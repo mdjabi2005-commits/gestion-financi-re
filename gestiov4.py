@@ -48,11 +48,19 @@ st.markdown("""
 # 📂 CONFIGURATION DES DOSSIERS
 # ==============================
 from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
-LOG_PATH = os.path.join(DATA_DIR, "pattern_log.json")
-os.makedirs(LOG_PATH, exist_ok=True)
+
+# Créer les dossiers de logs OCR
+OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
+os.makedirs(OCR_LOGS_DIR, exist_ok=True)
+
+LOG_PATH = os.path.join(OCR_LOGS_DIR, "pattern_log.json")
+OCR_PERFORMANCE_LOG = os.path.join(OCR_LOGS_DIR, "performance_stats.json")
+PATTERN_STATS_LOG = os.path.join(OCR_LOGS_DIR, "pattern_stats.json")
+OCR_SCAN_LOG = os.path.join(OCR_LOGS_DIR, "scan_history.jsonl")
+
 # === JOURNAL OCR ===
 def log_pattern_occurrence(pattern_name: str):
-    """Enregistre chaque mot-clé détecté par l’OCR dans un journal JSON."""
+    """Enregistre chaque mot-clé détecté par l'OCR dans un journal JSON."""
     try:
         data = {}
         if os.path.exists(LOG_PATH):
@@ -63,6 +71,169 @@ def log_pattern_occurrence(pattern_name: str):
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"[OCR-LOG] Erreur journalisation : {e}")
+
+def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, montant_choisi: float,
+                 categorie: str, sous_categorie: str, patterns_detectes: list = None, success_level: str = "exact"):
+    """
+    Enregistre un scan OCR complet avec son résultat.
+
+    Args:
+        document_type: "ticket" ou "revenu"
+        filename: nom du fichier scanné
+        montants_detectes: liste des montants trouvés par l'OCR
+        montant_choisi: montant finalement choisi par l'utilisateur
+        categorie: catégorie de la transaction
+        sous_categorie: sous-catégorie de la transaction
+        patterns_detectes: liste des patterns détectés (optionnel)
+        success_level: "exact" (montant exact détecté), "partial" (dans la liste), "failed" (corrigé manuellement)
+    """
+    try:
+        # 1. Enregistrer dans l'historique (JSONL)
+        scan_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "document_type": document_type,
+            "filename": filename,
+            "montants_detectes": montants_detectes,
+            "montant_choisi": montant_choisi,
+            "categorie": categorie,
+            "sous_categorie": sous_categorie,
+            "patterns_detectes": patterns_detectes or [],
+            "success_level": success_level,
+            "result": {
+                "success": success_level in ["exact", "partial"]
+            },
+            "extraction": {
+                "montant_final": montant_choisi,
+                "categorie_final": categorie
+            }
+        }
+
+        with open(OCR_SCAN_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(scan_entry, ensure_ascii=False) + "\n")
+
+        # 2. Mettre à jour les statistiques de performance
+        update_performance_stats(document_type, success_level)
+
+        # 3. Mettre à jour les statistiques par pattern
+        if patterns_detectes:
+            update_pattern_stats(patterns_detectes, success_level)
+
+    except Exception as e:
+        logger.error(f"[OCR-LOG] Erreur lors de l'enregistrement du scan : {e}")
+        print(f"[OCR-LOG] Erreur : {e}")
+
+def update_performance_stats(document_type: str, success_level: str):
+    """Met à jour les statistiques de performance globales."""
+    try:
+        # Charger les stats existantes
+        stats = {}
+        if os.path.exists(OCR_PERFORMANCE_LOG):
+            with open(OCR_PERFORMANCE_LOG, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+
+        # Initialiser si nécessaire
+        if document_type not in stats:
+            stats[document_type] = {
+                "total": 0,
+                "success": 0,
+                "partial": 0,
+                "failed": 0,
+                "success_rate": 0.0,
+                "correction_rate": 0.0
+            }
+
+        # Mettre à jour
+        stats[document_type]["total"] += 1
+        if success_level == "exact":
+            stats[document_type]["success"] += 1
+        elif success_level == "partial":
+            stats[document_type]["partial"] += 1
+        else:
+            stats[document_type]["failed"] += 1
+
+        # Calculer les taux
+        total = stats[document_type]["total"]
+        stats[document_type]["success_rate"] = (stats[document_type]["success"] / total * 100) if total > 0 else 0
+        stats[document_type]["correction_rate"] = (stats[document_type]["failed"] / total * 100) if total > 0 else 0
+
+        # Ajouter timestamp de mise à jour
+        stats["last_updated"] = datetime.now().isoformat()
+
+        # Sauvegarder
+        with open(OCR_PERFORMANCE_LOG, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        logger.error(f"[OCR-LOG] Erreur mise à jour performance : {e}")
+
+def update_pattern_stats(patterns_detectes: list, success_level: str):
+    """Met à jour les statistiques par pattern."""
+    try:
+        # Charger les stats existantes
+        stats = {}
+        if os.path.exists(PATTERN_STATS_LOG):
+            with open(PATTERN_STATS_LOG, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+
+        # Mettre à jour chaque pattern
+        for pattern in patterns_detectes:
+            if pattern not in stats:
+                stats[pattern] = {
+                    "total_detections": 0,
+                    "success_count": 0,
+                    "partial_count": 0,
+                    "failure_count": 0,
+                    "success_rate": 0.0,
+                    "reliability_score": 0.0
+                }
+
+            stats[pattern]["total_detections"] += 1
+
+            if success_level == "exact":
+                stats[pattern]["success_count"] += 1
+            elif success_level == "partial":
+                stats[pattern]["partial_count"] += 1
+            else:
+                stats[pattern]["failure_count"] += 1
+
+            # Calculer taux de succès
+            total = stats[pattern]["total_detections"]
+            success = stats[pattern]["success_count"] + stats[pattern]["partial_count"]
+            stats[pattern]["success_rate"] = (success / total * 100) if total > 0 else 0
+
+            # Score de fiabilité (pondéré par nombre de détections)
+            weight = min(total / 10, 1.0)
+            stats[pattern]["reliability_score"] = stats[pattern]["success_rate"] * weight
+
+        # Sauvegarder
+        with open(PATTERN_STATS_LOG, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        logger.error(f"[OCR-LOG] Erreur mise à jour patterns : {e}")
+
+def determine_success_level(montants_detectes: list, montant_choisi: float) -> str:
+    """
+    Détermine le niveau de succès de la détection OCR.
+
+    Returns:
+        "exact" : Le montant choisi est le premier de la liste (succès total)
+        "partial" : Le montant choisi est dans la liste mais pas le premier (succès partiel)
+        "failed" : Le montant choisi n'est pas dans la liste (échec)
+    """
+    if not montants_detectes:
+        return "failed"
+
+    # Arrondir pour comparaison
+    montants_arrondis = [round(float(m), 2) for m in montants_detectes]
+    montant_choisi_arrondi = round(float(montant_choisi), 2)
+
+    if montants_arrondis and montants_arrondis[0] == montant_choisi_arrondi:
+        return "exact"
+    elif montant_choisi_arrondi in montants_arrondis:
+        return "partial"
+    else:
+        return "failed"
 
 def show_toast(message: str, toast_type="success", duration=3000):
     """
@@ -212,9 +383,6 @@ logger = logging.getLogger(__name__)
 # ==============================
 # 🔧 FONCTIONS UTILITAIRES (à adapter selon votre implémentation)
 # ==============================
-OCR_PERFORMANCE_LOG = "data/ocr_logs/performance_stats.json"
-PATTERN_STATS_LOG = "data/ocr_logs/pattern_stats.json"
-OCR_SCAN_LOG = "data/ocr_logs/scan_history.jsonl"
 
 def get_ocr_performance_report():
     """Récupère le rapport de performance depuis les fichiers locaux."""
@@ -2240,6 +2408,7 @@ def process_all_tickets_in_folder():
                 st.error("⚠️ Catégorie ou montant invalide.")
                 continue
 
+            # Insérer la transaction
             insert_transaction_batch([{
                 "type": "dépense",
                 "categorie": categorie.strip(),
@@ -2249,9 +2418,40 @@ def process_all_tickets_in_folder():
                 "source": "OCR"
             }])
 
+            # Déplacer le ticket
             move_ticket_to_sorted(ticket_path, categorie, sous_categorie)
 
-            toast_success(f"Ticket enregistré : {montant_corrige:.2f} €")
+            # === ENREGISTRER LES STATISTIQUES OCR ===
+            # Déterminer le niveau de succès
+            success_level = determine_success_level(montants_possibles, montant_corrige)
+
+            # Extraire les patterns détectés du texte OCR
+            patterns_detectes = []
+            text_lower = text.lower()
+            ticket_patterns = ['total', 'montant', 'ttc', 'cb', 'carte', 'espèces', 'esp']
+            for pattern in ticket_patterns:
+                if pattern in text_lower:
+                    patterns_detectes.append(pattern)
+
+            # Enregistrer le scan avec toutes les infos
+            log_ocr_scan(
+                document_type="ticket",
+                filename=ticket_file,
+                montants_detectes=montants_possibles,
+                montant_choisi=montant_corrige,
+                categorie=categorie.strip(),
+                sous_categorie=sous_categorie.strip(),
+                patterns_detectes=patterns_detectes,
+                success_level=success_level
+            )
+
+            # Afficher un message selon le niveau de succès
+            if success_level == "exact":
+                toast_success(f"✅ Ticket enregistré : {montant_corrige:.2f} € (montant exact détecté !)")
+            elif success_level == "partial":
+                toast_warning(f"⚠️ Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste)")
+            else:
+                toast_warning(f"⚠️ Ticket enregistré : {montant_corrige:.2f} € (montant corrigé manuellement)", 4000)
 
 def interface_process_all_revenues_in_folder():
     st.subheader("📥 Scanner et enregistrer tous les revenus depuis le dossier V2")
@@ -2301,6 +2501,7 @@ def interface_process_all_revenues_in_folder():
                 "categorie": sous_dossier,
                 "sous_categorie": mois_nom,
                 "montant": parsed.get("montant", 0.0),
+                "montant_initial": parsed.get("montant", 0.0),  # Sauvegarder le montant détecté par OCR
                 "date": date_val,
                 "source":"PDF"
             })
@@ -2330,6 +2531,7 @@ def interface_process_all_revenues_in_folder():
                 "categorie": cat.strip(),
                 "sous_categorie": souscat.strip(),
                 "montant": montant_val,
+                "montant_initial": data.get("montant_initial", montant_val),  # Conserver le montant OCR initial
                 "date": date_edit,
                 "source": data["source"]
             })
@@ -2348,12 +2550,12 @@ def interface_process_all_revenues_in_folder():
                 transaction_data = {
                     "type": "revenu",
                     "categorie": data["categorie"],
-                    "sous_categorie": data["sous_categorie"], 
+                    "sous_categorie": data["sous_categorie"],
                     "montant": data["montant"],
                     "date": data["date"].isoformat(),
                     "source": data["source"]
                 }
-                
+
                 # Traitement Uber
                 transaction_data, uber_msg = process_uber_revenue(transaction_data)
                 if uber_msg:
@@ -2375,6 +2577,33 @@ def interface_process_all_revenues_in_folder():
                 os.makedirs(target_dir, exist_ok=True)
 
                 shutil.move(data["path"], os.path.join(target_dir, data["file"]))
+
+                # === ENREGISTRER LES STATISTIQUES OCR ===
+                # Comparer le montant initial (OCR) avec le montant final (choisi par l'utilisateur)
+                montant_initial = data.get("montant_initial", data["montant"])
+                montant_final = data["montant"]
+
+                # Déterminer le niveau de succès
+                success_level = determine_success_level([montant_initial], montant_final)
+
+                # Patterns pour les revenus (basiques, on peut enrichir plus tard)
+                patterns_detectes = []
+                if data["categorie"].lower() == "uber":
+                    patterns_detectes = ["uber", "revenu", "pdf"]
+                else:
+                    patterns_detectes = ["salaire", "revenu", "pdf"]
+
+                # Enregistrer le scan
+                log_ocr_scan(
+                    document_type="revenu",
+                    filename=data["file"],
+                    montants_detectes=[montant_initial],
+                    montant_choisi=montant_final,
+                    categorie=data["categorie"],
+                    sous_categorie=data["sous_categorie"],
+                    patterns_detectes=patterns_detectes,
+                    success_level=success_level
+                )
 
             conn.commit()
             conn.close()
