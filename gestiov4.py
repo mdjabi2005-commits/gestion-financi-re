@@ -48,8 +48,12 @@ st.markdown("""
 # 📂 CONFIGURATION DES DOSSIERS
 # ==============================
 from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
-LOG_PATH = os.path.join(DATA_DIR, "pattern_log.json")
-os.makedirs(LOG_PATH, exist_ok=True)
+
+# Créer les dossiers de logs OCR
+OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
+os.makedirs(OCR_LOGS_DIR, exist_ok=True)
+
+LOG_PATH = os.path.join(OCR_LOGS_DIR, "pattern_log.json")
 # === JOURNAL OCR ===
 def log_pattern_occurrence(pattern_name: str):
     """Enregistre chaque mot-clé détecté par l’OCR dans un journal JSON."""
