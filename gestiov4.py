@@ -73,7 +73,8 @@ def log_pattern_occurrence(pattern_name: str):
         print(f"[OCR-LOG] Erreur journalisation : {e}")
 
 def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, montant_choisi: float,
-                 categorie: str, sous_categorie: str, patterns_detectes: list = None, success_level: str = "exact"):
+                 categorie: str, sous_categorie: str, patterns_detectes: list = None, success_level: str = "exact",
+                 methode_detection: str = "UNKNOWN"):
     """
     Enregistre un scan OCR complet avec son résultat.
 
@@ -86,6 +87,7 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
         sous_categorie: sous-catégorie de la transaction
         patterns_detectes: liste des patterns détectés (optionnel)
         success_level: "exact" (montant exact détecté), "partial" (dans la liste), "failed" (corrigé manuellement)
+        methode_detection: "A-PATTERNS", "B-PAIEMENT", "C-HT+TVA", "D-FALLBACK" ou combinaison
     """
     try:
         print(f"[OCR-LOG] Début enregistrement : {filename}, type={document_type}, success={success_level}")
@@ -101,6 +103,7 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
             "sous_categorie": sous_categorie,
             "patterns_detectes": patterns_detectes or [],
             "success_level": success_level,
+            "methode_detection": methode_detection,
             "result": {
                 "success": success_level in ["exact", "partial"]
             },
@@ -1328,10 +1331,12 @@ def parse_ticket_metadata(ocr_text: str):
         r"NET\s*A\s*PAYER", r"À\s*PAYER", r"TOTAL$", r"TTC"
     ]
     montants_A = []
+    patterns_A_matches = []
     for pattern in total_patterns:
         m = get_montant_from_line(pattern, lines)
         if m > 0:
             montants_A.append(round(m, 2))
+            patterns_A_matches.append(pattern)
 
     # === MÉTHODE B : Somme des paiements (CB, espèces, web, etc.)
     paiement_patterns = [r"CB", r"CARTE", r"ESPECES", r"WEB", r"PAYPAL", r"CHEQUE"]
@@ -1370,8 +1375,21 @@ def parse_ticket_metadata(ocr_text: str):
         freq[m_rond] = freq.get(m_rond, 0) + 1
     if not freq:
         montant_final = 0.0
+        methode_detection = "AUCUNE"
     else:
         montant_final = max(freq, key=freq.get)  # prend le montant le plus récurrent
+
+        # Déterminer quelle méthode a trouvé ce montant
+        methode_detection = []
+        if montant_final in montants_A:
+            methode_detection.append("A-PATTERNS")
+        if somme_B == montant_final:
+            methode_detection.append("B-PAIEMENT")
+        if somme_C == montant_final:
+            methode_detection.append("C-HT+TVA")
+        if montant_fallback == montant_final and not methode_detection:
+            methode_detection.append("D-FALLBACK")
+        methode_detection = "+".join(methode_detection) if methode_detection else "UNKNOWN"
 
     # === Détection de la date (inchangée)
     date_patterns = [
@@ -1401,7 +1419,15 @@ def parse_ticket_metadata(ocr_text: str):
         "montants_possibles": montants_possibles if montants_possibles else [montant_final],
         "montant": montant_final,
         "date": detected_date,
-        "infos": "\n".join(key_lines)
+        "infos": "\n".join(key_lines),
+        "methode_detection": methode_detection,
+        "debug_info": {
+            "methode_A": montants_A,
+            "methode_B": somme_B,
+            "methode_C": somme_C,
+            "methode_D": montant_fallback,
+            "patterns_A": patterns_A_matches
+        }
     }
 
 def move_ticket_to_sorted(ticket_path, categorie, sous_categorie):
@@ -2389,6 +2415,18 @@ def process_all_tickets_in_folder():
         montants_possibles = data.get("montants_possibles", [montant_final])
         detected_date = data.get("date", datetime.now().date().isoformat())
         key_info = data.get("infos", "")
+        methode_detection = data.get("methode_detection", "UNKNOWN")
+        debug_info = data.get("debug_info", {})
+
+        # Afficher la méthode de détection
+        print(f"\n[OCR-DETECTION] Ticket: {ticket_file}")
+        print(f"[OCR-DETECTION] Methode utilisee: {methode_detection}")
+        print(f"[OCR-DETECTION] Montant final: {montant_final}€")
+        print(f"[OCR-DETECTION] Candidats methode A (patterns): {debug_info.get('methode_A', [])}")
+        print(f"[OCR-DETECTION] Patterns A trouves: {debug_info.get('patterns_A', [])}")
+        print(f"[OCR-DETECTION] Candidat methode B (paiements): {debug_info.get('methode_B', 0)}€")
+        print(f"[OCR-DETECTION] Candidat methode C (HT+TVA): {debug_info.get('methode_C', 0)}€")
+        print(f"[OCR-DETECTION] Candidat methode D (fallback): {debug_info.get('methode_D', 0)}€\n")
 
         # --- Déduction de la catégorie et sous-catégorie à partir du nom de fichier ---
         name = os.path.splitext(ticket_file)[0]
@@ -2476,16 +2514,25 @@ def process_all_tickets_in_folder():
                 categorie=categorie.strip(),
                 sous_categorie=sous_categorie.strip(),
                 patterns_detectes=patterns_detectes,
-                success_level=success_level
+                success_level=success_level,
+                methode_detection=methode_detection
             )
 
-            # Afficher un message selon le niveau de succès
+            # Afficher un message selon le niveau de succès avec la méthode de détection
+            methode_msg = {
+                "A-PATTERNS": "via patterns (TOTAL/TTC/MONTANT)",
+                "B-PAIEMENT": "via CB/CARTE/ESPECES",
+                "C-HT+TVA": "via calcul HT+TVA",
+                "D-FALLBACK": "via fallback (plus grand montant)",
+                "A-PATTERNS+D-FALLBACK": "via patterns + fallback"
+            }.get(methode_detection, f"méthode {methode_detection}")
+
             if success_level == "exact":
-                toast_success(f"Ticket enregistré : {montant_corrige:.2f} € (montant exact détecté !)")
+                toast_success(f"Ticket enregistré : {montant_corrige:.2f} € (détecté {methode_msg})")
             elif success_level == "partial":
-                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste)")
+                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste, {methode_msg})")
             else:
-                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant corrigé manuellement)", 4000)
+                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (corrigé manuellement, détection {methode_msg})", 4000)
 
 def interface_process_all_revenues_in_folder():
     st.subheader("📥 Scanner et enregistrer tous les revenus depuis le dossier V2")
