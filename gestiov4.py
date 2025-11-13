@@ -113,7 +113,7 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
         print(f"[OCR-LOG] Écriture dans {OCR_SCAN_LOG}")
         with open(OCR_SCAN_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(scan_entry, ensure_ascii=False) + "\n")
-        print(f"[OCR-LOG] ✓ Historique enregistré")
+        print(f"[OCR-LOG] Historique enregistre")
 
         # 2. Mettre à jour les statistiques de performance
         print(f"[OCR-LOG] Mise à jour performance stats...")
@@ -124,11 +124,11 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
             print(f"[OCR-LOG] Mise à jour pattern stats ({len(patterns_detectes)} patterns)...")
             update_pattern_stats(patterns_detectes, success_level)
 
-        print(f"[OCR-LOG] ✓ Log OCR terminé avec succès")
+        print(f"[OCR-LOG] Log OCR termine avec succes")
 
     except Exception as e:
         logger.error(f"[OCR-LOG] Erreur lors de l'enregistrement du scan : {e}")
-        print(f"[OCR-LOG] ❌ ERREUR : {e}")
+        print(f"[OCR-LOG] ERREUR : {e}")
         import traceback
         traceback.print_exc()
 
@@ -846,7 +846,7 @@ def migrate_database_schema():
         
         # Si les anciennes colonnes existent, on migre
         if "Catégorie" in columns or "Sous-catégorie" in columns:
-            logger.info("🔄 Migration du schéma de la base de données...")
+            logger.info("Migration du schema de la base de donnees...")
             
             # Créer une nouvelle table avec le bon schéma
             cursor.execute("""
@@ -887,10 +887,10 @@ def migrate_database_schema():
             
             # Renommer la nouvelle table
             cursor.execute("ALTER TABLE transactions_new RENAME TO transactions")
-            
-            logger.info("✅ Migration terminée avec succès!")
+
+            logger.info("Migration terminee avec succes!")
         else:
-            logger.info("✅ Le schéma est déjà à jour")
+            logger.info("Le schema est deja a jour")
             
     except Exception as e:
         logger.error(f"Erreur lors de la migration: {e}")
@@ -2338,15 +2338,15 @@ def process_all_tickets_in_folder():
     Version V2 avec conversions sécurisées.
     """
     print("\n" + "="*60)
-    print("🔥 FONCTION process_all_tickets_in_folder APPELÉE")
+    print("[DEBUG] FONCTION process_all_tickets_in_folder APPELEE")
     print("="*60 + "\n")
 
     st.subheader("🧾 Traitement des tickets à scanner V2")
 
     tickets = [f for f in os.listdir(TO_SCAN_DIR) if f.lower().endswith((".jpg", ".png", ".jpeg", ".pdf"))]
 
-    print(f"📂 TO_SCAN_DIR : {TO_SCAN_DIR}")
-    print(f"📋 Tickets trouvés : {len(tickets)}")
+    print(f"[DEBUG] TO_SCAN_DIR : {TO_SCAN_DIR}")
+    print(f"[DEBUG] Tickets trouves : {len(tickets)}")
     for t in tickets:
         print(f"  - {t}")
     print()
@@ -2424,17 +2424,17 @@ def process_all_tickets_in_folder():
             valider = st.form_submit_button("✅ Valider et enregistrer ce ticket")
 
         if valider:
-            print(f"\n🎯 FORMULAIRE VALIDÉ pour {ticket_file}")
-            print(f"   Catégorie: {categorie}")
+            print(f"\n[DEBUG] FORMULAIRE VALIDE pour {ticket_file}")
+            print(f"   Categorie: {categorie}")
             print(f"   Montant: {montant_corrige}")
             print(f"   Montants possibles: {montants_possibles}\n")
 
             if not categorie or montant_corrige <= 0:
-                print(f"❌ VALIDATION ÉCHOUÉE : catégorie='{categorie}', montant={montant_corrige}")
+                print(f"[DEBUG] VALIDATION ECHOUEE : categorie='{categorie}', montant={montant_corrige}")
                 toast_error("Catégorie ou montant invalide")
                 continue
 
-            print("✓ Validation OK, insertion transaction...")
+            print("[DEBUG] Validation OK, insertion transaction...")
             # Insérer la transaction
             insert_transaction_batch([{
                 "type": "dépense",
@@ -2972,7 +2972,7 @@ def interface_ajouter_revenu():
                 st.success(uber_msg)
 
             insert_transaction_batch([transaction_data])
-            toast_success("✅ Revenu manuel ajouté avec succès !")
+            toast_success("Revenu manuel ajouté avec succès !")
 
     elif mode == "Revenu récurrent":
         with st.form("ajouter_revenu_recurrent", clear_on_submit=True):
@@ -3032,7 +3032,7 @@ def interface_ajouter_revenu():
                     processed_transactions.append(transaction)
             
             insert_transaction_batch(processed_transactions)
-            toast_success(f"✅ Revenu récurrent ({recurrence}) ajouté avec succès.")
+            toast_success(f"Revenu récurrent ({recurrence}) ajouté avec succès.")
             st.info(f"{len(occurrences)} versement(s) passé(s) ajouté(s).")
 
 # =============================
