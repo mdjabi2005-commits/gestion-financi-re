@@ -88,13 +88,15 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
         success_level: "exact" (montant exact détecté), "partial" (dans la liste), "failed" (corrigé manuellement)
     """
     try:
+        print(f"[OCR-LOG] Début enregistrement : {filename}, type={document_type}, success={success_level}")
+
         # 1. Enregistrer dans l'historique (JSONL)
         scan_entry = {
             "timestamp": datetime.now().isoformat(),
             "document_type": document_type,
             "filename": filename,
-            "montants_detectes": montants_detectes,
-            "montant_choisi": montant_choisi,
+            "montants_detectes": [float(m) for m in montants_detectes] if montants_detectes else [],
+            "montant_choisi": float(montant_choisi),
             "categorie": categorie,
             "sous_categorie": sous_categorie,
             "patterns_detectes": patterns_detectes or [],
@@ -103,24 +105,32 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
                 "success": success_level in ["exact", "partial"]
             },
             "extraction": {
-                "montant_final": montant_choisi,
+                "montant_final": float(montant_choisi),
                 "categorie_final": categorie
             }
         }
 
+        print(f"[OCR-LOG] Écriture dans {OCR_SCAN_LOG}")
         with open(OCR_SCAN_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(scan_entry, ensure_ascii=False) + "\n")
+        print(f"[OCR-LOG] ✓ Historique enregistré")
 
         # 2. Mettre à jour les statistiques de performance
+        print(f"[OCR-LOG] Mise à jour performance stats...")
         update_performance_stats(document_type, success_level)
 
         # 3. Mettre à jour les statistiques par pattern
         if patterns_detectes:
+            print(f"[OCR-LOG] Mise à jour pattern stats ({len(patterns_detectes)} patterns)...")
             update_pattern_stats(patterns_detectes, success_level)
+
+        print(f"[OCR-LOG] ✓ Log OCR terminé avec succès")
 
     except Exception as e:
         logger.error(f"[OCR-LOG] Erreur lors de l'enregistrement du scan : {e}")
-        print(f"[OCR-LOG] Erreur : {e}")
+        print(f"[OCR-LOG] ❌ ERREUR : {e}")
+        import traceback
+        traceback.print_exc()
 
 def update_performance_stats(document_type: str, success_level: str):
     """Met à jour les statistiques de performance globales."""
@@ -781,7 +791,7 @@ def get_db_connection():
         return conn
     except sqlite3.Error as e:
         logger.error(f"Database connection failed: {e}")
-        st.error("❌ Erreur de connexion à la base de données")
+        toast_error("Erreur de connexion à la base de données")
         raise
 
 def init_db():
@@ -945,13 +955,13 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
                 if text:
                     st.text_area("Texte OCR détecté :", text, height=200)
                 else:
-                    st.warning("⚠️ Aucun texte détecté par l'OCR.")
+                    toast_warning("Aucun texte détecté par l'OCR.")
 
         return text
 
     except Exception as e:
         logger.error(f"OCR error on {image_path}: {e}")
-        st.error(f"❌ Erreur OCR sur {os.path.basename(image_path)} : {e}")
+        toast_error("Erreur OCR sur {os.path.basename(image_path)} : {e}")
         show_toast(f"Erreur OCR: {os.path.basename(image_path)}", toast_type="error")
         return ""
 
@@ -1125,7 +1135,7 @@ def afficher_documents_associes(transaction):
                         st.text_area("Texte du ticket:", texte_ocr, height=150)
                         
                 except Exception as e:
-                    st.error(f"❌ Impossible d'afficher l'image: {e}")
+                    toast_error("Impossible d'afficher l'image: {e}")
                     
             elif fichier.lower().endswith('.pdf'):
                 # Afficher les infos du PDF
@@ -1242,7 +1252,7 @@ def insert_transaction_batch(transactions):
     
     # Affichage des résultats
     if inserted > 0:
-        st.success(f"✅ {inserted} transaction(s) insérée(s).")
+        toast_success("{inserted} transaction(s) insérée(s).")
         if uber_processed > 0:
             st.info(f"🚗 {uber_processed} revenu(s) Uber traité(s) avec application de la fiscalité (79%)")
             for msg in uber_messages:
@@ -1407,7 +1417,7 @@ def move_ticket_to_sorted(ticket_path, categorie, sous_categorie):
             counter += 1
 
     shutil.move(ticket_path, dest_path)
-    st.success(f"✅ Ticket déplacé vers : {dest_path}")
+    toast_success("Ticket déplacé vers : {dest_path}")
 
 def extract_text_from_pdf(pdf_path):
     """Lit un PDF et renvoie le texte brut."""
@@ -1416,7 +1426,7 @@ def extract_text_from_pdf(pdf_path):
         return extract_text(pdf_path)
     except Exception as e:
         logger.warning(f"Impossible de lire le PDF {pdf_path} ({e})")
-        st.warning(f"⚠️ Impossible de lire le PDF {pdf_path} ({e})")
+        toast_warning("Impossible de lire le PDF {pdf_path} ({e})")
         return ""
 
 def parse_uber_pdf(pdf_path: str) -> dict:
@@ -1706,7 +1716,7 @@ def interface_accueil():
         df = load_transactions()
     except Exception as e:
         logger.error(f"Error loading data: {e}")
-        st.error("❌ Erreur lors du chargement des données")
+        toast_error("Erreur lors du chargement des données")
         return
     
     if df.empty:
@@ -1762,7 +1772,7 @@ def interface_accueil():
     df_periode = df[(df["date"] >= pd.Timestamp(date_debut)) & (df["date"] <= pd.Timestamp(date_fin))]
     
     if df_periode.empty:
-        st.warning("📊 Aucune transaction dans la période sélectionnée.")
+        toast_warning("Aucune transaction dans la période sélectionnée.")
         return
     
     # 🔥 STATISTIQUES PAR MOIS
@@ -2351,8 +2361,7 @@ def process_all_tickets_in_folder():
                 text = full_ocr(ticket_path, show_ticket=True)
         except Exception as e:
             logger.error(f"OCR failed for {ticket_file}: {e}")
-            st.error(f"❌ Erreur OCR sur {ticket_file} : {e}")
-            toast_error("Le ticket n'a pas être analyser",5000)
+            toast_error(f"Erreur OCR sur {ticket_file} : {e}", 5000)
             continue
 
         # --- Analyse du texte OCR ---
@@ -2362,7 +2371,7 @@ def process_all_tickets_in_folder():
         montants_possibles = data.get("montants_possibles", [montant_final])
         detected_date = data.get("date", datetime.now().date().isoformat())
         key_info = data.get("infos", "")
-        
+
         # --- Déduction de la catégorie et sous-catégorie à partir du nom de fichier ---
         name = os.path.splitext(ticket_file)[0]
         parts = name.split(".")[1:]
@@ -2405,7 +2414,7 @@ def process_all_tickets_in_folder():
 
         if valider:
             if not categorie or montant_corrige <= 0:
-                st.error("⚠️ Catégorie ou montant invalide.")
+                toast_error("Catégorie ou montant invalide")
                 continue
 
             # Insérer la transaction
@@ -2447,11 +2456,11 @@ def process_all_tickets_in_folder():
 
             # Afficher un message selon le niveau de succès
             if success_level == "exact":
-                toast_success(f"✅ Ticket enregistré : {montant_corrige:.2f} € (montant exact détecté !)")
+                toast_success(f"Ticket enregistré : {montant_corrige:.2f} € (montant exact détecté !)")
             elif success_level == "partial":
-                toast_warning(f"⚠️ Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste)")
+                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste)")
             else:
-                toast_warning(f"⚠️ Ticket enregistré : {montant_corrige:.2f} € (montant corrigé manuellement)", 4000)
+                toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant corrigé manuellement)", 4000)
 
 def interface_process_all_revenues_in_folder():
     st.subheader("📥 Scanner et enregistrer tous les revenus depuis le dossier V2")
@@ -2467,7 +2476,7 @@ def interface_process_all_revenues_in_folder():
                 for f in files if f.lower().endswith(".pdf")]
 
         if not pdfs:
-            st.warning("📂 Aucun PDF de revenu trouvé dans le dossier.")
+            toast_warning("Aucun PDF de revenu trouvé dans le dossier.")
             return
 
         data_list = []
@@ -2483,7 +2492,7 @@ def interface_process_all_revenues_in_folder():
                 if sous_dossier.lower() == "uber":
                     parsed = parse_uber_pdf(pdf_path)
                     # 🔥 V2: Uber tax already applied in parse_uber_pdf
-                    st.success(f"🚗 Uber PDF traité: {parsed.get('montant_brut', 0):.2f}€ → {parsed['montant']:.2f}€ net")
+                    toast_success("Uber PDF traité: {parsed.get('montant_brut', 0):.2f}€ → {parsed['montant']:.2f}€ net")
                 else:
                     parsed = parse_fiche_paie(pdf_path)
             except Exception as e:
@@ -2507,7 +2516,7 @@ def interface_process_all_revenues_in_folder():
             })
 
         st.session_state["revenus_data"] = data_list
-        st.success("✅ Revenus scannés avec succès. Tu peux maintenant les modifier avant validation.")
+        toast_success("Revenus scannés avec succès. Tu peux maintenant les modifier avant validation.")
 
     if st.session_state.get("revenus_data"):
         updated_list = []
@@ -2539,7 +2548,7 @@ def interface_process_all_revenues_in_folder():
         st.session_state["revenus_data"] = updated_list
 
         st.markdown("---")
-        st.warning("⚠️ Vérifie bien les informations avant de confirmer l'enregistrement.")
+        toast_warning("Vérifie bien les informations avant de confirmer l'enregistrement.")
 
         if st.button("✅ Confirmer et enregistrer tous les revenus"):
             conn = get_db_connection()
@@ -2559,7 +2568,7 @@ def interface_process_all_revenues_in_folder():
                 # Traitement Uber
                 transaction_data, uber_msg = process_uber_revenue(transaction_data)
                 if uber_msg:
-                    st.success(f"🚗 {uber_msg}")
+                    toast_success("{uber_msg}")
 
                 cursor.execute("""
                     INSERT INTO transactions (type, categorie, sous_categorie, montant, date, source)
@@ -2607,7 +2616,7 @@ def interface_process_all_revenues_in_folder():
 
             conn.commit()
             conn.close()
-            st.success("🎉 Tous les revenus ont été enregistrés et rangés avec succès !")
+            toast_success("Tous les revenus ont été enregistrés et rangés avec succès !")
             st.session_state.pop("revenus_data")
 
 # =============================
@@ -2662,19 +2671,19 @@ def interface_transactions_unifiee():
                     df_new["montant"] = df_new["montant"].apply(nettoyer_montant)
             except Exception as e:
                 logger.error(f"CSV import failed for {uploaded.name}: {e}")
-                st.error(f"❌ Erreur lors de la lecture de {uploaded.name} : {e}")
+                toast_error("Erreur lors de la lecture de {uploaded.name} : {e}")
                 continue
 
             required_cols = ["date", "categorie", "sous_categorie", "description", "montant"]
             missing = [c for c in required_cols if c not in df_new.columns]
             if missing:
-                st.error(f"❌ {uploaded.name} : colonnes manquantes ({', '.join(missing)})")
+                toast_error("{uploaded.name} : colonnes manquantes ({', '.join(missing)})")
                 st.error("Vérifiez bien l'orthographe des colonnes.")
                 toast_error("Les transaction n'ont pas pu être ajoutée. Vérifiez bien le format du csv",10000)
                 continue
 
             all_new_rows.append(df_new)
-            st.success(f"✅ {uploaded.name} importé avec succès ({len(df_new)} lignes).")
+            toast_success("{uploaded.name} importé avec succès ({len(df_new)} lignes).")
 
         if all_new_rows:
             df_new_total = pd.concat(all_new_rows, ignore_index=True)
@@ -2712,7 +2721,7 @@ def interface_transactions_unifiee():
             df_new_clean = df_merged[df_merged["_merge"] == "left_only"].drop(columns=["_merge"])
 
             if not df_dupes_internal.empty or not df_dupes_sqlite.empty:
-                st.warning("⚠️ Doublons détectés :")
+                toast_warning("Doublons détectés :")
                 if not df_dupes_internal.empty:
                     st.caption("🔁 Dans les fichiers importés / CSV local :")
                     st.dataframe(df_dupes_internal)
@@ -2741,7 +2750,7 @@ def interface_transactions_unifiee():
 
             if not df_new_clean.empty:
                 if "type" not in df_new_clean.columns:
-                    st.warning("⚠️ Colonne 'type' absente — les lignes seront marquées comme 'dépense'.")
+                    toast_warning("Colonne 'type' absente — les lignes seront marquées comme 'dépense'.")
                     df_new_clean["type"] = "dépense"
 
                 transactions_to_insert = []
@@ -2760,13 +2769,13 @@ def interface_transactions_unifiee():
                     if transaction["type"] == "revenu":
                         transaction, uber_msg = process_uber_revenue(transaction)
                         if uber_msg:
-                            st.success(f"🚗 {uber_msg}")
+                            toast_success("{uber_msg}")
                     
                     transactions_to_insert.append(transaction)
 
                 insert_transaction_batch(transactions_to_insert)
-                toast_success(f"{len(df_new_clean)} transaction(s) importée(s) avec succès")
-                toast_success("Pensez a bien actualisez la page",5000)
+                toast_success(f"{len(df_new_clean)} transaction(s) importée(s)")
+                toast_success("Pensez à bien actualiser la page", 5000)
             else:
                 st.info("ℹ️ Aucune nouvelle transaction à insérer (toutes déjà présentes).")
 
@@ -2789,7 +2798,7 @@ def interface_transactions_unifiee():
 
     if valider:
         if not cat or montant <= 0:
-            st.error("⚠️ Veuillez entrer au moins une catégorie et un montant valide.")
+            toast_error("Veuillez entrer au moins une catégorie et un montant valide.")
         else:
             transaction_data = {
                 "type": type_tr,
@@ -2852,7 +2861,7 @@ def interface_transaction_recurrente():
 
     if submit_btn:
         if not categorie or montant <= 0:
-            st.error("⚠️ Veuillez entrer une catégorie et un montant valide.")
+            toast_error("Veuillez entrer une catégorie et un montant valide.")
             return
 
         safe_categorie = re.sub(r'[<>:"/\\|?*]', "_", categorie.strip())
@@ -2927,7 +2936,7 @@ def interface_ajouter_revenu():
 
         if submit_btn:
             if not categorie or montant <= 0:
-                st.error("⚠️ Veuillez entrer une catégorie et un montant valide.")
+                toast_error("Veuillez entrer une catégorie et un montant valide.")
                 return
 
             transaction_data = {
@@ -2963,7 +2972,7 @@ def interface_ajouter_revenu():
 
         if submit_btn:
             if not categorie or montant <= 0:
-                st.error("⚠️ Veuillez entrer une catégorie et un montant valide.")
+                toast_error("Veuillez entrer une catégorie et un montant valide.")
                 return
 
             safe_categorie = re.sub(r'[<>:"/\\|?*]', "_", categorie.strip())
@@ -3395,7 +3404,7 @@ def interface_gerer_transactions():
                     if transaction_data['type'] == 'revenu':
                         transaction_data, uber_msg = process_uber_revenue(transaction_data)
                         if uber_msg:
-                            st.success(f"🚗 Revenu Uber ajusté: {uber_msg}")
+                            toast_success("Revenu Uber ajusté: {uber_msg}")
                     
                     cursor.execute("""
                         UPDATE transactions 
@@ -3414,7 +3423,7 @@ def interface_gerer_transactions():
             conn.close()
             
             if modified_count > 0:
-                st.success(f"✅ {modified_count} transaction(s) mise(s) à jour avec succès")
+                toast_success("{modified_count} transaction(s) mise(s) à jour avec succès")
                 refresh_and_rerun()
             else:
                 st.info("ℹ️ Aucune modification validée")
@@ -3436,7 +3445,7 @@ def interface_gerer_transactions():
                 toast_success(f"{len(to_delete)} transaction(s) supprimée(s)")
                 refresh_and_rerun()
             else:
-                st.warning("⚠️ Coche au moins une transaction avant de supprimer.")
+                toast_warning("Coche au moins une transaction avant de supprimer.")
 
 # =============================
 # 📊 VOIR TOUTES LES TRANSACTIONS V2
@@ -3929,7 +3938,7 @@ def interface_solde_previsionnel():
                           transaction_data["montant"], transaction_data["date"], transaction_data["source"]))
             conn.commit()
             conn.close()
-            st.success(f"✅ Prévision {type_prevision} ajoutée pour le {date_prevision.strftime('%d/%m/%Y')}")
+            toast_success("Prévision {type_prevision} ajoutée pour le {date_prevision.strftime('%d/%m/%Y')}")
 
     with tab3:
         st.subheader("💹 Suivi du portefeuille V2")
@@ -4003,27 +4012,27 @@ def interface_solde_previsionnel():
 
             if btn_valider:
                 if valeur_actuelle <= 0:
-                    st.warning("⚠️ Merci d'entrer une valeur supérieure à 0.")
+                    toast_warning("Merci d'entrer une valeur supérieure à 0.")
                 else:
                     cursor.execute("SELECT valeur_reelle FROM portefeuille WHERE date = ?", (date_saisie.isoformat(),))
                     existing = cursor.fetchone()
 
                     if existing:
-                        st.warning(f"⚠️ Une valeur existe déjà pour le {date_saisie.strftime('%d/%m/%Y')} ({existing[0]:,.2f} €)")
+                        toast_warning("Une valeur existe déjà pour le {date_saisie.strftime('%d/%m/%Y')} ({existing[0]:,.2f} €)")
                         if st.button("📝 Remplacer la valeur existante"):
                             cursor.execute(
                                 "UPDATE portefeuille SET valeur_reelle = ? WHERE date = ?",
                                 (valeur_actuelle, date_saisie.isoformat())
                             )
                             conn.commit()
-                            st.success(f"✅ Valeur mise à jour pour le {date_saisie.strftime('%d/%m/%Y')} ({valeur_actuelle:,.2f} €)")
+                            toast_success("Valeur mise à jour pour le {date_saisie.strftime('%d/%m/%Y')} ({valeur_actuelle:,.2f} €)")
                     else:
                         cursor.execute(
                             "INSERT INTO portefeuille (date, valeur_reelle) VALUES (?, ?)",
                             (date_saisie.isoformat(), valeur_actuelle)
                         )
                         conn.commit()
-                        st.success(f"✅ Valeur enregistrée ({valeur_actuelle:,.2f} €) le {date_saisie.strftime('%d/%m/%Y')}")
+                        toast_success("Valeur enregistrée ({valeur_actuelle:,.2f} €) le {date_saisie.strftime('%d/%m/%Y')}")
 
                 df_portefeuille = pd.read_sql_query("SELECT * FROM portefeuille ORDER BY date ASC", conn)
                 if not df_portefeuille.empty:
@@ -4038,7 +4047,7 @@ def interface_solde_previsionnel():
             st.markdown("### 🚀 Stratégie de rattrapage (deux modes)")
 
             if df_portefeuille.empty:
-                st.warning("⚠️ Enregistre d'abord au moins une valeur réelle dans l'onglet précédent.")
+                toast_warning("Enregistre d'abord au moins une valeur réelle dans l'onglet précédent.")
             else:
                 montant_depart = safe_convert(df_portefeuille["valeur_reelle"].iloc[-1], float, 0.0)
                 date_depart = df_portefeuille["date"].iloc[-1]
@@ -4074,7 +4083,7 @@ def interface_solde_previsionnel():
                         dates, theo_series, reel_series, rattrap_series = [], [], [], []
 
                         if montant_rattrap >= montant_theo:
-                            st.success("✅ Tu es déjà au-dessus de la courbe théorique.")
+                            toast_success("Tu es déjà au-dessus de la courbe théorique.")
                         else:
                             while montant_rattrap < montant_theo and jours < int(max_days):
                                 current_date = date.today() + timedelta(days=jours)
@@ -4105,7 +4114,7 @@ def interface_solde_previsionnel():
                                 semaines = jours_tot // 7
                                 st.success(f"🎯 Rattrapage atteint en environ {mois} mois ({semaines} semaines / {jours_tot} jours) — le {date_rattrap.strftime('%d/%m/%Y')}.")
                             else:
-                                st.warning("⚠️ Rattrapage non atteint dans la limite de jours spécifiée.")
+                                toast_warning("Rattrapage non atteint dans la limite de jours spécifiée.")
 
                             fig, ax = plt.subplots(figsize=(10,5))
                             ax.plot(dates, theo_series, label="Simulation théorique", color="blue", linewidth=2)
@@ -4152,7 +4161,7 @@ def interface_solde_previsionnel():
                         versement_par_periode = numer / denom if denom != 0 else float('inf')
 
                         if versement_par_periode <= 0:
-                            st.success("✅ Tu es déjà au-dessus ou égal à la courbe théorique à la date choisie.")
+                            toast_success("Tu es déjà au-dessus ou égal à la courbe théorique à la date choisie.")
                         else:
                             total_verse = versement_par_periode * n_periodes
                             st.success(f"💡 Il faut verser **{versement_par_periode:.2f} € par {freq_common.lower()}** pour rattraper la courbe le {date_cible.strftime('%d/%m/%Y')}.")
@@ -4222,7 +4231,7 @@ def interface_voir_investissements_alpha():
 
     required_cols = {"Ticker", "Quantité", "Prix d'achat (€)"}
     if not required_cols.issubset(df_tr.columns):
-        st.error(f"⚠️ Le fichier doit contenir les colonnes : {', '.join(required_cols)}")
+        toast_error(f"Le fichier doit contenir les colonnes : {', '.join(required_cols)}")
         return
 
     tickers = df_tr["Ticker"].dropna().unique().tolist()
@@ -4240,7 +4249,7 @@ def interface_voir_investissements_alpha():
             data[t] = df
         except Exception as e:
             logger.error(f"Alpha Vantage failed for {t}: {e}")
-            st.warning(f"❌ Impossible de récupérer {t} ({e})")
+            toast_warning(f"Impossible de récupérer {t} ({e})")
 
     if not data:
         st.warning("Aucune donnée récupérée depuis Alpha Vantage.")
@@ -4284,7 +4293,7 @@ def interface_voir_investissements_alpha():
         ax.legend()
         st.pyplot(fig)
 
-    st.success("✅ Portefeuille analysé avec succès !")
+    toast_success("Portefeuille analysé avec succès !")
 
 # ==============================
 # 📊 INTERFACE PRINCIPALE
@@ -4485,7 +4494,7 @@ def interface_own_scans():
                 else:
                     st.info(f"🟡 **{row['pattern']}** : À améliorer ({row['success_rate']:.1f}%) - {row['detections']} détections")
         else:
-            st.success("✅ **Aucun pattern problématique détecté !**")
+            toast_success("**Aucun pattern problématique détecté !**")
             st.markdown("""
             ### 🎉 Excellent travail !
             
@@ -4521,7 +4530,7 @@ def interface_own_scans():
             # Conversion en DataFrame
             df_scans = pd.DataFrame(scans)
             
-            st.success(f"✅ **{len(df_scans)} scans trouvés** dans l'historique")
+            toast_success("**{len(df_scans)} scans trouvés** dans l'historique")
             
             # Graphique temporel
             if 'timestamp' in df_scans.columns:
@@ -4726,7 +4735,7 @@ def interface_external_logs():
     )
 
     if uploaded_file:
-        st.success(f"✅ Fichier '{uploaded_file.name}' uploadé avec succès !")
+        toast_success("Fichier '{uploaded_file.name}' uploadé avec succès !")
 
         # Analyser le fichier uploadé
         data = analyze_external_log(uploaded_file)
@@ -4788,7 +4797,7 @@ def interface_external_logs():
 
                 # Patterns problématiques
                 if diagnostics.get('problematic_patterns'):
-                    st.error("❌ Patterns problématiques détectés :")
+                    toast_error("Patterns problématiques détectés :")
 
                     for pattern_info in diagnostics['problematic_patterns']:
                         st.warning(
@@ -4798,7 +4807,7 @@ def interface_external_logs():
 
                 # Patterns fiables
                 if diagnostics.get('reliable_patterns'):
-                    st.success("✅ Patterns fiables :")
+                    toast_success("Patterns fiables :")
 
                     for pattern_info in diagnostics['reliable_patterns']:
                         st.info(
@@ -4822,7 +4831,7 @@ def interface_external_logs():
                     mime="application/json"
                 )
         else:
-            st.error(f"❌ Impossible d'analyser {uploaded_file.name}")
+            toast_error("Impossible d'analyser {uploaded_file.name}")
 
     else:
         st.info("👆 Uploadez les fichiers de logs pour commencer l'analyse")
@@ -4890,7 +4899,7 @@ def interface_comparison():
 
     # Si au moins 2 fichiers sont uploadés
     if file1 and file2:
-        st.success("✅ Analyse comparative de 2 sources")
+        toast_success("Analyse comparative de 2 sources")
 
         # Analyser les deux fichiers
         data1 = analyze_external_log(file1)
@@ -4961,11 +4970,11 @@ def interface_comparison():
 
             if common_problems:
                 for pattern, files in common_problems.items():
-                    st.warning(f"⚠️ **{pattern}** problématique dans : {', '.join(files)}")
+                    toast_warning("**{pattern}** problématique dans : {', '.join(files)}")
             else:
-                st.success("✅ Aucun pattern problématique commun")
+                toast_success("Aucun pattern problématique commun")
         else:
-            st.error("❌ Erreur lors de l'analyse des fichiers")
+            toast_error("Erreur lors de l'analyse des fichiers")
     else:
         st.info("👆 Uploadez au moins 2 fichiers pour comparer")
 
