@@ -2337,9 +2337,20 @@ def process_all_tickets_in_folder():
     - insertion en base + déplacement
     Version V2 avec conversions sécurisées.
     """
+    print("\n" + "="*60)
+    print("🔥 FONCTION process_all_tickets_in_folder APPELÉE")
+    print("="*60 + "\n")
+
     st.subheader("🧾 Traitement des tickets à scanner V2")
 
     tickets = [f for f in os.listdir(TO_SCAN_DIR) if f.lower().endswith((".jpg", ".png", ".jpeg", ".pdf"))]
+
+    print(f"📂 TO_SCAN_DIR : {TO_SCAN_DIR}")
+    print(f"📋 Tickets trouvés : {len(tickets)}")
+    for t in tickets:
+        print(f"  - {t}")
+    print()
+
     if not tickets:
         st.info("📂 Aucun ticket à scanner pour le moment.")
         return
@@ -2413,10 +2424,17 @@ def process_all_tickets_in_folder():
             valider = st.form_submit_button("✅ Valider et enregistrer ce ticket")
 
         if valider:
+            print(f"\n🎯 FORMULAIRE VALIDÉ pour {ticket_file}")
+            print(f"   Catégorie: {categorie}")
+            print(f"   Montant: {montant_corrige}")
+            print(f"   Montants possibles: {montants_possibles}\n")
+
             if not categorie or montant_corrige <= 0:
+                print(f"❌ VALIDATION ÉCHOUÉE : catégorie='{categorie}', montant={montant_corrige}")
                 toast_error("Catégorie ou montant invalide")
                 continue
 
+            print("✓ Validation OK, insertion transaction...")
             # Insérer la transaction
             insert_transaction_batch([{
                 "type": "dépense",
