@@ -1279,8 +1279,18 @@ def get_montant_from_line(label_pattern, all_lines, allow_next_line=True):
 
     def clean_ocr_text(txt):
         """Corrige les erreurs courantes de lecture OCR (O/0, I/1, etc.)."""
-        txt = txt.replace("O", "0").replace("o", "0")
-        txt = txt.replace("I", "1").replace("l", "1")
+        # Ne remplacer O par 0 QUE dans un contexte numérique (entouré de chiffres)
+        # Exemple: "1O5" → "105", mais "MONTANT" reste "MONTANT"
+        txt = re.sub(r'(\d)[Oo](\d)', r'\g<1>0\g<2>', txt)  # 1O5 → 105
+        txt = re.sub(r'(\d)[Oo](?=\s|$|,|\.)', r'\g<1>0', txt)  # 1O → 10
+        txt = re.sub(r'(?<=\s|^|,|\.)[Oo](\d)', r'0\g<1>', txt)  # O5 → 05
+
+        # Ne remplacer I/l par 1 QUE dans un contexte numérique
+        txt = re.sub(r'(\d)[Il](\d)', r'\g<1>1\g<2>', txt)  # 2I5 → 215
+        txt = re.sub(r'(\d)[Il](?=\s|$|,|\.)', r'\g<1>1', txt)  # 2I → 21
+        txt = re.sub(r'(?<=\s|^|,|\.)[Il](\d)', r'1\g<1>', txt)  # I5 → 15
+
+        # Nettoyer les espaces
         txt = re.sub(r"[\u200b\s]+", " ", txt)
         return txt.strip()
 
@@ -1327,8 +1337,14 @@ def parse_ticket_metadata(ocr_text: str):
 
     # === MÉTHODE A : Totaux directs (comme avant)
     total_patterns = [
-        r"TOTAL\s*TTC", r"TOTAL\s*(A\s*PAYER)?", r"MONTANT\s*(R[EÉ]EL|TTC)?",
-        r"NET\s*A\s*PAYER", r"À\s*PAYER", r"TOTAL$", r"TTC"
+        r"TOTAL\s*TTC",
+        r"TOTAL\s*(A\s*PAYER)?",
+        r"MONTANT\s*(R[EÉ][EÉ][LI]|R[EÉ][LI][LI]|TTC)?",  # REEL, RÉEL, RELL, RFEI, etc.
+        r"NET\s*A\s*PAYER",
+        r"À\s*PAYER",
+        r"TOTAL$",
+        r"TTC",
+        r"MONTANT\s*EUR",  # Variante Leclerc
     ]
     montants_A = []
     patterns_A_matches = []
