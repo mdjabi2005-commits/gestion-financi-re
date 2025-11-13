@@ -5125,7 +5125,7 @@ def main():
             
             page = st.radio(
                 "Navigation",
-                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel"," Analyse"]
+                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel", "🔬 Analyse"]
             )
             
             # 🔄 BOUTON DE RAFRAÎCHISSEMENT DES DONNÉES (discret en bas)
@@ -5183,8 +5183,9 @@ def main():
                 
         elif page == "📈 Solde prévisionnel":
             interface_solde_previsionnel()
-        
-        elif page == "Analyse" : 
+
+        elif page == "🔬 Analyse":
+            print("[DEBUG] Page Analyse selectionnee !")
             interface_ocr_analysis_complete()
             
     except Exception as e:
