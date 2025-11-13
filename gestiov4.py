@@ -4470,168 +4470,215 @@ def interface_own_scans():
 
 def interface_external_logs():
     """Interface pour analyser les logs externes des utilisateurs."""
-    
+
     st.subheader("🔬 Analyse de Logs Externes")
     st.info("💡 **Fonctionnalité en développement**")
     st.markdown("""
     ### 📤 Upload de Logs Utilisateurs
-    
+
     Cette section permettra d'analyser les logs OCR de vos utilisateurs pour :
     - 🔍 Diagnostiquer les problèmes d'OCR
     - 📊 Comparer les performances entre utilisateurs
     - 🐛 Identifier les patterns problématiques
-    
+
     **Formats supportés :**
     - `pattern_log.json` - Statistiques des patterns
     - `scan_history.jsonl` - Historique des scans
     - `performance_stats.json` - Métriques de performance
-    
+
     🚧 **Statut :** En cours de développement
     """)
-    
+
     # Interface basique d'upload
     uploaded_file = st.file_uploader(
         "📁 Uploader un fichier de logs (JSON/JSONL)",
         type=['json', 'jsonl', 'txt'],
         help="Uploadez les logs d'un utilisateur pour analyse"
     )
-    
+
     if uploaded_file:
         st.success(f"✅ Fichier '{uploaded_file.name}' uploadé avec succès !")
-        st.info("🔧 Analyse en cours d'implémentation..."
-                        "Patterns problématiques",
-                        len(diagnostics.get('problematic_patterns', [])))
-                    
-                
-        # Affichage selon le type
-        if isinstance(data, dict) and data.get('type') == 'pattern_counts':
-            st.markdown("#### 📊 Compteurs de patterns")
-            
-            patterns = data['data']
-            df = pd.DataFrame([
-                {'Pattern': k, 'Détections': v}
-                for k, v in sorted(patterns.items(), key=lambda x: x[1], reverse=True)
-            ])
-            
-            # Graphique
-            fig = px.bar(
-                df.head(20),
-                x='Pattern',
-                y='Détections',
-                title='Top 20 Patterns Détectés'
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Tableau complet
-            st.dataframe(df, use_container_width=True)
-        
-        elif isinstance(data, list):
-            st.markdown("#### 📋 Analyse détaillée des scans")
-            
-            # Patterns problématiques
-            if diagnostics['problematic_patterns']:
-                st.error("❌ Patterns problématiques détectés :")
-                
-                for pattern_info in diagnostics['problematic_patterns']:
-                    st.warning(
-                        f"⚠️ **{pattern_info['pattern']}** : "
-                        f"Succès {pattern_info['success_rate']:.1f}% sur {pattern_info['detections']} détections"
-                    )
-            
-            # Patterns fiables
-            if diagnostics['reliable_patterns']:
-                st.success("✅ Patterns fiables :")
-                
-                for pattern_info in diagnostics['reliable_patterns']:
-                    st.info(
-                        f"✓ **{pattern_info['pattern']}** : "
-                        f"Succès {pattern_info['success_rate']:.1f}% sur {pattern_info['detections']} détections"
-                    )
-        
-        # Recommandations
-        if diagnostics['recommendations']:
-            st.markdown("### 💡 Recommandations")
-            for rec in diagnostics['recommendations']:
-                st.markdown(f"- {rec}")
-        
-        # Export du diagnostic
-        if st.button(f"💾 Exporter diagnostic - {uploaded_file.name}"):
-            diagnostic_json = json.dumps(diagnostics, indent=2, ensure_ascii=False)
-            st.download_button(
-                "📥 Télécharger le diagnostic",
-                diagnostic_json,
-                f"diagnostic_{uploaded_file.name}",
-                mime="application/json"
-            )
-    if not uploaded_file :
+
+        # Analyser le fichier uploadé
+        data = analyze_external_log(uploaded_file)
+
+        if data:
+            # Diagnostic des données
+            diagnostics = diagnose_ocr_patterns(data)
+
+            # Métriques principales
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("Total scans", diagnostics.get('total_scans', 0))
+
+            with col2:
+                success_rate = diagnostics.get('success_rate', 0)
+                st.metric(
+                    "Taux de succès",
+                    f"{success_rate:.1f}%",
+                    delta=f"{success_rate - 70:.1f}%" if success_rate > 0 else None
+                )
+
+            with col3:
+                st.metric(
+                    "Patterns fiables",
+                    len(diagnostics.get('reliable_patterns', []))
+                )
+
+            with col4:
+                st.metric(
+                    "Patterns problématiques",
+                    len(diagnostics.get('problematic_patterns', []))
+                )
+
+            # Affichage selon le type
+            if isinstance(data, dict) and data.get('type') == 'pattern_counts':
+                st.markdown("#### 📊 Compteurs de patterns")
+
+                patterns = data['data']
+                df = pd.DataFrame([
+                    {'Pattern': k, 'Détections': v}
+                    for k, v in sorted(patterns.items(), key=lambda x: x[1], reverse=True)
+                ])
+
+                # Graphique
+                fig = px.bar(
+                    df.head(20),
+                    x='Pattern',
+                    y='Détections',
+                    title='Top 20 Patterns Détectés'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Tableau complet
+                st.dataframe(df, use_container_width=True)
+
+            elif isinstance(data, list):
+                st.markdown("#### 📋 Analyse détaillée des scans")
+
+                # Patterns problématiques
+                if diagnostics.get('problematic_patterns'):
+                    st.error("❌ Patterns problématiques détectés :")
+
+                    for pattern_info in diagnostics['problematic_patterns']:
+                        st.warning(
+                            f"⚠️ **{pattern_info['pattern']}** : "
+                            f"Succès {pattern_info['success_rate']:.1f}% sur {pattern_info['detections']} détections"
+                        )
+
+                # Patterns fiables
+                if diagnostics.get('reliable_patterns'):
+                    st.success("✅ Patterns fiables :")
+
+                    for pattern_info in diagnostics['reliable_patterns']:
+                        st.info(
+                            f"✓ **{pattern_info['pattern']}** : "
+                            f"Succès {pattern_info['success_rate']:.1f}% sur {pattern_info['detections']} détections"
+                        )
+
+            # Recommandations
+            if diagnostics.get('recommendations'):
+                st.markdown("### 💡 Recommandations")
+                for rec in diagnostics['recommendations']:
+                    st.markdown(f"- {rec}")
+
+            # Export du diagnostic
+            if st.button(f"💾 Exporter diagnostic - {uploaded_file.name}"):
+                diagnostic_json = json.dumps(diagnostics, indent=2, ensure_ascii=False)
+                st.download_button(
+                    "📥 Télécharger le diagnostic",
+                    diagnostic_json,
+                    f"diagnostic_{uploaded_file.name}",
+                    mime="application/json"
+                )
+        else:
+            st.error(f"❌ Impossible d'analyser {uploaded_file.name}")
+
+    else:
         st.info("👆 Uploadez les fichiers de logs pour commencer l'analyse")
-        
+
         # Instructions
         with st.expander("📖 Instructions pour les utilisateurs"):
             st.markdown("""
             ### Comment récupérer vos logs OCR :
-            
+
             1. **pattern_log.json** : Compteurs de patterns détectés
                - Chemin : `data/ocr_logs/pattern_log.json`
-            
+
             2. **scan_history.jsonl** : Historique complet des scans
                - Chemin : `data/ocr_logs/scan_history.jsonl`
-            
+
             3. **performance_stats.json** : Statistiques de performance
                - Chemin : `data/ocr_logs/performance_stats.json`
-            
+
             4. **pattern_stats.json** : Statistiques détaillées par pattern
                - Chemin : `data/ocr_logs/pattern_stats.json`
-            
+
             ### Format des logs :
             - JSON : Fichiers structurés avec statistiques
             - JSONL : Une ligne JSON par scan (historique)
             - TXT : Extraction basique de patterns
             """)
-    
-    else :
-        st.error(f"❌ Impossible d'analyser {uploaded_file.name}")
 
 def interface_comparison():
     """Comparaison entre différents logs/utilisateurs."""
-    
+
     st.subheader("📈 Comparaison Multi-Sources")
     st.info("💡 **Fonctionnalité en développement**")
     st.markdown("""
     ### 🔀 Analyse Comparative
-    
+
     Cette section permettra de comparer :
     - 👥 Performances entre différents utilisateurs
     - 📅 Évolution dans le temps
     - 🏢 Comparaison entre succursales/équipes
     - 🌍 Analyse géographique
-    
+
     **Métriques comparées :**
     - 📊 Taux de succès OCR
     - 🎯 Patterns les plus fiables
     - ⚠️ Patterns problématiques
     - 💰 Montants moyens détectés
     - ⏱️ Temps de traitement
-    
+
     **Visualisations :**
     - 📊 Graphiques comparatifs
     - 📈 Tendances temporelles
     - 🎯 Heatmaps de performance
-    
+
     🚧 **Statut :** En cours de développement
     """)
-    
+
     # Interface basique
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("#### 📁 Source 1")
-        st.file_uploader("Logs utilisateur 1", type=['json', 'jsonl'], key="comp1")
+        file1 = st.file_uploader("Logs utilisateur 1", type=['json', 'jsonl'], key="comp1")
     with col2:
         st.markdown("#### 📁 Source 2")
-        st.file_uploader("Logs utilisateur 2", type=['json', 'jsonl'], key="comp2")
-    
-    st.info("🔧 Upload et comparaison automatique en cours d'implémentation...")
-            
+        file2 = st.file_uploader("Logs utilisateur 2", type=['json', 'jsonl'], key="comp2")
+
+    # Si au moins 2 fichiers sont uploadés
+    if file1 and file2:
+        st.success("✅ Analyse comparative de 2 sources")
+
+        # Analyser les deux fichiers
+        data1 = analyze_external_log(file1)
+        data2 = analyze_external_log(file2)
+
+        if data1 and data2:
+            # Diagnostics
+            diag1 = diagnose_ocr_patterns(data1)
+            diag2 = diagnose_ocr_patterns(data2)
+
+            comparisons = {
+                file1.name: diag1,
+                file2.name: diag2
+            }
+
+            # Tableau comparatif
+            comparison_data = []
             for filename, diag in comparisons.items():
                 comparison_data.append({
                     'Fichier': filename[:30],
@@ -4640,13 +4687,13 @@ def interface_comparison():
                     'Patterns OK': len(diag.get('reliable_patterns', [])),
                     'Patterns KO': len(diag.get('problematic_patterns', []))
                 })
-            
+
             df_comp = pd.DataFrame(comparison_data)
             st.dataframe(df_comp, use_container_width=True)
-            
+
             # Graphiques comparatifs
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 # Taux de succès
                 fig = px.bar(
@@ -4657,7 +4704,7 @@ def interface_comparison():
                     color='Succès (%)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            
+
             with col2:
                 # Patterns problématiques
                 fig = px.bar(
@@ -4668,10 +4715,10 @@ def interface_comparison():
                     barmode='group'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            
+
             # Patterns communs problématiques
             st.markdown("### 🔍 Patterns problématiques communs")
-            
+
             all_problematic = {}
             for filename, diag in comparisons.items():
                 for pattern_info in diag.get('problematic_patterns', []):
@@ -4679,54 +4726,55 @@ def interface_comparison():
                     if pattern not in all_problematic:
                         all_problematic[pattern] = []
                     all_problematic[pattern].append(filename)
-            
+
             # Afficher les patterns présents dans plusieurs fichiers
             common_problems = {k: v for k, v in all_problematic.items() if len(v) > 1}
-            
+
             if common_problems:
                 for pattern, files in common_problems.items():
                     st.warning(f"⚠️ **{pattern}** problématique dans : {', '.join(files)}")
             else:
                 st.success("✅ Aucun pattern problématique commun")
-    
+        else:
+            st.error("❌ Erreur lors de l'analyse des fichiers")
     else:
         st.info("👆 Uploadez au moins 2 fichiers pour comparer")
 
 def interface_diagnostic():
     """Diagnostic approfondi avec recommandations détaillées."""
-    
+
     st.subheader("🛠️ Diagnostic Complet OCR")
     st.info("💡 **Fonctionnalité en développement**")
-    
+
     st.markdown("""
     ### 🔍 Analyse Approfondie
-    
+
     Cette section fournira un diagnostic complet de votre système OCR :
-    
+
     **Analyses incluses :**
     - 🎯 Taux de succès global et par type
     - 📊 Performance par pattern
     - ⚠️ Identification des points faibles
     - 💡 Recommandations d'amélioration
     - 🔧 Suggestions de configuration
-    
+
     **Niveaux de diagnostic :**
     - ⚡ **Rapide** : Vue d'ensemble (1-2 min)
     - 📊 **Standard** : Analyse détaillée (3-5 min)
     - 🔬 **Approfondie** : Audit complet (5-10 min)
-    
+
     **Rapports générés :**
     - 📄 Résumé exécutif
     - 📈 Graphiques de tendances
     - 🎯 Liste d'actions prioritaires
     - 📋 Guide d'optimisation
-    
+
     🚧 **Statut :** En cours de développement
     """)
-    
+
     # Interface basique de sélection
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("#### 📊 Source des données")
         source = st.radio(
@@ -4734,7 +4782,7 @@ def interface_diagnostic():
             ["💾 Mes logs locaux", "📤 Upload fichier externe"],
             label_visibility="collapsed"
         )
-    
+
     with col2:
         st.markdown("#### 🔍 Profondeur d'analyse")
         depth = st.select_slider(
@@ -4742,161 +4790,39 @@ def interface_diagnostic():
             ["⚡ Rapide", "📊 Standard", "🔬 Approfondie"],
             label_visibility="collapsed"
         )
-    
+
     st.info(f"🔧 Analyse {depth} en cours d'implémentation...")
-    
+
     # Aperçu de ce qui sera disponible
     with st.expander("👀 Aperçu du futur rapport"):
         st.markdown("""
         **Le diagnostic complet inclura :**
-        
+
         1. **📊 Vue d'ensemble**
            - Nombre total de scans
            - Taux de succès global
            - Tendances sur 7/30 jours
-        
+
         2. **🎯 Analyse par Pattern**
            - Top 10 patterns fiables
            - Top 10 patterns problématiques
            - Suggestions d'optimisation
-        
+
         3. **⚠️ Points d'attention**
            - Erreurs critiques
            - Dégradations de performance
            - Patterns à surveiller
-        
+
         4. **💡 Recommandations**
            - Actions prioritaires
            - Ajustements de configuration
            - Formation recommandée
-        
+
         5. **📈 Projections**
            - Évolution attendue
            - Objectifs réalistes
            - ROI estimé
         """)
-                    delta=f"{success_rate - 70:.1f}%"
-                )
-            
-            with col3:
-                st.metric("Patterns OK", len(diagnostics.get('reliable_patterns', [])))
-            
-            with col4:
-                st.metric("Patterns KO", len(diagnostics.get('problematic_patterns', [])))
-            
-            # Analyse approfondie selon le niveau
-            if depth in ["Standard", "Approfondie"]:
-                st.markdown("### 🔍 Analyse Détaillée")
-                
-                tab1, tab2, tab3 = st.tabs(["Patterns", "Temporel", "Catégories"])
-                
-                with tab1:
-                    # Analyse des patterns
-                    if diagnostics.get('problematic_patterns'):
-                        st.error(f"❌ {len(diagnostics['problematic_patterns'])} patterns critiques")
-                        
-                        for p in diagnostics['problematic_patterns'][:5]:
-                            st.markdown(f"- **{p['pattern']}** : {p['success_rate']:.1f}% de succès")
-                    
-                    if diagnostics.get('reliable_patterns'):
-                        st.success(f"✅ {len(diagnostics['reliable_patterns'])} patterns fiables")
-                
-                with tab2:
-                    # Analyse temporelle si disponible
-                    if isinstance(data, list) and data:
-                        df = pd.DataFrame(data)
-                        if 'timestamp' in df.columns:
-                            df['timestamp'] = pd.to_datetime(df['timestamp'])
-                            df['hour'] = df['timestamp'].dt.hour
-                            
-                            # Répartition par heure
-                            hourly = df.groupby('hour').size()
-                            
-                            fig = px.bar(
-                                x=hourly.index,
-                                y=hourly.values,
-                                title="Répartition des scans par heure",
-                                labels={'x': 'Heure', 'y': 'Nombre de scans'}
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
-                
-                with tab3:
-                    # Analyse par catégorie
-                    if isinstance(data, list):
-                        categories = {}
-                        for scan in data:
-                            if 'extraction' in scan:
-                                cat = scan['extraction'].get('categorie_final', 'autres')
-                                if cat not in categories:
-                                    categories[cat] = {'success': 0, 'total': 0}
-                                
-                                categories[cat]['total'] += 1
-                                if scan.get('result', {}).get('success'):
-                                    categories[cat]['success'] += 1
-                        
-                        if categories:
-                            cat_analysis = []
-                            for cat, stats in categories.items():
-                                success_rate = stats['success'] / stats['total'] * 100 if stats['total'] > 0 else 0
-                                cat_analysis.append({
-                                    'Catégorie': cat,
-                                    'Total': stats['total'],
-                                    'Succès (%)': success_rate
-                                })
-                            
-                            df_cat = pd.DataFrame(cat_analysis)
-                            st.dataframe(df_cat.sort_values('Succès (%)', ascending=False))
-            
-            # Recommandations finales
-            st.markdown("### 💡 Plan d'Action Recommandé")
-            
-            if diagnostics.get('recommendations'):
-                for i, rec in enumerate(diagnostics['recommendations'], 1):
-                    st.markdown(f"{i}. {rec}")
-            
-            # Recommandations supplémentaires selon le taux de succès
-            if success_rate < 50:
-                st.error("""
-                **🚨 Actions urgentes requises :**
-                1. Revoir complètement la logique d'extraction OCR
-                2. Enrichir la base de patterns avec des exemples réels
-                3. Implémenter un système de fallback pour les échecs
-                4. Ajouter des validations supplémentaires
-                """)
-            elif success_rate < 70:
-                st.warning("""
-                **⚠️ Améliorations recommandées :**
-                1. Optimiser les patterns problématiques identifiés
-                2. Améliorer le prétraitement des images
-                3. Ajouter des patterns régionaux/spécifiques
-                """)
-            else:
-                st.success("""
-                **✅ Système performant - Optimisations possibles :**
-                1. Continuer à monitorer les patterns
-                2. Affiner les patterns les moins fiables
-                3. Étendre la couverture à de nouveaux formats
-                """)
-            
-            # Export du rapport complet
-            if st.button("📥 Exporter le rapport complet"):
-                report = {
-                    'timestamp': datetime.now().isoformat(),
-                    'diagnostics': diagnostics,
-                    'depth': depth,
-                    'source': source
-                }
-                
-                report_json = json.dumps(report, indent=2, ensure_ascii=False)
-                st.download_button(
-                    "💾 Télécharger rapport JSON",
-                    report_json,
-                    f"rapport_diagnostic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-    
-    else:
-        st.warning("Aucune donnée disponible pour le diagnostic")
 
 # Liste de catégories valides connues (tu peux l'étendre à volonté)
 KNOWN_CATEGORIES = [
