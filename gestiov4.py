@@ -396,13 +396,20 @@ logger = logging.getLogger(__name__)
 
 def get_ocr_performance_report():
     """Récupère le rapport de performance depuis les fichiers locaux."""
-    # À adapter selon votre structure
     try:
+        print(f"[DEBUG] get_ocr_performance_report() - Chemin: {OCR_PERFORMANCE_LOG}")
         if os.path.exists(OCR_PERFORMANCE_LOG):
+            print(f"[DEBUG] Fichier existe, lecture...")
             with open(OCR_PERFORMANCE_LOG, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except:
-        pass
+                data = json.load(f)
+                print(f"[DEBUG] Données chargées: {data}")
+                return data
+        else:
+            print(f"[DEBUG] Fichier n'existe pas")
+    except Exception as e:
+        print(f"[DEBUG] ERREUR lors de la lecture: {e}")
+        import traceback
+        traceback.print_exc()
     return {}
 
 def get_best_patterns(min_detections, min_success_rate):
@@ -4357,10 +4364,16 @@ def interface_own_scans():
     
     with tab1:
         st.subheader("📊 Performance Globale")
-        
+
         # Charger les stats depuis vos fichiers locaux
         perf = get_ocr_performance_report()
-        
+
+        # DEBUG: Afficher ce qui a été chargé
+        print(f"[DEBUG-ANALYSE] Fichier existe: {os.path.exists(OCR_PERFORMANCE_LOG)}")
+        print(f"[DEBUG-ANALYSE] Contenu perf: {perf}")
+        print(f"[DEBUG-ANALYSE] Type perf: {type(perf)}")
+        print(f"[DEBUG-ANALYSE] Clés: {list(perf.keys()) if perf else 'None'}")
+
         # Vérifier si des données existent
         if not perf or (not perf.get('ticket') and not perf.get('revenu')):
             st.info("📊 **Aucune donnée OCR disponible pour le moment**")
