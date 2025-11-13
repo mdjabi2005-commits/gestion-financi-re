@@ -1273,7 +1273,7 @@ def insert_transaction_batch(transactions):
 def get_montant_from_line(label_pattern, all_lines, allow_next_line=True):
     """
     Recherche un montant à partir d'un label (ex: 'TOTAL', 'MONTANT RÉEL', etc.)
-    Corrigée pour être plus robuste face aux erreurs d'OCR et aux formats de tickets variés.
+    Retourne (montant, pattern_matched) où pattern_matched indique si le pattern a vraiment été trouvé.
     """
     montant_regex = r"(\d{1,5}[.,]?\d{0,2})\s*(?:€|eur|euros?)?"
 
@@ -1302,23 +1302,17 @@ def get_montant_from_line(label_pattern, all_lines, allow_next_line=True):
             found_same = re.findall(montant_regex, l_clean, re.IGNORECASE)
             if found_same:
                 # Prend le montant le plus grand sur la ligne (souvent le total TTC)
-                return safe_convert(max(found_same, key=lambda x: safe_convert(x)))
+                return (safe_convert(max(found_same, key=lambda x: safe_convert(x))), True)
 
             # Ligne suivante possible
             if allow_next_line and i + 1 < len(all_lines):
                 next_line = clean_ocr_text(all_lines[i + 1])
                 found_next = re.findall(montant_regex, next_line, re.IGNORECASE)
                 if found_next:
-                    return safe_convert(max(found_next, key=lambda x: safe_convert(x)))
+                    return (safe_convert(max(found_next, key=lambda x: safe_convert(x))), True)
 
-    # Si rien trouvé, essaie de repérer un montant seul sur une ligne typique de paiement
-    for l in all_lines:
-        l_clean = clean_ocr_text(l)
-        match = re.search(r"(\d+[.,]\d{2})", l_clean)
-        if match:
-            return safe_convert(match.group(1))
-
-    return 0.0
+    # Pattern pas trouvé
+    return (0.0, False)
 
 def parse_ticket_metadata(ocr_text: str):
     """
@@ -1349,9 +1343,9 @@ def parse_ticket_metadata(ocr_text: str):
     montants_A = []
     patterns_A_matches = []
     for pattern in total_patterns:
-        m = get_montant_from_line(pattern, lines)
-        if m > 0:
-            montants_A.append(round(m, 2))
+        montant, matched = get_montant_from_line(pattern, lines)
+        if matched and montant > 0:  # Ne compter que si le pattern a VRAIMENT matché
+            montants_A.append(round(montant, 2))
             patterns_A_matches.append(pattern)
 
     # === MÉTHODE B : Somme des paiements (CB, espèces, web, etc.)
