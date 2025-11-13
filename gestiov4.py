@@ -5125,7 +5125,7 @@ def main():
             
             page = st.radio(
                 "Navigation",
-                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel"," Analyse"]
+                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel","Analyse"]
             )
             
             # 🔄 BOUTON DE RAFRAÎCHISSEMENT DES DONNÉES (discret en bas)
