@@ -1771,8 +1771,9 @@ def backfill_recurrences_to_today(db_path):
 #  🏠 ACCUEIL V2
 # ============================== 
 def interface_accueil():
-    st.title("🏠 Tableau de Bord Financier V2")
-    
+    """Page d'accueil simplifiée avec système de bulles (expanders)"""
+    st.title("🏠 Tableau de Bord Financier")
+
     # Charger les données avec gestion d'erreurs
     try:
         df = load_transactions()
@@ -1780,616 +1781,407 @@ def interface_accueil():
         logger.error(f"Error loading data: {e}")
         toast_error("Erreur lors du chargement des données")
         return
-    
+
     if df.empty:
         st.info("💰 Aucune transaction enregistrée. Commencez par ajouter vos premières transactions !")
         return
-    
-    # 🔥 DÉTERMINER LA PREMIÈRE TRANSACTION
+
+    # === PÉRIODE (COMPACTE) ===
     premiere_date = df["date"].min().date()
     derniere_date = df["date"].max().date()
-    
-    st.markdown("---")
-    st.subheader("🎯 Période d'analyse")
-    
-    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-    
+
+    col1, col2, col3 = st.columns([3, 2, 1])
+
     with col1:
         periode_options = {
             "Depuis le début": "debut",
+            "3 derniers mois": 3,
             "6 derniers mois": 6,
-            "3 derniers mois": 3, 
             "12 derniers mois": 12,
             "Personnalisée": "custom"
         }
-        periode_choice = st.selectbox("Choisir la période", list(periode_options.keys()))
-    
+        periode_choice = st.selectbox("📅 Période d'analyse", list(periode_options.keys()), key="periode_accueil")
+
     with col2:
         if periode_choice == "Personnalisée":
-            date_debut = st.date_input("Date de début", value=premiere_date)
-            date_fin = st.date_input("Date de fin", value=derniere_date)
+            date_debut = st.date_input("Début", value=premiere_date, key="debut_accueil")
+            date_fin = st.date_input("Fin", value=derniere_date, key="fin_accueil")
         elif periode_choice == "Depuis le début":
             date_debut = premiere_date
             date_fin = derniere_date
-            st.info(f"📅 Depuis le début\n{date_debut.strftime('%d/%m/%Y')}")
         else:
             mois_retour = periode_options[periode_choice]
             date_debut = max(premiere_date, date.today() - relativedelta(months=mois_retour))
             date_fin = derniere_date
-            st.info(f"📅 {date_debut.strftime('%d/%m/%Y')} → {date_fin.strftime('%d/%m/%Y')}")
-    
+
+        st.caption(f"📆 {date_debut.strftime('%d/%m/%y')} → {date_fin.strftime('%d/%m/%y')}")
+
     with col3:
-        duree_mois = max(1, ((date_fin - date_debut).days // 30))
-        st.metric(
-            "📅 Couverture", 
-            f"{duree_mois} mois",
-            delta=f"Depuis {premiere_date.strftime('%d/%m/%y')}"
-        )
-    
-    with col4:
-        if st.button("🔄 Actualiser"):
+        if st.button("🔄", key="refresh_accueil", help="Actualiser les données"):
             refresh_and_rerun()
-    
-    # Filtrer les données selon la période
+
+    # Filtrer les données
     df_periode = df[(df["date"] >= pd.Timestamp(date_debut)) & (df["date"] <= pd.Timestamp(date_fin))]
-    
+
     if df_periode.empty:
         toast_warning("Aucune transaction dans la période sélectionnée.")
         return
-    
-    # 🔥 STATISTIQUES PAR MOIS
-    df_mensuel = df_periode.copy()
-    df_mensuel["mois"] = df_mensuel["date"].dt.to_period("M")
-    df_mensuel["mois_str"] = df_mensuel["date"].dt.strftime("%b %Y")
-    
-    transactions_par_mois = df_mensuel.groupby("mois_str").agg({
-        "montant": "count",
-        "type": lambda x: (x == "revenu").sum()
-    }).rename(columns={"montant": "total_transactions", "type": "nb_revenus"})
-    
-    transactions_par_mois["nb_depenses"] = transactions_par_mois["total_transactions"] - transactions_par_mois["nb_revenus"]
-    
-    # 🔥 MÉTRIQUES PRINCIPALES AMÉLIORÉES
+
+    # === MÉTRIQUES PRINCIPALES (SIMPLIFIÉES) ===
     st.markdown("---")
-    st.subheader("📈 Vue d'Ensemble")
-    
+
     total_revenus = df_periode[df_periode["type"] == "revenu"]["montant"].sum()
     total_depenses = df_periode[df_periode["type"] == "dépense"]["montant"].sum()
     solde_periode = total_revenus - total_depenses
     nb_transactions = len(df_periode)
-    
-    df_depenses = df_periode[df_periode["type"] == "dépense"]
-    df_revenus = df_periode[df_periode["type"] == "revenu"]
-    
-    nb_depenses = len(df_depenses)
-    nb_revenus = len(df_revenus)
-    mois_couverts = max(1, ((date_fin - date_debut).days // 30))
-    
-    depenses_mensuelles = total_depenses / mois_couverts
-    revenus_mensuels = total_revenus / mois_couverts
-    moyenne_depense = df_depenses["montant"].median() if not df_depenses.empty else 0
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
-        solde_color = "green" if solde_periode >= 0 else "red"
-        solde_icon = "📈" if solde_periode >= 0 else "📉"
         st.metric(
-            f"{solde_icon} Solde période", 
-            f"{solde_periode:+.2f} €",
-            delta=f"{solde_periode/mois_couverts:+.0f} €/mois"
+            "💰 Solde",
+            f"{solde_periode:+.0f} €",
+            delta="Positif" if solde_periode >= 0 else "Négatif",
+            delta_color="normal" if solde_periode >= 0 else "inverse",
+            help="Revenus - Dépenses sur la période sélectionnée"
         )
-    
+
     with col2:
         st.metric(
-            "💸 Dépenses totales", 
-            f"{total_depenses:.2f} €",
-            delta=f"~{depenses_mensuelles:.0f} €/mois • {nb_depenses} transactions"
+            "💸 Dépenses",
+            f"{total_depenses:.0f} €",
+            delta=f"{len(df_periode[df_periode['type'] == 'dépense'])} transactions",
+            help="Total des dépenses sur la période"
         )
-    
+
     with col3:
         st.metric(
-            "💹 Revenus totaux", 
-            f"{total_revenus:.2f} €",
-            delta=f"~{revenus_mensuels:.0f} €/mois • {nb_revenus} transactions"
+            "💹 Revenus",
+            f"{total_revenus:.0f} €",
+            delta=f"{len(df_periode[df_periode['type'] == 'revenu'])} transactions",
+            help="Total des revenus sur la période"
         )
-    
+
     with col4:
-        transactions_mensuelles = nb_transactions / mois_couverts
+        mois_couverts = max(1, ((date_fin - date_debut).days // 30))
+        tx_par_mois = nb_transactions / mois_couverts
         st.metric(
-            "📊 Activité moyenne", 
-            f"{transactions_mensuelles:.1f}/mois",
-            delta=f"{nb_transactions} transactions total"
+            "📊 Activité",
+            f"{tx_par_mois:.1f}/mois",
+            delta=f"{nb_transactions} total",
+            help="Nombre moyen de transactions par mois"
         )
-    
-    # 🔥 TABLEAU DES TRANSACTIONS PAR MOIS
-    st.markdown("---")
-    st.subheader("📅 Activité Mensuelle")
-    
-    if not transactions_par_mois.empty:
-        transactions_par_mois = transactions_par_mois.sort_index(
-            key=lambda x: pd.to_datetime(x, format='%b %Y')
-        )
-        
-        df_display = transactions_par_mois.reset_index()
-        df_display = df_display.rename(columns={
-            "mois_str": "Mois",
-            "total_transactions": "Total",
-            "nb_revenus": "Revenus",
-            "nb_depenses": "Dépenses"
-        })
-        
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Mois": st.column_config.TextColumn("📅 Mois"),
-                "Total": st.column_config.NumberColumn("📊 Total", format="%d"),
-                "Revenus": st.column_config.NumberColumn("💹 Revenus", format="%d"),
-                "Dépenses": st.column_config.NumberColumn("💸 Dépenses", format="%d")
-            }
-        )
-        
-        # 🔥 GRAPHIQUE DE L'ACTIVITÉ MENSUELLE
-        col1, col2 = st.columns(2)
-        
+
+    # === MÉTRIQUES DÉTAILLÉES (EN ACCORDÉON) ===
+    with st.expander("📈 Voir métriques détaillées"):
+        col1, col2, col3, col4 = st.columns(4)
+
         with col1:
-            st.markdown("**📈 Évolution du nombre de transactions**")
-            
-            fig, ax = plt.subplots(figsize=(10, 4))
-            
+            if total_revenus > 0:
+                taux_epargne = (solde_periode / total_revenus) * 100
+                if taux_epargne >= 20:
+                    emoji, message = "🎉", "Excellent"
+                elif taux_epargne >= 10:
+                    emoji, message = "👍", "Très bien"
+                elif taux_epargne >= 0:
+                    emoji, message = "✅", "Correct"
+                else:
+                    emoji, message = "🚨", "Découvert"
+
+                st.metric(f"{emoji} Taux d'épargne", f"{taux_epargne:.1f}%", delta=message)
+            else:
+                st.metric("Taux d'épargne", "N/A")
+
+        with col2:
+            if total_revenus > 0:
+                ratio_depenses = (total_depenses / total_revenus) * 100
+                st.metric("📊 Ratio dépenses/revenus", f"{ratio_depenses:.0f}%")
+            else:
+                st.metric("Ratio dépenses/revenus", "N/A")
+
+        with col3:
+            df_depenses = df_periode[df_periode["type"] == "dépense"]
+            if not df_depenses.empty:
+                depense_max = df_depenses["montant"].max()
+                st.metric("🔥 Plus grosse dépense", f"{depense_max:.0f} €")
+            else:
+                st.metric("Plus grosse dépense", "0 €")
+
+        with col4:
+            if not df_depenses.empty:
+                depense_moyenne = df_depenses["montant"].median()
+                st.metric("📊 Dépense médiane", f"{depense_moyenne:.0f} €")
+            else:
+                st.metric("Dépense médiane", "0 €")
+
+        # Explication des métriques
+        st.info("""
+        **💡 Explication des métriques :**
+        - **Taux d'épargne** : Pourcentage de vos revenus que vous épargnez (Solde / Revenus × 100)
+        - **Ratio dépenses/revenus** : Part de vos revenus dépensée (Dépenses / Revenus × 100)
+        - **Plus grosse dépense** : La transaction la plus importante de la période
+        - **Dépense médiane** : Montant médian de vos dépenses (50% en-dessous, 50% au-dessus)
+        """)
+
+    # === ÉVOLUTION MENSUELLE (TABLEAU + GRAPHIQUE COMBINÉS) ===
+    with st.expander("📊 Évolution mensuelle", expanded=True):
+        df_mensuel = df_periode.copy()
+        df_mensuel["mois"] = df_mensuel["date"].dt.to_period("M")
+        df_mensuel["mois_str"] = df_mensuel["date"].dt.strftime("%b %Y")
+
+        # Préparation données
+        df_evolution = df_mensuel.groupby(["mois_str", "type"])["montant"].sum().unstack(fill_value=0)
+        df_evolution = df_evolution.reindex(sorted(df_evolution.index, key=lambda x: pd.to_datetime(x, format='%b %Y')))
+
+        if not df_evolution.empty:
+            # Tableau compact
+            st.markdown("**📋 Résumé mensuel**")
+            df_display = df_evolution.copy()
+            df_display["Solde"] = df_display.get("revenu", 0) - df_display.get("dépense", 0)
+            df_display = df_display.reset_index()
+            df_display.columns = ["Mois", "Dépenses", "Revenus", "Solde"]
+
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Mois": st.column_config.TextColumn("📅 Mois"),
+                    "Dépenses": st.column_config.NumberColumn("💸 Dépenses", format="%.0f €"),
+                    "Revenus": st.column_config.NumberColumn("💹 Revenus", format="%.0f €"),
+                    "Solde": st.column_config.NumberColumn("💰 Solde", format="%+.0f €")
+                }
+            )
+
+            # Graphique intégré
+            st.markdown("**📈 Graphique d'évolution**")
+
+            # Détection thème
             try:
                 theme = st.get_option("theme.base")
-                is_dark_theme = theme == "dark"
+                is_dark = theme == "dark"
             except:
-                is_dark_theme = False
-                
-            bg_color = "#0E1117" if is_dark_theme else "white"
-            text_color = "white" if is_dark_theme else "black"
-            
+                is_dark = False
+
+            bg_color = "#0E1117" if is_dark else "white"
+            text_color = "white" if is_dark else "black"
+
+            fig, ax = plt.subplots(figsize=(12, 5))
             fig.patch.set_facecolor(bg_color)
             ax.set_facecolor(bg_color)
             ax.tick_params(colors=text_color)
-            ax.xaxis.label.set_color(text_color)
-            ax.yaxis.label.set_color(text_color)
-            ax.title.set_color(text_color)
-            
-            x_pos = np.arange(len(transactions_par_mois.index))
+
+            x_pos = np.arange(len(df_evolution.index))
             bar_width = 0.6
-            
-            bars_total = ax.bar(x_pos, transactions_par_mois["total_transactions"], 
-                               bar_width, label="Total", alpha=0.7, color="#4A90E2")
-            
-            ax.set_ylabel("Nombre de transactions", color=text_color, fontweight='bold')
+
+            # Barres revenus et dépenses
+            if "revenu" in df_evolution.columns:
+                ax.bar(x_pos, df_evolution["revenu"], bar_width, label="Revenus", color="#00D4AA", alpha=0.9)
+            if "dépense" in df_evolution.columns:
+                ax.bar(x_pos, -df_evolution["dépense"], bar_width, label="Dépenses", color="#FF6B6B", alpha=0.9)
+
+            # Ligne de solde
+            if "revenu" in df_evolution.columns and "dépense" in df_evolution.columns:
+                solde = df_evolution["revenu"] - df_evolution["dépense"]
+                ax.plot(x_pos, solde, label="Solde", color="#4A90E2", marker='o', linewidth=2.5, markersize=5)
+
+            ax.axhline(0, color=text_color, linewidth=1, alpha=0.5)
+            ax.set_ylabel("Montant (€)", color=text_color, fontweight='bold')
             ax.set_xlabel("Mois", color=text_color, fontweight='bold')
-            ax.set_title("Évolution de l'activité mensuelle", color=text_color, fontweight='bold')
-            
             ax.set_xticks(x_pos)
-            ax.set_xticklabels(transactions_par_mois.index, rotation=45, ha='right', color=text_color)
+            ax.set_xticklabels(df_evolution.index, rotation=45, ha='right', color=text_color)
             ax.legend(facecolor=bg_color, edgecolor=text_color, labelcolor=text_color)
-            ax.grid(True, alpha=0.3)
-            
+            ax.grid(True, alpha=0.2)
+
+            for spine in ax.spines.values():
+                spine.set_color(text_color)
+                spine.set_alpha(0.3)
+
             plt.tight_layout()
             st.pyplot(fig)
-        
+        else:
+            st.info("Pas assez de données pour l'analyse mensuelle")
+
+    # === RÉPARTITION PAR CATÉGORIES ===
+    with st.expander("🥧 Répartition par catégories"):
+        col1, col2 = st.columns(2)
+
+        # Détection thème pour les pie charts
+        try:
+            theme = st.get_option("theme.base")
+            is_dark = theme == "dark"
+        except:
+            is_dark = False
+
+        bg_color = "#0E1117" if is_dark else "white"
+        text_color = "white" if is_dark else "black"
+
+        with col1:
+            st.markdown("**💸 Dépenses par catégorie**")
+            depenses_df = df_periode[df_periode["type"] == "dépense"]
+            if not depenses_df.empty:
+                categories_depenses = depenses_df.groupby("categorie")["montant"].sum().sort_values(ascending=False)
+
+                # Top 6 + Autres
+                top_categories = categories_depenses.head(6)
+                autres = categories_depenses[6:].sum() if len(categories_depenses) > 6 else 0
+                if autres > 0:
+                    top_categories = top_categories.copy()
+                    top_categories["Autres"] = autres
+
+                fig, ax = plt.subplots(figsize=(7, 5))
+                fig.patch.set_facecolor(bg_color)
+                ax.set_facecolor(bg_color)
+
+                colors = plt.cm.Set3(np.linspace(0, 1, len(top_categories)))
+                wedges, texts, autotexts = ax.pie(
+                    top_categories.values,
+                    labels=top_categories.index,
+                    autopct='%1.1f%%',
+                    startangle=90,
+                    colors=colors,
+                    wedgeprops={'edgecolor': bg_color, 'linewidth': 2}
+                )
+
+                for text in texts:
+                    text.set_color(text_color)
+                for autotext in autotexts:
+                    autotext.set_color('white' if is_dark else 'black')
+                    autotext.set_fontweight('bold')
+
+                ax.axis('equal')
+                st.pyplot(fig)
+            else:
+                st.info("Aucune dépense")
+
         with col2:
-            st.markdown("**🥧 Répartition Revenus/Dépenses**")
-            
-            total_revenus_count = transactions_par_mois["nb_revenus"].sum()
-            total_depenses_count = transactions_par_mois["nb_depenses"].sum()
-            
-            if total_revenus_count + total_depenses_count > 0:
-                fig, ax = plt.subplots(figsize=(8, 4))
-                
+            st.markdown("**💹 Revenus par catégorie**")
+            revenus_df = df_periode[df_periode["type"] == "revenu"]
+            if not revenus_df.empty:
+                categories_revenus = revenus_df.groupby("categorie")["montant"].sum().sort_values(ascending=False)
+
+                fig, ax = plt.subplots(figsize=(7, 5))
                 fig.patch.set_facecolor(bg_color)
                 ax.set_facecolor(bg_color)
-                
-                data = [total_revenus_count, total_depenses_count]
-                labels = [f"Revenus\n{total_revenus_count}", f"Dépenses\n{total_depenses_count}"]
-                colors = ["#00D4AA", "#FF6B6B"]
-                
+
+                colors = plt.cm.Pastel1(np.linspace(0, 1, len(categories_revenus)))
                 wedges, texts, autotexts = ax.pie(
-                    data, 
-                    labels=labels, 
-                    autopct='%1.1f%%', 
+                    categories_revenus.values,
+                    labels=categories_revenus.index,
+                    autopct='%1.1f%%',
                     startangle=90,
                     colors=colors,
                     wedgeprops={'edgecolor': bg_color, 'linewidth': 2}
                 )
-                
+
                 for text in texts:
                     text.set_color(text_color)
-                    text.set_fontweight('bold')
                 for autotext in autotexts:
-                    autotext.set_color('white')
+                    autotext.set_color('white' if is_dark else 'black')
                     autotext.set_fontweight('bold')
-                
+
                 ax.axis('equal')
-                ax.set_title("Répartition des transactions", color=text_color, fontweight='bold')
                 st.pyplot(fig)
             else:
-                st.info("📊 Pas assez de données pour le graphique")
-    
-    else:
-        st.info("📅 Pas assez de données pour l'analyse mensuelle")
-    
-    # 🔥 INDICATEURS DE SANTÉ FINANCIÈRE
-    st.markdown("---")
-    st.subheader("💰 Santé Financière")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if total_revenus > 0:
-            taux_epargne = (solde_periode / total_revenus) * 100
-            
-            if taux_epargne >= 20:
-                message = "🎉 Excellent"
-                couleur = "normal"
-            elif taux_epargne >= 10:
-                message = "👍 Très bien" 
-                couleur = "normal"
-            elif taux_epargne >= 0:
-                message = "✅ Correct"
-                couleur = "off"
+                st.info("Aucun revenu")
+
+    # === TOPS TRANSACTIONS (MENU DÉROULANT + GRAPHIQUE) ===
+    with st.expander("🎯 Tops transactions"):
+        col1, col2 = st.columns([1, 3])
+
+        with col1:
+            type_top = st.radio("Type", ["💸 Dépenses", "💹 Revenus"], key="type_top")
+            nombre_top = st.selectbox("Nombre", [5, 10, 15, 20], key="nb_top")
+
+        with col2:
+            if type_top == "💸 Dépenses":
+                top_trans = df_periode[df_periode["type"] == "dépense"].nlargest(nombre_top, "montant")
+                couleur = "#FF6B6B"
+                signe = "-"
             else:
-                message = "🚨 Découvert"
-                couleur = "inverse"
-                
-            st.metric(
-                "🎯 Taux d'épargne", 
-                f"{taux_epargne:.1f}%",
-                delta=message,
-                delta_color=couleur
-            )
-        else:
-            st.metric("🎯 Taux d'épargne", "N/A", delta="Aucun revenu")
-    
-    with col2:
-        if total_revenus > 0:
-            ratio_depenses = (total_depenses / total_revenus) * 100
-            
-            if ratio_depenses <= 80:
-                message = "✅ Maîtrisé"
-                couleur = "normal"
-            elif ratio_depenses <= 100:
-                message = "⚠️ Limite"
-                couleur = "off" 
-            else:
-                message = "🚨 Dangereux"
-                couleur = "inverse"
-                
-            st.metric(
-                "📊 Ratio dépenses", 
-                f"{ratio_depenses:.1f}%",
-                delta=message,
-                delta_color=couleur
-            )
-        else:
-            st.metric("📊 Ratio dépenses", "N/A", delta="Aucun revenu")
-    
-    with col3:
-        if not df_depenses.empty:
-            depense_max = df_depenses["montant"].max()
-            
-            if total_revenus > 0:
-                ratio_max = (depense_max / (total_revenus/mois_couverts)) * 100
-                if ratio_max > 50:
-                    message = "🚨 Important"
-                    couleur = "inverse"
-                elif ratio_max > 25:
-                    message = "⚠️ Notable"
-                    couleur = "off"
-                else:
-                    message = "✅ Normal"
-                    couleur = "normal"
-            else:
-                message = "💰 Dépense"
-                couleur = "normal"
-                
-            st.metric(
-                "🔥 Plus grosse dépense", 
-                f"{depense_max:.0f} €",
-                delta=message,
-                delta_color=couleur
-            )
-        else:
-            st.metric("🔥 Plus grosse dépense", "0 €")
-    
-    with col4:
-        tx_par_mois = nb_transactions / mois_couverts
-        if tx_par_mois > 20:
-            message = "📈 Actif"
-            couleur = "normal"
-        elif tx_par_mois > 10:
-            message = "📊 Moyen"
-            couleur = "normal"
-        else:
-            message = "📉 Faible"
-            couleur = "off"
-            
-        st.metric(
-            "🔄 Activité moyenne", 
-            f"{tx_par_mois:.1f}/mois",
-            delta=message,
-            delta_color=couleur
-        )
-    
-    # 🔥 DÉTECTION DU THÈME STREAMLIT
-    try:
-        theme = st.get_option("theme.base")
-        is_dark_theme = theme == "dark"
-    except:
-        is_dark_theme = False
-    
-    # 🔥 COULEURS ADAPTATIVES AU THÈME
-    if is_dark_theme:
-        bg_color = "#0E1117"
-        text_color = "white"
-        grid_color = "#2E2E2E"
-        face_color = "#0E1117"
-    else:
-        bg_color = "white"
-        text_color = "black"
-        grid_color = "#E0E0E0"
-        face_color = "white"
-    
-    couleur_revenus = "#00D4AA"
-    couleur_depenses = "#FF6B6B"
-    couleur_solde = "#4A90E2"
-    
-    # 🔥 GRAPHIQUE PRINCIPAL ADAPTÉ AU THÈME
-    st.markdown("---")
-    st.subheader("📊 Évolution Financière")
-    
-    df_mensuel = df_periode.copy()
-    df_mensuel["mois"] = df_mensuel["date"].dt.to_period("M")
-    df_mensuel["mois_str"] = df_mensuel["date"].dt.strftime("%b %Y")
-    
-    df_evolution = df_mensuel.groupby(["mois_str", "type"])["montant"].sum().unstack(fill_value=0)
-    df_evolution = df_evolution.reindex(sorted(df_evolution.index, key=lambda x: pd.to_datetime(x, format='%b %Y')))
-    
-    if not df_evolution.empty:
-        plt.style.use('default')
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
-        fig.patch.set_facecolor(bg_color)
-        ax.set_facecolor(bg_color)
-        ax.tick_params(colors=text_color)
-        ax.xaxis.label.set_color(text_color)
-        ax.yaxis.label.set_color(text_color)
-        ax.title.set_color(text_color)
-        
-        bar_width = 0.6
-        x_pos = np.arange(len(df_evolution.index))
-        
-        if "revenu" in df_evolution.columns:
-            bars_revenus = ax.bar(x_pos, df_evolution["revenu"], bar_width, 
-                                  label="Revenus", color=couleur_revenus, alpha=0.9,
-                                  edgecolor=text_color, linewidth=0.5)
-        
-        if "dépense" in df_evolution.columns:
-            bars_depenses = ax.bar(x_pos, -df_evolution["dépense"], bar_width, 
-                                   label="Dépenses", color=couleur_depenses, alpha=0.9,
-                                   edgecolor=text_color, linewidth=0.5)
-        
-        if "revenu" in df_evolution.columns and "dépense" in df_evolution.columns:
-            solde_mensuel = df_evolution.get("revenu", 0) - df_evolution.get("dépense", 0)
-            line_solde = ax.plot(x_pos, solde_mensuel, label="Solde", color=couleur_solde, 
-                                 marker='o', linewidth=3, markersize=6, markerfacecolor=bg_color,
-                                 markeredgecolor=couleur_solde, markeredgewidth=2)
-        
-        ax.axhline(0, color=text_color, linewidth=1, alpha=0.5)
-        ax.set_ylabel("Montant (€)", fontsize=12, fontweight='bold', color=text_color)
-        ax.set_xlabel("Mois", fontsize=12, fontweight='bold', color=text_color)
-        ax.set_title("Évolution des Revenus et Dépenses", fontsize=14, fontweight='bold', pad=20, color=text_color)
-        
-        legend = ax.legend(loc='upper left', frameon=True, fancybox=True, 
-                          facecolor=bg_color, edgecolor=text_color, labelcolor=text_color)
-        
-        ax.grid(True, alpha=0.2, color=grid_color)
-        ax.set_xticks(x_pos)
-        ax.set_xticklabels(df_evolution.index, rotation=45, ha='right', color=text_color)
-        
-        def add_value_labels(ax, bars):
-            for bar in bars:
-                height = bar.get_height()
-                if abs(height) > 0:
-                    label_color = text_color if abs(height) > max(ax.get_ylim())*0.1 else text_color
-                    va = 'bottom' if height > 0 else 'top'
-                    y_offset = 10 if height > 0 else -20
-                    
-                    ax.text(bar.get_x() + bar.get_width()/2., height + y_offset,
-                           f'{abs(height):.0f}€', ha='center', va=va,
-                           fontweight='bold', fontsize=9, color=label_color)
-        
-        if "revenu" in df_evolution.columns:
-            add_value_labels(ax, bars_revenus)
-        if "dépense" in df_evolution.columns:
-            add_value_labels(ax, bars_depenses)
-        
-        for spine in ax.spines.values():
-            spine.set_color(text_color)
-            spine.set_alpha(0.3)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        
-    else:
-        st.info("📈 Pas assez de données pour afficher l'évolution mensuelle")
-    
-    
-    # 🔥 RÉPARTITION DES CATÉGORIES ADAPTÉE
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🥧 Dépenses par Catégorie")
-        
-        depenses_df = df_periode[df_periode["type"] == "dépense"]
-        if not depenses_df.empty:
-            categories_depenses = depenses_df.groupby("categorie")["montant"].sum().sort_values(ascending=False)
-            total_depenses_calc = categories_depenses.sum()
-            
-            seuil_minimum = 0.03
-            categories_principales = categories_depenses[categories_depenses / total_depenses_calc >= seuil_minimum]
-            categories_autres = categories_depenses[categories_depenses / total_depenses_calc < seuil_minimum]
-            
-            if not categories_autres.empty:
-                categories_principales = categories_principales.copy()
-                categories_principales["Autres"] = categories_autres.sum()
-            
-            if not categories_principales.empty:
-                fig, ax = plt.subplots(figsize=(8, 6))
-                
+                top_trans = df_periode[df_periode["type"] == "revenu"].nlargest(nombre_top, "montant")
+                couleur = "#00D4AA"
+                signe = "+"
+
+            if not top_trans.empty:
+                # Graphique horizontal
+                fig, ax = plt.subplots(figsize=(10, max(5, nombre_top * 0.4)))
+
+                try:
+                    theme = st.get_option("theme.base")
+                    is_dark = theme == "dark"
+                except:
+                    is_dark = False
+
+                bg_color = "#0E1117" if is_dark else "white"
+                text_color = "white" if is_dark else "black"
+
                 fig.patch.set_facecolor(bg_color)
                 ax.set_facecolor(bg_color)
-                
-                colors = plt.cm.Set3(np.linspace(0, 1, len(categories_principales)))
-                wedges, texts, autotexts = ax.pie(
-                    categories_principales.values, 
-                    labels=categories_principales.index, 
-                    autopct='%1.1f%%', 
-                    startangle=90,
-                    colors=colors,
-                    wedgeprops={'edgecolor': bg_color, 'linewidth': 2}
-                )
-                
-                for text in texts:
-                    text.set_color(text_color)
-                for autotext in autotexts:
-                    autotext.set_color('white' if is_dark_theme else 'black')
-                    autotext.set_fontweight('bold')
-                
-                ax.axis('equal')
-                ax.set_title(f"Dépenses ({len(categories_principales)} catégories)", 
-                           color=text_color, fontweight='bold')
+                ax.tick_params(colors=text_color)
+
+                # Labels avec catégorie + date
+                labels = [f"{row['categorie']}\n{row['date'].strftime('%d/%m/%y')}" for _, row in top_trans.iterrows()]
+                y_pos = np.arange(len(labels))
+
+                ax.barh(y_pos, top_trans["montant"], color=couleur, alpha=0.8)
+                ax.set_yticks(y_pos)
+                ax.set_yticklabels(labels, color=text_color)
+                ax.set_xlabel("Montant (€)", color=text_color, fontweight='bold')
+                ax.set_title(f"Top {nombre_top} {type_top}", color=text_color, fontweight='bold')
+                ax.grid(True, alpha=0.2, axis='x')
+                ax.invert_yaxis()
+
+                # Valeurs sur barres
+                for i, v in enumerate(top_trans["montant"]):
+                    ax.text(v, i, f" {v:.0f}€", va='center', color=text_color, fontweight='bold')
+
+                for spine in ax.spines.values():
+                    spine.set_color(text_color)
+                    spine.set_alpha(0.3)
+
+                plt.tight_layout()
                 st.pyplot(fig)
-                
-    with col2:
-        st.subheader("📊 Revenus par Catégorie")
-        
-        revenus_df = df_periode[df_periode["type"] == "revenu"]
-        if not revenus_df.empty:
-            categories_revenus = revenus_df.groupby("categorie")["montant"].sum().sort_values(ascending=False)
-            total_revenus_calc = categories_revenus.sum()
-            
-            seuil_minimum = 0.03
-            categories_principales = categories_revenus[categories_revenus / total_revenus_calc >= seuil_minimum]
-            categories_autres = categories_revenus[categories_revenus / total_revenus_calc < seuil_minimum]
-            
-            if not categories_autres.empty:
-                categories_principales = categories_principales.copy()
-                categories_principales["Autres"] = categories_autres.sum()
-            
-            if not categories_principales.empty:
-                fig, ax = plt.subplots(figsize=(8, 6))
-                
-                fig.patch.set_facecolor(bg_color)
-                ax.set_facecolor(bg_color)
-                
-                colors = plt.cm.Pastel1(np.linspace(0, 1, len(categories_principales)))
-                wedges, texts, autotexts = ax.pie(
-                    categories_principales.values, 
-                    labels=categories_principales.index, 
-                    autopct='%1.1f%%', 
-                    startangle=90,
-                    colors=colors,
-                    wedgeprops={'edgecolor': bg_color, 'linewidth': 2}
-                )
-                
-                for text in texts:
-                    text.set_color(text_color)
-                for autotext in autotexts:
-                    autotext.set_color('black')
-                    autotext.set_fontweight('bold')
-                
-                ax.axis('equal')
-                ax.set_title(f"Revenus ({len(categories_principales)} catégories)", 
-                           color=text_color, fontweight='bold')
-                st.pyplot(fig)
-    
-    # 🔥 PLUS GROSSES TRANSACTIONS (REVENUS ET DÉPENSES)
-    st.markdown("---")
-    st.subheader("🎯 Transactions Importantes")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**💸 Top 5 Dépenses**")
-        top_depenses = df_periode[df_periode["type"] == "dépense"].nlargest(5, "montant")
-        
-        if not top_depenses.empty:
-            for idx, trans in top_depenses.iterrows():
-                with st.container():
-                    col_a, col_b = st.columns([3, 2])
+
+                # Liste détaillée dessous
+                st.markdown(f"**📋 Détails des transactions**")
+                for idx, trans in top_trans.iterrows():
+                    col_a, col_b = st.columns([4, 1])
                     with col_a:
                         st.write(f"**{trans['categorie']}** → {trans['sous_categorie']}")
-                        if trans.get('description'):
-                            st.caption(f"📝 {trans['description']}")
+                        st.caption(f"📅 {trans['date'].strftime('%d/%m/%Y')}")
                     with col_b:
-                        st.markdown(f"<h4 style='color: #FF6B6B; text-align: right;'>-{trans['montant']:.2f} €</h4>", 
-                                  unsafe_allow_html=True)
-                    st.caption(f"📅 {trans['date'].strftime('%d/%m/%Y')}")
+                        st.markdown(f"<p style='color: {couleur}; font-size: 18px; text-align: right; font-weight: bold;'>{signe}{trans['montant']:.2f} €</p>", unsafe_allow_html=True)
                     st.markdown("---")
-        else:
-            st.info("Aucune dépense significative")
-    
-    with col2:
-        st.markdown("**💹 Top 5 Revenus**")
-        top_revenus = df_periode[df_periode["type"] == "revenu"].nlargest(5, "montant")
-        
-        if not top_revenus.empty:
-            for idx, trans in top_revenus.iterrows():
-                with st.container():
-                    col_a, col_b = st.columns([3, 2])
-                    with col_a:
-                        st.write(f"**{trans['categorie']}** → {trans['sous_categorie']}")
-                        if trans.get('description'):
-                            st.caption(f"📝 {trans['description']}")
-                    with col_b:
-                        st.markdown(f"<h4 style='color: #00D4AA; text-align: right;'>+{trans['montant']:.2f} €</h4>", 
-                                  unsafe_allow_html=True)
-                    st.caption(f"📅 {trans['date'].strftime('%d/%m/%Y')}")
-                    st.markdown("---")
-        else:
-            st.info("Aucun revenu significatif")
-    
-    # 🔥 10 DERNIÈRES TRANSACTIONS
-    st.markdown("---")
-    st.subheader("🕒 10 Dernières Transactions")
-    
-    dernieres = df_periode.head(5)
-    
-    if not dernieres.empty:
-        for idx, trans in dernieres.iterrows():
-            with st.container():
-                col1, col2, col3 = st.columns([1, 3, 2])
-                
+            else:
+                st.info("Aucune transaction")
+
+    # === DERNIÈRES TRANSACTIONS ===
+    with st.expander("🕒 Dernières transactions"):
+        nb_dernieres = st.slider("Nombre de transactions", 5, 20, 10, key="nb_dernieres")
+        dernieres = df_periode.sort_values("date", ascending=False).head(nb_dernieres)
+
+        if not dernieres.empty:
+            for idx, trans in dernieres.iterrows():
+                col1, col2, col3 = st.columns([1, 3, 1])
+
                 with col1:
-                    icon = "🟢" if trans["type"] == "revenu" else "🔴"
-                    st.write(icon)
-                
+                    icone = "💸" if trans["type"] == "dépense" else "💹"
+                    st.write(f"{icone}")
+
                 with col2:
                     st.write(f"**{trans['categorie']}** → {trans['sous_categorie']}")
-                    if trans.get('description'):
-                        st.caption(f"📝 {trans['description']}")
                     st.caption(f"📅 {trans['date'].strftime('%d/%m/%Y')}")
-                
-                with col3:
-                    montant_color = "#00D4AA" if trans["type"] == "revenu" else "#FF6B6B"
-                    montant_prefix = "+" if trans["type"] == "revenu" else "-"
-                    st.markdown(f"<h4 style='color: {montant_color}; text-align: right;'>{montant_prefix}{trans['montant']:.2f} €</h4>", 
-                              unsafe_allow_html=True)
-                
-                st.markdown("---")
-    else:
-        st.info("Aucune transaction récente")
 
-# ==============================
-# ⚙️ TRAITEMENT DES TICKETS ET REVENUS V2
-# ==============================
+                with col3:
+                    couleur = "#FF6B6B" if trans["type"] == "dépense" else "#00D4AA"
+                    signe = "-" if trans["type"] == "dépense" else "+"
+                    st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{trans['montant']:.2f} €</p>", unsafe_allow_html=True)
+
+                st.markdown("---")
+        else:
+            st.info("Aucune transaction")
+
 def process_all_tickets_in_folder():
     """
     Traite tous les tickets du dossier TO_SCAN_DIR :
