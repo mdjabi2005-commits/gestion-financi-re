@@ -1057,6 +1057,100 @@ def trouver_fichiers_associes(transaction, base_dirs=[SORTED_DIR, REVENUS_TRAITE
     
     return fichiers_trouves[:5]  # Limiter à 5 fichiers maximum
 
+def supprimer_fichiers_associes(transaction):
+    """
+    Supprime les fichiers PDF/OCR associés à une transaction
+    Retourne le nombre de fichiers supprimés
+    """
+    fichiers = trouver_fichiers_associes(transaction)
+    nb_supprimes = 0
+
+    for fichier in fichiers:
+        try:
+            if os.path.exists(fichier):
+                os.remove(fichier)
+                nb_supprimes += 1
+                logger.info(f"Fichier supprimé : {fichier}")
+
+                # Supprimer le dossier parent s'il est vide
+                parent_dir = os.path.dirname(fichier)
+                if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                    os.rmdir(parent_dir)
+                    logger.info(f"Dossier vide supprimé : {parent_dir}")
+
+                    # Supprimer le dossier catégorie s'il est vide
+                    cat_dir = os.path.dirname(parent_dir)
+                    if os.path.exists(cat_dir) and not os.listdir(cat_dir):
+                        os.rmdir(cat_dir)
+                        logger.info(f"Dossier catégorie vide supprimé : {cat_dir}")
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression de {fichier} : {e}")
+
+    return nb_supprimes
+
+def deplacer_fichiers_associes(transaction_old, transaction_new):
+    """
+    Déplace les fichiers associés si la catégorie, sous-catégorie ou date a changé
+    Retourne le nombre de fichiers déplacés
+    """
+    # Vérifier si un déplacement est nécessaire
+    cat_changed = transaction_old.get("categorie") != transaction_new.get("categorie")
+    souscat_changed = transaction_old.get("sous_categorie") != transaction_new.get("sous_categorie")
+
+    if not (cat_changed or souscat_changed):
+        return 0  # Pas de déplacement nécessaire
+
+    source = transaction_old.get("source", "")
+    if source not in ["OCR", "PDF"]:
+        return 0  # Pas de fichiers à déplacer
+
+    # Trouver les fichiers de l'ancienne transaction
+    fichiers = trouver_fichiers_associes(transaction_old)
+    nb_deplaces = 0
+
+    # Déterminer le dossier de base selon la source
+    if source == "OCR":
+        base_dir = SORTED_DIR
+    else:  # PDF
+        base_dir = REVENUS_TRAITES
+
+    # Créer le nouveau chemin
+    nouveau_chemin = os.path.join(
+        base_dir,
+        transaction_new.get("categorie", "").strip(),
+        transaction_new.get("sous_categorie", "").strip()
+    )
+
+    # Créer le dossier de destination si nécessaire
+    os.makedirs(nouveau_chemin, exist_ok=True)
+
+    for fichier in fichiers:
+        try:
+            if os.path.exists(fichier):
+                nom_fichier = os.path.basename(fichier)
+                nouveau_fichier = os.path.join(nouveau_chemin, nom_fichier)
+
+                # Déplacer le fichier
+                shutil.move(fichier, nouveau_fichier)
+                nb_deplaces += 1
+                logger.info(f"Fichier déplacé : {fichier} -> {nouveau_fichier}")
+
+                # Nettoyer les dossiers vides
+                ancien_dir = os.path.dirname(fichier)
+                if os.path.exists(ancien_dir) and not os.listdir(ancien_dir):
+                    os.rmdir(ancien_dir)
+                    logger.info(f"Dossier vide supprimé : {ancien_dir}")
+
+                    # Supprimer le dossier catégorie s'il est vide
+                    cat_dir = os.path.dirname(ancien_dir)
+                    if os.path.exists(cat_dir) and not os.listdir(cat_dir):
+                        os.rmdir(cat_dir)
+                        logger.info(f"Dossier catégorie vide supprimé : {cat_dir}")
+        except Exception as e:
+            logger.error(f"Erreur lors du déplacement de {fichier} : {e}")
+
+    return nb_deplaces
+
 def get_badge_html(transaction):
     """Retourne le badge HTML pour une transaction"""
     source = transaction.get("source", "")
@@ -3417,6 +3511,7 @@ def interface_voir_transactions_v3():
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 modified = 0
+                fichiers_deplaces = 0
 
                 for idx in df_edited.index:
                     # Récupérer l'ID de la transaction (utiliser .loc pour éviter index out-of-bounds)
@@ -3432,7 +3527,19 @@ def interface_voir_transactions_v3():
                             break
 
                     if has_changes:
-                        # Mise à jour
+                        # Déplacer les fichiers si nécessaire (catégorie/sous-catégorie changées)
+                        transaction_old = original.to_dict()
+                        transaction_new = {
+                            "categorie": edited["categorie"],
+                            "sous_categorie": edited["sous_categorie"],
+                            "source": original.get("source", ""),
+                            "type": edited["type"]
+                        }
+
+                        nb_deplaces = deplacer_fichiers_associes(transaction_old, transaction_new)
+                        fichiers_deplaces += nb_deplaces
+
+                        # Mise à jour de la base de données
                         cursor.execute("""
                             UPDATE transactions
                             SET type = ?, categorie = ?, sous_categorie = ?, montant = ?,
@@ -3453,7 +3560,10 @@ def interface_voir_transactions_v3():
                 conn.close()
 
                 if modified > 0:
-                    toast_success(f"{modified} transaction(s) modifiée(s) !")
+                    message = f"{modified} transaction(s) modifiée(s) !"
+                    if fichiers_deplaces > 0:
+                        message += f" ({fichiers_deplaces} fichier(s) déplacé(s))"
+                    toast_success(message)
                     refresh_and_rerun()
                 else:
                     st.info("Aucune modification détectée")
@@ -3464,15 +3574,29 @@ def interface_voir_transactions_v3():
                 if st.button(f"🗑️ Supprimer ({len(to_delete)})", type="secondary", key="delete_v3"):
                     conn = get_db_connection()
                     cursor = conn.cursor()
+                    fichiers_supprimes = 0
 
                     for idx in to_delete.index:
                         trans_id = df_edit.loc[idx, "id"]
+
+                        # Récupérer la transaction complète avec la source
+                        transaction = df_edit.loc[idx].to_dict()
+
+                        # Supprimer les fichiers associés si source = OCR ou PDF
+                        if transaction.get("source") in ["OCR", "PDF"]:
+                            nb_supprimes = supprimer_fichiers_associes(transaction)
+                            fichiers_supprimes += nb_supprimes
+
+                        # Supprimer de la base de données
                         cursor.execute("DELETE FROM transactions WHERE id = ?", (trans_id,))
 
                     conn.commit()
                     conn.close()
 
-                    toast_success(f"{len(to_delete)} transaction(s) supprimée(s) !")
+                    message = f"{len(to_delete)} transaction(s) supprimée(s) !"
+                    if fichiers_supprimes > 0:
+                        message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
+                    toast_success(message)
                     refresh_and_rerun()
 
     # === GÉRER LES RÉCURRENCES (EN EXPANDER) ===
@@ -3609,15 +3733,27 @@ def interface_gerer_transactions():
                 to_delete = df_edit[df_edit["🗑️ Supprimer"] == True]
             else:
                 to_delete = pd.DataFrame()
-            
+
             if not to_delete.empty:
                 conn = get_db_connection()
                 cursor = conn.cursor()
+                fichiers_supprimes = 0
+
                 for _, row in to_delete.iterrows():
+                    # Supprimer les fichiers associés si source = OCR ou PDF
+                    if row.get("source") in ["OCR", "PDF"]:
+                        nb_supprimes = supprimer_fichiers_associes(row.to_dict())
+                        fichiers_supprimes += nb_supprimes
+
                     cursor.execute("DELETE FROM transactions WHERE id=?", (row["id"],))
+
                 conn.commit()
                 conn.close()
-                toast_success(f"{len(to_delete)} transaction(s) supprimée(s)")
+
+                message = f"{len(to_delete)} transaction(s) supprimée(s)"
+                if fichiers_supprimes > 0:
+                    message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
+                toast_success(message)
                 refresh_and_rerun()
             else:
                 toast_warning("Coche au moins une transaction avant de supprimer.")
