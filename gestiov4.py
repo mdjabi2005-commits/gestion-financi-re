@@ -3482,21 +3482,18 @@ def interface_voir_transactions_v3():
         df_edit = df_filtered.copy()
         df_edit["montant"] = df_edit["montant"].apply(lambda x: safe_convert(x, float, 0.0))
 
-        # IMPORTANT : Sauvegarder les IDs originaux pour la synchronisation
-        # Cela permet de matcher les lignes éditées avec les données originales
-        original_ids = df_edit["id"].copy()
-
         # Ajouter colonne de suppression
         df_edit.insert(0, "🗑️", False)
 
-        # Afficher l'éditeur
+        # Afficher l'éditeur (en incluant l'ID pour la synchronisation fiable)
         df_edited = st.data_editor(
-            df_edit[["🗑️", "date", "type", "categorie", "sous_categorie", "montant", "description"]],
+            df_edit[["id", "🗑️", "date", "type", "categorie", "sous_categorie", "montant", "description"]],
             use_container_width=True,
             num_rows="fixed",
             hide_index=True,
             key="editor_v3",
             column_config={
+                "id": st.column_config.NumberColumn("ID", disabled=True),
                 "🗑️": st.column_config.CheckboxColumn("🗑️ Suppr.", help="Cocher pour supprimer"),
                 "date": st.column_config.DateColumn("Date", format="DD/MM/YYYY"),
                 "type": st.column_config.SelectboxColumn("Type", options=["dépense", "revenu"]),
@@ -3516,61 +3513,32 @@ def interface_voir_transactions_v3():
                 cursor = conn.cursor()
                 modified = 0
                 fichiers_deplaces = 0
-                save_errors = []
 
-                for idx in df_edited.index:
-                    # Récupérer l'ID de la transaction avec la sauvegarde des IDs
-                    # Utiliser original_ids pour la synchronisation absolue
-                    try:
-                        trans_id = original_ids.loc[idx]
-                    except (KeyError, IndexError):
-                        trans_id = df_edit.loc[idx, "id"]
+                # Itérer sur les lignes éditées
+                for idx, row in df_edited.iterrows():
+                    # Récupérer l'original par ID pour synchronisation fiable
+                    original_rows = df_edit[df_edit["id"] == row["id"]]
+                    if original_rows.empty:
+                        st.warning(f"⚠️ Transaction ID {row['id']} non trouvée dans l'original")
+                        continue
 
-                    original = df_edit.loc[idx]
-                    edited = df_edited.loc[idx]
+                    original = original_rows.iloc[0]
 
-                    # Vérifier les changements (amélioration de la détection)
+                    # Détection des changements (simple et fiable)
                     has_changes = False
-
-                    # Comparaison pour chaque champ
-                    # Date : comparer comme dates
-                    try:
-                        date_orig = pd.to_datetime(original["date"]).date()
-                        date_edit = pd.to_datetime(edited["date"]).date() if not isinstance(edited["date"], pd.Timestamp) else edited["date"].date()
-                        if date_orig != date_edit:
+                    for col in ["type", "categorie", "sous_categorie", "description", "montant", "date"]:
+                        if str(row[col]) != str(original[col]):
                             has_changes = True
-                    except:
-                        if str(original["date"]) != str(edited["date"]):
-                            has_changes = True
-
-                    # Autres champs : comparaison directe (sans normalisation de casse)
-                    if not has_changes:
-                        for col in ["type", "categorie", "sous_categorie", "description"]:
-                            val_orig = str(original.get(col, "")).strip()
-                            val_edit = str(edited.get(col, "")).strip()
-                            if val_orig != val_edit:
-                                has_changes = True
-                                break
-
-                    # Montant : comparaison numérique
-                    if not has_changes:
-                        try:
-                            montant_orig = float(original["montant"])
-                            montant_edit = float(edited["montant"])
-                            if abs(montant_orig - montant_edit) > 0.01:  # Tolérance de 1 centime
-                                has_changes = True
-                        except:
-                            if str(original["montant"]) != str(edited["montant"]):
-                                has_changes = True
+                            break
 
                     if has_changes:
                         # Déplacer les fichiers si nécessaire (catégorie/sous-catégorie changées)
                         transaction_old = original.to_dict()
                         transaction_new = {
-                            "categorie": edited["categorie"],
-                            "sous_categorie": edited["sous_categorie"],
+                            "categorie": row["categorie"],
+                            "sous_categorie": row["sous_categorie"],
                             "source": original.get("source", ""),
-                            "type": edited["type"]
+                            "type": row["type"]
                         }
 
                         nb_deplaces = deplacer_fichiers_associes(transaction_old, transaction_new)
@@ -3583,13 +3551,13 @@ def interface_voir_transactions_v3():
                                 date = ?, description = ?
                             WHERE id = ?
                         """, (
-                            str(edited["type"]).strip().lower(),
-                            str(edited["categorie"]).strip().lower(),
-                            str(edited["sous_categorie"]).strip().lower(),
-                            safe_convert(edited["montant"], float, 0.0),
-                            safe_date_convert(edited["date"]).isoformat(),
-                            str(edited.get("description", "")).strip(),
-                            trans_id
+                            str(row["type"]).strip().lower(),
+                            str(row["categorie"]).strip().lower(),
+                            str(row["sous_categorie"]).strip().lower(),
+                            safe_convert(row["montant"], float, 0.0),
+                            safe_date_convert(row["date"]).isoformat(),
+                            str(row.get("description", "")).strip(),
+                            row["id"]
                         ))
                         modified += 1
 
@@ -3604,28 +3572,9 @@ def interface_voir_transactions_v3():
                     message = f"✅ {modified} transaction(s) modifiée(s) !"
                     if fichiers_deplaces > 0:
                         message += f" ({fichiers_deplaces} fichier(s) déplacé(s))"
-
-                    # VÉRIFICATION : Confirmer que les modifications ont été enregistrées
-                    # Recharger depuis la base de données pour vérifier
-                    try:
-                        verify_conn = sqlite3.connect(DB_PATH)
-                        verify_cursor = verify_conn.cursor()
-                        verify_cursor.execute("SELECT COUNT(*) FROM transactions WHERE id IN ({})".format(
-                            ",".join("?" * len(original_ids))
-                        ), original_ids.tolist())
-                        count = verify_cursor.fetchone()[0]
-                        verify_conn.close()
-
-                        if count == len(original_ids):
-                            toast_success(message)
-                            st.success(message)
-                            refresh_and_rerun()
-                        else:
-                            st.warning(f"⚠️ Certaines transactions n'ont pas été trouvées en base de données après enregistrement!")
-                    except Exception as verify_error:
-                        st.warning(f"⚠️ Impossible de vérifier les modifications: {str(verify_error)}")
-                        st.success(message)
-                        refresh_and_rerun()
+                    toast_success(message)
+                    st.success(message)
+                    refresh_and_rerun()
                 else:
                     st.warning("⚠️ Aucune modification détectée")
 
@@ -3671,15 +3620,14 @@ def interface_voir_transactions_v3():
                     cursor = conn.cursor()
                     fichiers_supprimes = 0
 
-                    for idx in to_delete.index:
-                        # Utiliser original_ids pour la synchronisation absolue
-                        try:
-                            trans_id = original_ids.loc[idx]
-                        except (KeyError, IndexError):
-                            trans_id = df_edit.loc[idx, "id"]
+                    for idx, row in to_delete.iterrows():
+                        trans_id = row["id"]
 
                         # Récupérer la transaction complète avec la source
-                        transaction = df_edit.loc[idx].to_dict()
+                        original_rows = df_edit[df_edit["id"] == trans_id]
+                        if original_rows.empty:
+                            continue
+                        transaction = original_rows.iloc[0].to_dict()
 
                         # Supprimer les fichiers associés si source = OCR ou PDF
                         if transaction.get("source") in ["OCR", "PDF"]:
