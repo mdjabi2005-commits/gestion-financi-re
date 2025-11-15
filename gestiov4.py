@@ -1057,6 +1057,100 @@ def trouver_fichiers_associes(transaction, base_dirs=[SORTED_DIR, REVENUS_TRAITE
     
     return fichiers_trouves[:5]  # Limiter à 5 fichiers maximum
 
+def supprimer_fichiers_associes(transaction):
+    """
+    Supprime les fichiers PDF/OCR associés à une transaction
+    Retourne le nombre de fichiers supprimés
+    """
+    fichiers = trouver_fichiers_associes(transaction)
+    nb_supprimes = 0
+
+    for fichier in fichiers:
+        try:
+            if os.path.exists(fichier):
+                os.remove(fichier)
+                nb_supprimes += 1
+                logger.info(f"Fichier supprimé : {fichier}")
+
+                # Supprimer le dossier parent s'il est vide
+                parent_dir = os.path.dirname(fichier)
+                if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                    os.rmdir(parent_dir)
+                    logger.info(f"Dossier vide supprimé : {parent_dir}")
+
+                    # Supprimer le dossier catégorie s'il est vide
+                    cat_dir = os.path.dirname(parent_dir)
+                    if os.path.exists(cat_dir) and not os.listdir(cat_dir):
+                        os.rmdir(cat_dir)
+                        logger.info(f"Dossier catégorie vide supprimé : {cat_dir}")
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression de {fichier} : {e}")
+
+    return nb_supprimes
+
+def deplacer_fichiers_associes(transaction_old, transaction_new):
+    """
+    Déplace les fichiers associés si la catégorie, sous-catégorie ou date a changé
+    Retourne le nombre de fichiers déplacés
+    """
+    # Vérifier si un déplacement est nécessaire
+    cat_changed = transaction_old.get("categorie") != transaction_new.get("categorie")
+    souscat_changed = transaction_old.get("sous_categorie") != transaction_new.get("sous_categorie")
+
+    if not (cat_changed or souscat_changed):
+        return 0  # Pas de déplacement nécessaire
+
+    source = transaction_old.get("source", "")
+    if source not in ["OCR", "PDF"]:
+        return 0  # Pas de fichiers à déplacer
+
+    # Trouver les fichiers de l'ancienne transaction
+    fichiers = trouver_fichiers_associes(transaction_old)
+    nb_deplaces = 0
+
+    # Déterminer le dossier de base selon la source
+    if source == "OCR":
+        base_dir = SORTED_DIR
+    else:  # PDF
+        base_dir = REVENUS_TRAITES
+
+    # Créer le nouveau chemin
+    nouveau_chemin = os.path.join(
+        base_dir,
+        transaction_new.get("categorie", "").strip(),
+        transaction_new.get("sous_categorie", "").strip()
+    )
+
+    # Créer le dossier de destination si nécessaire
+    os.makedirs(nouveau_chemin, exist_ok=True)
+
+    for fichier in fichiers:
+        try:
+            if os.path.exists(fichier):
+                nom_fichier = os.path.basename(fichier)
+                nouveau_fichier = os.path.join(nouveau_chemin, nom_fichier)
+
+                # Déplacer le fichier
+                shutil.move(fichier, nouveau_fichier)
+                nb_deplaces += 1
+                logger.info(f"Fichier déplacé : {fichier} -> {nouveau_fichier}")
+
+                # Nettoyer les dossiers vides
+                ancien_dir = os.path.dirname(fichier)
+                if os.path.exists(ancien_dir) and not os.listdir(ancien_dir):
+                    os.rmdir(ancien_dir)
+                    logger.info(f"Dossier vide supprimé : {ancien_dir}")
+
+                    # Supprimer le dossier catégorie s'il est vide
+                    cat_dir = os.path.dirname(ancien_dir)
+                    if os.path.exists(cat_dir) and not os.listdir(cat_dir):
+                        os.rmdir(cat_dir)
+                        logger.info(f"Dossier catégorie vide supprimé : {cat_dir}")
+        except Exception as e:
+            logger.error(f"Erreur lors du déplacement de {fichier} : {e}")
+
+    return nb_deplaces
+
 def get_badge_html(transaction):
     """Retourne le badge HTML pour une transaction"""
     source = transaction.get("source", "")
@@ -3417,6 +3511,7 @@ def interface_voir_transactions_v3():
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 modified = 0
+                fichiers_deplaces = 0
 
                 for idx in df_edited.index:
                     # Récupérer l'ID de la transaction (utiliser .loc pour éviter index out-of-bounds)
@@ -3432,7 +3527,19 @@ def interface_voir_transactions_v3():
                             break
 
                     if has_changes:
-                        # Mise à jour
+                        # Déplacer les fichiers si nécessaire (catégorie/sous-catégorie changées)
+                        transaction_old = original.to_dict()
+                        transaction_new = {
+                            "categorie": edited["categorie"],
+                            "sous_categorie": edited["sous_categorie"],
+                            "source": original.get("source", ""),
+                            "type": edited["type"]
+                        }
+
+                        nb_deplaces = deplacer_fichiers_associes(transaction_old, transaction_new)
+                        fichiers_deplaces += nb_deplaces
+
+                        # Mise à jour de la base de données
                         cursor.execute("""
                             UPDATE transactions
                             SET type = ?, categorie = ?, sous_categorie = ?, montant = ?,
@@ -3453,7 +3560,10 @@ def interface_voir_transactions_v3():
                 conn.close()
 
                 if modified > 0:
-                    toast_success(f"{modified} transaction(s) modifiée(s) !")
+                    message = f"{modified} transaction(s) modifiée(s) !"
+                    if fichiers_deplaces > 0:
+                        message += f" ({fichiers_deplaces} fichier(s) déplacé(s))"
+                    toast_success(message)
                     refresh_and_rerun()
                 else:
                     st.info("Aucune modification détectée")
@@ -3464,15 +3574,29 @@ def interface_voir_transactions_v3():
                 if st.button(f"🗑️ Supprimer ({len(to_delete)})", type="secondary", key="delete_v3"):
                     conn = get_db_connection()
                     cursor = conn.cursor()
+                    fichiers_supprimes = 0
 
                     for idx in to_delete.index:
                         trans_id = df_edit.loc[idx, "id"]
+
+                        # Récupérer la transaction complète avec la source
+                        transaction = df_edit.loc[idx].to_dict()
+
+                        # Supprimer les fichiers associés si source = OCR ou PDF
+                        if transaction.get("source") in ["OCR", "PDF"]:
+                            nb_supprimes = supprimer_fichiers_associes(transaction)
+                            fichiers_supprimes += nb_supprimes
+
+                        # Supprimer de la base de données
                         cursor.execute("DELETE FROM transactions WHERE id = ?", (trans_id,))
 
                     conn.commit()
                     conn.close()
 
-                    toast_success(f"{len(to_delete)} transaction(s) supprimée(s) !")
+                    message = f"{len(to_delete)} transaction(s) supprimée(s) !"
+                    if fichiers_supprimes > 0:
+                        message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
+                    toast_success(message)
                     refresh_and_rerun()
 
     # === GÉRER LES RÉCURRENCES (EN EXPANDER) ===
@@ -3609,15 +3733,27 @@ def interface_gerer_transactions():
                 to_delete = df_edit[df_edit["🗑️ Supprimer"] == True]
             else:
                 to_delete = pd.DataFrame()
-            
+
             if not to_delete.empty:
                 conn = get_db_connection()
                 cursor = conn.cursor()
+                fichiers_supprimes = 0
+
                 for _, row in to_delete.iterrows():
+                    # Supprimer les fichiers associés si source = OCR ou PDF
+                    if row.get("source") in ["OCR", "PDF"]:
+                        nb_supprimes = supprimer_fichiers_associes(row.to_dict())
+                        fichiers_supprimes += nb_supprimes
+
                     cursor.execute("DELETE FROM transactions WHERE id=?", (row["id"],))
+
                 conn.commit()
                 conn.close()
-                toast_success(f"{len(to_delete)} transaction(s) supprimée(s)")
+
+                message = f"{len(to_delete)} transaction(s) supprimée(s)"
+                if fichiers_supprimes > 0:
+                    message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
+                toast_success(message)
                 refresh_and_rerun()
             else:
                 toast_warning("Coche au moins une transaction avant de supprimer.")
@@ -5501,6 +5637,720 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
             """)
 
 
+# =============================
+# 💼 ONGLET PORTEFEUILLE
+# =============================
+def interface_portefeuille():
+    """Interface de gestion du portefeuille : budgets, notes et statistiques"""
+    st.title("💼 Mon Portefeuille")
+
+    # Initialiser les tables si elles n'existent pas
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Table budgets par catégorie
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS budgets_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categorie TEXT UNIQUE NOT NULL,
+            budget_mensuel REAL NOT NULL,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
+    # Table notes
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes_portefeuille (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titre TEXT NOT NULL,
+            contenu TEXT,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
+    # Table échéances pour gérer les prévisions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS echeances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            categorie TEXT NOT NULL,
+            sous_categorie TEXT,
+            montant REAL NOT NULL,
+            date_echeance TEXT NOT NULL,
+            recurrence TEXT,
+            statut TEXT DEFAULT 'active',
+            description TEXT,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
+    conn.commit()
+
+    # Onglets principaux
+    tab1, tab2, tab3, tab4 = st.tabs(["💰 Budgets par catégorie", "📝 Notes", "📊 Vue d'ensemble", "📅 Prévisions"])
+
+    # ===== ONGLET 1: BUDGETS PAR CATÉGORIE =====
+    with tab1:
+        st.subheader("💰 Gérer les budgets par catégorie")
+
+        # Charger les catégories de dépenses existantes
+        df_transactions = load_transactions()
+        if not df_transactions.empty:
+            categories_depenses = sorted(
+                df_transactions[df_transactions["type"] == "dépense"]["categorie"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+        else:
+            categories_depenses = []
+
+        # Charger les budgets existants
+        df_budgets = pd.read_sql_query(
+            "SELECT * FROM budgets_categories ORDER BY categorie",
+            conn
+        )
+
+        st.markdown("#### 📌 Budgets actuels")
+
+        if df_budgets.empty:
+            st.info("💡 Aucun budget défini. Commencez par en ajouter ci-dessous !")
+        else:
+            # Calculer les dépenses du mois en cours pour chaque catégorie
+            today = datetime.now()
+            premier_jour_mois = today.replace(day=1).date()
+
+            # Préparer l'affichage avec pourcentages
+            budgets_display = []
+
+            for _, budget in df_budgets.iterrows():
+                categorie = budget["categorie"]
+                budget_mensuel = budget["budget_mensuel"]
+
+                # Calculer les dépenses du mois pour cette catégorie
+                if not df_transactions.empty:
+                    depenses_mois = df_transactions[
+                        (df_transactions["type"] == "dépense") &
+                        (df_transactions["categorie"] == categorie) &
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                    ]["montant"].sum()
+                else:
+                    depenses_mois = 0.0
+
+                # Calculer le pourcentage utilisé
+                if budget_mensuel > 0:
+                    pourcentage = (depenses_mois / budget_mensuel) * 100
+                else:
+                    pourcentage = 0
+
+                # Déterminer la couleur
+                if pourcentage >= 100:
+                    couleur = "🔴"
+                    status = "Dépassé"
+                elif pourcentage >= 80:
+                    couleur = "🟠"
+                    status = "Attention"
+                elif pourcentage >= 50:
+                    couleur = "🟡"
+                    status = "Bon"
+                else:
+                    couleur = "🟢"
+                    status = "Excellent"
+
+                budgets_display.append({
+                    "Catégorie": f"{couleur} {categorie}",
+                    "Budget (€)": f"{budget_mensuel:.2f}",
+                    "Dépensé (€)": f"{depenses_mois:.2f}",
+                    "Reste (€)": f"{budget_mensuel - depenses_mois:.2f}",
+                    "% utilisé": f"{pourcentage:.1f}%",
+                    "État": status
+                })
+
+            # Afficher le tableau
+            st.dataframe(
+                pd.DataFrame(budgets_display),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("---")
+        st.markdown("#### ➕ Ajouter/Modifier un budget")
+
+        col1, col2, col3 = st.columns([2, 1, 1])
+
+        with col1:
+            # Choix entre catégorie existante ou nouvelle
+            mode_ajout = st.radio(
+                "Mode",
+                ["Catégorie existante", "Nouvelle catégorie"],
+                horizontal=True,
+                key="mode_budget"
+            )
+
+            if mode_ajout == "Catégorie existante":
+                if categories_depenses:
+                    categorie_budget = st.selectbox(
+                        "Catégorie",
+                        categories_depenses,
+                        key="cat_budget_existante"
+                    )
+                else:
+                    st.warning("Aucune catégorie de dépense trouvée")
+                    categorie_budget = None
+            else:
+                categorie_budget = st.text_input(
+                    "Nom de la catégorie",
+                    key="cat_budget_nouvelle"
+                )
+
+        with col2:
+            montant_budget = st.number_input(
+                "Budget mensuel (€)",
+                min_value=0.0,
+                step=10.0,
+                value=100.0,
+                key="montant_budget"
+            )
+
+        with col3:
+            st.write("")  # Espacement
+            st.write("")  # Espacement
+            if st.button("💾 Enregistrer", type="primary", key="save_budget"):
+                if categorie_budget and categorie_budget.strip():
+                    try:
+                        cursor.execute("""
+                            INSERT INTO budgets_categories (categorie, budget_mensuel, date_creation, date_modification)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(categorie) DO UPDATE SET
+                                budget_mensuel = excluded.budget_mensuel,
+                                date_modification = excluded.date_modification
+                        """, (
+                            categorie_budget.strip(),
+                            montant_budget,
+                            datetime.now().isoformat(),
+                            datetime.now().isoformat()
+                        ))
+                        conn.commit()
+                        toast_success(f"Budget pour '{categorie_budget}' enregistré !")
+                        refresh_and_rerun()
+                    except Exception as e:
+                        toast_error(f"Erreur : {e}")
+                else:
+                    toast_warning("Veuillez sélectionner ou saisir une catégorie")
+
+        # Option de suppression
+        if not df_budgets.empty:
+            st.markdown("---")
+            st.markdown("#### 🗑️ Supprimer un budget")
+
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                budget_to_delete = st.selectbox(
+                    "Catégorie à supprimer",
+                    df_budgets["categorie"].tolist(),
+                    key="budget_delete"
+                )
+
+            with col2:
+                st.write("")  # Espacement
+                st.write("")  # Espacement
+                if st.button("🗑️ Supprimer", type="secondary", key="delete_budget"):
+                    cursor.execute(
+                        "DELETE FROM budgets_categories WHERE categorie = ?",
+                        (budget_to_delete,)
+                    )
+                    conn.commit()
+                    toast_success(f"Budget '{budget_to_delete}' supprimé")
+                    refresh_and_rerun()
+
+    # ===== ONGLET 2: NOTES =====
+    with tab2:
+        st.subheader("📝 Mes notes")
+
+        # Charger les notes
+        df_notes = pd.read_sql_query(
+            "SELECT * FROM notes_portefeuille ORDER BY date_modification DESC",
+            conn
+        )
+
+        # Afficher les notes existantes
+        if not df_notes.empty:
+            st.markdown("#### 📌 Notes enregistrées")
+
+            for _, note in df_notes.iterrows():
+                with st.expander(f"📝 {note['titre']}", expanded=False):
+                    st.markdown(note['contenu'])
+                    st.caption(f"Modifié le : {note['date_modification'][:10]}")
+
+                    col1, col2 = st.columns([1, 4])
+                    with col1:
+                        if st.button("🗑️ Supprimer", key=f"delete_note_{note['id']}"):
+                            cursor.execute(
+                                "DELETE FROM notes_portefeuille WHERE id = ?",
+                                (note['id'],)
+                            )
+                            conn.commit()
+                            toast_success("Note supprimée")
+                            refresh_and_rerun()
+        else:
+            st.info("💡 Aucune note pour le moment")
+
+        # Ajouter une nouvelle note
+        st.markdown("---")
+        st.markdown("#### ➕ Ajouter une note")
+
+        titre_note = st.text_input("Titre de la note", key="titre_note")
+        contenu_note = st.text_area(
+            "Contenu",
+            height=150,
+            key="contenu_note",
+            placeholder="Écrivez vos notes ici..."
+        )
+
+        if st.button("💾 Enregistrer la note", type="primary", key="save_note"):
+            if titre_note and titre_note.strip():
+                cursor.execute("""
+                    INSERT INTO notes_portefeuille (titre, contenu, date_creation, date_modification)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    titre_note.strip(),
+                    contenu_note.strip(),
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+                toast_success("Note enregistrée !")
+                refresh_and_rerun()
+            else:
+                toast_warning("Veuillez saisir un titre")
+
+    # ===== ONGLET 3: VUE D'ENSEMBLE =====
+    with tab3:
+        st.subheader("📊 Vue d'ensemble du mois")
+
+        if df_budgets.empty:
+            st.info("💡 Définissez des budgets pour voir les statistiques")
+        else:
+            # Calculer les totaux
+            budget_total = df_budgets["budget_mensuel"].sum()
+
+            # Calculer les dépenses du mois
+            today = datetime.now()
+            premier_jour_mois = today.replace(day=1).date()
+
+            if not df_transactions.empty:
+                depenses_mois_total = df_transactions[
+                    (df_transactions["type"] == "dépense") &
+                    (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                ]["montant"].sum()
+            else:
+                depenses_mois_total = 0.0
+
+            reste_total = budget_total - depenses_mois_total
+            pourcentage_total = (depenses_mois_total / budget_total * 100) if budget_total > 0 else 0
+
+            # Afficher les métriques
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("💰 Budget total", f"{budget_total:.0f} €")
+
+            with col2:
+                st.metric("💸 Dépensé", f"{depenses_mois_total:.0f} €")
+
+            with col3:
+                delta_color = "normal" if reste_total >= 0 else "inverse"
+                st.metric("💵 Reste", f"{reste_total:.0f} €", delta_color=delta_color)
+
+            with col4:
+                st.metric("📊 % utilisé", f"{pourcentage_total:.1f}%")
+
+            # Graphique de répartition
+            st.markdown("---")
+            st.markdown("#### 📊 Répartition des dépenses par catégorie")
+
+            if not df_transactions.empty:
+                depenses_par_cat = []
+
+                for _, budget in df_budgets.iterrows():
+                    categorie = budget["categorie"]
+                    budget_mensuel = budget["budget_mensuel"]
+
+                    depenses = df_transactions[
+                        (df_transactions["type"] == "dépense") &
+                        (df_transactions["categorie"] == categorie) &
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                    ]["montant"].sum()
+
+                    depenses_par_cat.append({
+                        "Catégorie": categorie,
+                        "Dépensé": depenses,
+                        "Budget": budget_mensuel,
+                        "% du budget": (depenses / budget_mensuel * 100) if budget_mensuel > 0 else 0
+                    })
+
+                df_depenses = pd.DataFrame(depenses_par_cat)
+
+                if not df_depenses.empty:
+                    # Graphique en barres
+                    fig = go.Figure()
+
+                    fig.add_trace(go.Bar(
+                        name='Budget',
+                        x=df_depenses['Catégorie'],
+                        y=df_depenses['Budget'],
+                        marker_color='lightblue'
+                    ))
+
+                    fig.add_trace(go.Bar(
+                        name='Dépensé',
+                        x=df_depenses['Catégorie'],
+                        y=df_depenses['Dépensé'],
+                        marker_color='salmon'
+                    ))
+
+                    fig.update_layout(
+                        barmode='group',
+                        title='Budget vs Dépenses par catégorie',
+                        xaxis_title='Catégorie',
+                        yaxis_title='Montant (€)',
+                        height=400
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+    # ===== ONGLET 4: PRÉVISIONS =====
+    with tab4:
+        st.subheader("📅 Gérer les échéances et prévisions")
+
+        # Charger les échéances
+        df_echeances = pd.read_sql_query(
+            "SELECT * FROM echeances WHERE statut = 'active' ORDER BY date_echeance ASC",
+            conn
+        )
+
+        # Sous-onglets pour organiser l'interface
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📋 Mes échéances", "➕ Ajouter une échéance", "📈 Solde prévisionnel"])
+
+        # ===== SUB-TAB 1: MES ÉCHÉANCES =====
+        with sub_tab1:
+            st.markdown("#### 📌 Échéances actives")
+
+            if df_echeances.empty:
+                st.info("💡 Aucune échéance enregistrée. Ajoutez-en pour suivre vos prévisions !")
+            else:
+                # Afficher les échéances par type
+                echeances_display = []
+
+                for _, ech in df_echeances.iterrows():
+                    icon = "💹" if ech["type"] == "revenu" else "💸"
+                    rec_text = ""
+                    if ech["recurrence"]:
+                        rec_icon = {"hebdomadaire": "🔁 Hebdo", "mensuelle": "🔁 Mensuel", "annuelle": "🔁 Annuel"}.get(ech["recurrence"], "🔁")
+                        rec_text = f" {rec_icon}"
+
+                    echeances_display.append({
+                        "ID": ech["id"],
+                        "Type": f"{icon} {ech['type'].capitalize()}",
+                        "Date": pd.to_datetime(ech["date_echeance"]).strftime("%d/%m/%Y"),
+                        "Catégorie": ech["categorie"],
+                        "Sous-catégorie": ech.get("sous_categorie", ""),
+                        "Montant (€)": f"{ech['montant']:.2f}",
+                        "Récurrence": rec_text if rec_text else "—",
+                        "Description": ech.get("description", "")[:50]
+                    })
+
+                df_display = pd.DataFrame(echeances_display)
+                st.dataframe(
+                    df_display.drop(columns=["ID"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # Options de gestion
+                st.markdown("---")
+                st.markdown("#### 🛠️ Gérer les échéances")
+
+                col1, col2 = st.columns([2, 1])
+
+                with col1:
+                    echeance_to_manage = st.selectbox(
+                        "Sélectionner une échéance",
+                        df_echeances["id"].tolist(),
+                        format_func=lambda x: f"#{x} - {df_echeances[df_echeances['id']==x].iloc[0]['categorie']} - {df_echeances[df_echeances['id']==x].iloc[0]['montant']:.2f}€",
+                        key="echeance_manage"
+                    )
+
+                with col2:
+                    action_col1, action_col2 = st.columns(2)
+
+                    with action_col1:
+                        if st.button("✅ Marquer payée", key="mark_paid"):
+                            cursor.execute(
+                                "UPDATE echeances SET statut = 'payée', date_modification = ? WHERE id = ?",
+                                (datetime.now().isoformat(), echeance_to_manage)
+                            )
+                            conn.commit()
+                            toast_success("Échéance marquée comme payée")
+                            refresh_and_rerun()
+
+                    with action_col2:
+                        if st.button("🗑️ Supprimer", key="delete_echeance"):
+                            cursor.execute(
+                                "DELETE FROM echeances WHERE id = ?",
+                                (echeance_to_manage,)
+                            )
+                            conn.commit()
+                            toast_success("Échéance supprimée")
+                            refresh_and_rerun()
+
+        # ===== SUB-TAB 2: AJOUTER UNE ÉCHÉANCE =====
+        with sub_tab2:
+            st.markdown("#### ➕ Nouvelle échéance")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                type_echeance = st.selectbox(
+                    "Type",
+                    ["dépense", "revenu"],
+                    key="type_echeance"
+                )
+
+                # Charger les catégories existantes
+                df_transactions = load_transactions()
+                if not df_transactions.empty:
+                    categories = sorted(
+                        df_transactions[df_transactions["type"] == type_echeance]["categorie"]
+                        .dropna()
+                        .unique()
+                        .tolist()
+                    )
+                else:
+                    categories = []
+
+                mode_cat = st.radio(
+                    "Catégorie",
+                    ["Existante", "Nouvelle"],
+                    horizontal=True,
+                    key="mode_cat_echeance"
+                )
+
+                if mode_cat == "Existante" and categories:
+                    categorie_echeance = st.selectbox("Sélectionner", categories, key="cat_ech_exist")
+                else:
+                    categorie_echeance = st.text_input("Nom de la catégorie", key="cat_ech_new")
+
+                sous_categorie_echeance = st.text_input("Sous-catégorie", key="souscat_ech")
+
+            with col2:
+                montant_echeance = st.number_input(
+                    "Montant (€)",
+                    min_value=0.0,
+                    step=10.0,
+                    value=100.0,
+                    key="montant_ech"
+                )
+
+                date_echeance = st.date_input(
+                    "Date d'échéance",
+                    value=date.today() + timedelta(days=30),
+                    key="date_ech"
+                )
+
+                recurrence_echeance = st.selectbox(
+                    "Récurrence",
+                    ["Aucune", "Hebdomadaire", "Mensuelle", "Annuelle"],
+                    key="rec_ech"
+                )
+
+            description_echeance = st.text_area(
+                "Description (optionnel)",
+                height=100,
+                key="desc_ech",
+                placeholder="Ex: Facture EDF, Salaire, etc."
+            )
+
+            if st.button("💾 Enregistrer l'échéance", type="primary", key="save_echeance"):
+                if categorie_echeance and categorie_echeance.strip():
+                    rec_value = None if recurrence_echeance == "Aucune" else recurrence_echeance.lower()
+
+                    cursor.execute("""
+                        INSERT INTO echeances
+                        (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, description, date_creation, date_modification)
+                        VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+                    """, (
+                        type_echeance,
+                        categorie_echeance.strip(),
+                        sous_categorie_echeance.strip() if sous_categorie_echeance else "",
+                        montant_echeance,
+                        date_echeance.isoformat(),
+                        rec_value,
+                        description_echeance.strip() if description_echeance else "",
+                        datetime.now().isoformat(),
+                        datetime.now().isoformat()
+                    ))
+                    conn.commit()
+                    toast_success(f"Échéance {type_echeance} ajoutée pour le {date_echeance.strftime('%d/%m/%Y')}")
+                    refresh_and_rerun()
+                else:
+                    toast_warning("Veuillez saisir une catégorie")
+
+        # ===== SUB-TAB 3: SOLDE PRÉVISIONNEL =====
+        with sub_tab3:
+            st.markdown("#### 📈 Évolution du solde prévisionnel")
+
+            # Calculer le solde actuel
+            df_transactions = load_transactions()
+            if not df_transactions.empty:
+                revenus = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
+                depenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
+                solde_actuel = revenus - depenses
+            else:
+                solde_actuel = 0.0
+
+            # Période de projection
+            col1, col2 = st.columns([2, 2])
+
+            with col1:
+                date_projection = st.date_input(
+                    "Projeter jusqu'au",
+                    value=date.today() + timedelta(days=90),
+                    key="date_proj"
+                )
+
+            with col2:
+                st.metric("💰 Solde actuel", f"{solde_actuel:,.2f} €")
+
+            # Récupérer toutes les échéances actives jusqu'à la date de projection
+            echeances_futures = []
+
+            if not df_echeances.empty:
+                for _, ech in df_echeances.iterrows():
+                    date_ech = pd.to_datetime(ech["date_echeance"])
+                    recurrence = ech.get("recurrence")
+
+                    # Ajouter l'échéance si elle est dans la période
+                    if date_ech.date() <= date_projection and date_ech.date() >= date.today():
+                        echeances_futures.append({
+                            "date": date_ech,
+                            "type": ech["type"],
+                            "categorie": ech["categorie"],
+                            "montant": ech["montant"],
+                            "description": ech.get("description", "")
+                        })
+
+                    # Si récurrente, générer les occurrences futures
+                    if recurrence:
+                        current_date = date_ech
+
+                        while current_date.date() <= date_projection:
+                            if recurrence == "hebdomadaire":
+                                current_date += pd.Timedelta(weeks=1)
+                            elif recurrence == "mensuelle":
+                                current_date += pd.DateOffset(months=1)
+                            elif recurrence == "annuelle":
+                                current_date += pd.DateOffset(years=1)
+                            else:
+                                break
+
+                            if current_date.date() <= date_projection and current_date.date() >= date.today():
+                                echeances_futures.append({
+                                    "date": current_date,
+                                    "type": ech["type"],
+                                    "categorie": ech["categorie"],
+                                    "montant": ech["montant"],
+                                    "description": f"{ech.get('description', '')} (récurrent)"
+                                })
+
+            if echeances_futures:
+                # Trier par date
+                df_prev = pd.DataFrame(echeances_futures).sort_values("date").reset_index(drop=True)
+
+                # Calculer le solde prévisionnel cumulé
+                solde_cum = [solde_actuel]
+                for _, row in df_prev.iterrows():
+                    dernier_solde = solde_cum[-1]
+                    if row["type"] == "revenu":
+                        solde_cum.append(dernier_solde + row["montant"])
+                    else:
+                        solde_cum.append(dernier_solde - row["montant"])
+
+                df_prev["solde_previsionnel"] = solde_cum[1:]
+
+                # Afficher le tableau
+                st.markdown("##### 📋 Échéances futures")
+                df_prev_display = df_prev.copy()
+                df_prev_display["date"] = df_prev_display["date"].dt.strftime("%d/%m/%Y")
+                df_prev_display["Type"] = df_prev_display["type"].apply(lambda x: "💹 Revenu" if x == "revenu" else "💸 Dépense")
+
+                st.dataframe(
+                    df_prev_display[["date", "Type", "categorie", "montant", "solde_previsionnel", "description"]].rename(columns={
+                        "date": "Date",
+                        "categorie": "Catégorie",
+                        "montant": "Montant (€)",
+                        "solde_previsionnel": "Solde prév. (€)",
+                        "description": "Description"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # Métrique finale
+                st.metric(
+                    f"💹 Solde prévisionnel au {date_projection.strftime('%d/%m/%Y')}",
+                    f"{solde_cum[-1]:,.2f} €",
+                    delta=f"{solde_cum[-1] - solde_actuel:+,.2f} €"
+                )
+
+                # Graphique d'évolution
+                st.markdown("---")
+                st.markdown("##### 📊 Graphique d'évolution")
+
+                # Créer le graphique avec Plotly
+                fig = go.Figure()
+
+                # Ligne du solde prévisionnel
+                fig.add_trace(go.Scatter(
+                    x=df_prev["date"],
+                    y=df_prev["solde_previsionnel"],
+                    mode='lines+markers',
+                    name='Solde prévisionnel',
+                    line=dict(color='royalblue', width=3),
+                    marker=dict(size=8)
+                ))
+
+                # Ligne horizontale à 0
+                fig.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="Seuil 0€")
+
+                # Ligne horizontale du solde actuel
+                fig.add_hline(
+                    y=solde_actuel,
+                    line_dash="dot",
+                    line_color="green",
+                    annotation_text=f"Solde actuel: {solde_actuel:.0f}€"
+                )
+
+                fig.update_layout(
+                    title="Évolution du solde prévisionnel",
+                    xaxis_title="Date",
+                    yaxis_title="Solde (€)",
+                    height=400,
+                    hovermode='x unified'
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                st.info("💡 Aucune échéance future trouvée. Ajoutez des échéances pour voir les prévisions.")
+
+    conn.close()
+
+
 def main():
     """Fonction principale V2"""
     try:
@@ -5516,7 +6366,7 @@ def main():
             
             page = st.radio(
                 "Navigation",
-                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel", "🔬 Analyse"]
+                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "💼 Portefeuille", "📈 Solde prévisionnel", "🔬 Analyse"]
             )
             
             # 🔄 BOUTON DE RAFRAÎCHISSEMENT DES DONNÉES (discret en bas)
@@ -5536,7 +6386,10 @@ def main():
         elif page == "📊 Voir Transactions":
             # Afficher la nouvelle interface unifiée (voir + gérer)
             interface_voir_transactions_v3()
-                
+
+        elif page == "💼 Portefeuille":
+            interface_portefeuille()
+
         elif page == "📈 Solde prévisionnel":
             interface_solde_previsionnel()
 
