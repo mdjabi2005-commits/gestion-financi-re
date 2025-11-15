@@ -3198,6 +3198,282 @@ def interface_gerer_recurrences():
 # =============================
 # 🛠️ GERER LES TRANSACTIONS V2
 # =============================
+def interface_voir_transactions_v3():
+    """Interface unifiée : Voir ET gérer les transactions (simplifiée)"""
+    st.title("📊 Mes Transactions")
+
+    backfill_recurrences_to_today(DB_PATH)
+    df = load_transactions()
+
+    if df.empty:
+        st.info("💰 Aucune transaction enregistrée. Commencez par en ajouter !")
+        return
+
+    # === FILTRES SIMPLIFIÉS ===
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
+    with col1:
+        # Filtre de période simplifié
+        periode = st.selectbox(
+            "📅 Période",
+            ["Tout voir", "Ce mois", "Mois dernier", "30 derniers jours", "Cette année", "Personnalisée"],
+            key="periode_voir_v3"
+        )
+
+    # Calculer dates selon période
+    today = datetime.now().date()
+
+    if periode == "Tout voir":
+        date_debut, date_fin = None, None
+    elif periode == "Ce mois":
+        date_debut = today.replace(day=1)
+        date_fin = today
+    elif periode == "Mois dernier":
+        premier_mois = today.replace(day=1)
+        date_fin = premier_mois - timedelta(days=1)
+        date_debut = date_fin.replace(day=1)
+    elif periode == "30 derniers jours":
+        date_debut = today - timedelta(days=30)
+        date_fin = today
+    elif periode == "Cette année":
+        date_debut = today.replace(month=1, day=1)
+        date_fin = today
+    else:  # Personnalisée
+        with col2:
+            date_debut = st.date_input("Début", value=today - timedelta(days=30), key="debut_v3")
+        with col3:
+            date_fin = st.date_input("Fin", value=today, key="fin_v3")
+
+    # Afficher la période sélectionnée
+    if periode != "Personnalisée":
+        with col2:
+            if date_debut:
+                st.caption(f"📅 Du {date_debut.strftime('%d/%m/%y')}")
+            else:
+                st.caption("📅 Depuis le début")
+        with col3:
+            if date_fin:
+                st.caption(f"📅 Au {date_fin.strftime('%d/%m/%y')}")
+            else:
+                st.caption("📅 Jusqu'à aujourd'hui")
+
+    with col4:
+        if st.button("🔄", help="Actualiser"):
+            refresh_and_rerun()
+
+    # Filtres supplémentaires (simplifiés)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        type_filter = st.selectbox("Type", ["Toutes", "Dépense", "Revenu"], key="type_v3")
+
+    with col2:
+        categories = ["Toutes"] + sorted(df["categorie"].dropna().unique().tolist())
+        cat_filter = st.selectbox("Catégorie", categories, key="cat_v3")
+
+    with col3:
+        # Mode affichage
+        mode_affichage = st.selectbox("Mode", ["👁️ Consultation", "✏️ Édition"], key="mode_v3")
+
+    st.markdown("---")
+
+    # === APPLIQUER LES FILTRES ===
+    df_filtered = df.copy()
+    df_filtered["date"] = pd.to_datetime(df_filtered["date"])
+
+    # Filtre période
+    if date_debut and date_fin:
+        df_filtered = df_filtered[
+            (df_filtered["date"].dt.date >= date_debut) &
+            (df_filtered["date"].dt.date <= date_fin)
+        ]
+
+    # Filtre type
+    if type_filter == "Dépense":
+        df_filtered = df_filtered[df_filtered["type"] == "dépense"]
+    elif type_filter == "Revenu":
+        df_filtered = df_filtered[df_filtered["type"] == "revenu"]
+
+    # Filtre catégorie
+    if cat_filter != "Toutes":
+        df_filtered = df_filtered[df_filtered["categorie"] == cat_filter]
+
+    # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
+    df_filtered = df_filtered.sort_values("date", ascending=False)
+
+    if df_filtered.empty:
+        st.warning("🔍 Aucune transaction trouvée avec ces filtres")
+        return
+
+    # Statistiques rapides (compactes)
+    total_revenus = df_filtered[df_filtered["type"] == "revenu"]["montant"].sum()
+    total_depenses = df_filtered[df_filtered["type"] == "dépense"]["montant"].sum()
+    solde = total_revenus - total_depenses
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Transactions", len(df_filtered))
+    with col2:
+        st.metric("💹 Revenus", f"{total_revenus:.0f} €")
+    with col3:
+        st.metric("💸 Dépenses", f"{total_depenses:.0f} €")
+    with col4:
+        delta_color = "normal" if solde >= 0 else "inverse"
+        st.metric("💰 Solde", f"{solde:+.0f} €", delta_color=delta_color)
+
+    st.markdown("---")
+
+    # === MODE CONSULTATION ===
+    if mode_affichage == "👁️ Consultation":
+        st.subheader("📋 Liste des transactions")
+
+        # Tableau simplifié (non éditable)
+        df_display = df_filtered.copy()
+        df_display["montant"] = df_display["montant"].apply(lambda x: safe_convert(x, float, 0.0))
+
+        # Ajouter icônes
+        df_display["Type"] = df_display["type"].apply(lambda x: "🟢" if x == "revenu" else "🔴")
+        df_display["Date"] = pd.to_datetime(df_display["date"]).dt.strftime("%d/%m/%Y")
+
+        # Montant signé pour l'affichage
+        df_display["Montant"] = df_display.apply(
+            lambda row: row["montant"] if row["type"] == "revenu" else -row["montant"],
+            axis=1
+        )
+
+        st.dataframe(
+            df_display[["Type", "Date", "categorie", "sous_categorie", "Montant", "description"]].rename(columns={
+                "categorie": "Catégorie",
+                "sous_categorie": "Sous-catégorie",
+                "description": "Description"
+            }),
+            use_container_width=True,
+            height=500,
+            hide_index=True,
+            column_config={
+                "Montant": st.column_config.NumberColumn("Montant (€)", format="%.2f €")
+            }
+        )
+
+        # Expander pour détails
+        with st.expander("🔍 Voir détails par transaction"):
+            for idx, trans in df_display.head(20).iterrows():
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    type_icon = "💹" if trans["type"] == "revenu" else "💸"
+                    st.write(f"{type_icon} **{trans['categorie']}** → {trans['sous_categorie']}")
+                with col2:
+                    st.caption(f"📅 {trans['Date']}")
+                    if trans.get('description'):
+                        st.caption(f"📝 {trans['description']}")
+                with col3:
+                    couleur = "#00D4AA" if trans["type"] == "revenu" else "#FF6B6B"
+                    signe = "+" if trans["type"] == "revenu" else "-"
+                    st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{abs(trans['Montant']):.2f} €</p>", unsafe_allow_html=True)
+                st.markdown("---")
+
+    # === MODE ÉDITION ===
+    else:
+        st.subheader("✏️ Modifier ou supprimer des transactions")
+
+        st.info("💡 Modifiez les valeurs directement dans le tableau, puis cliquez sur 'Enregistrer'")
+
+        # Préparer le tableau éditable
+        df_edit = df_filtered.copy()
+        df_edit["montant"] = df_edit["montant"].apply(lambda x: safe_convert(x, float, 0.0))
+
+        # Ajouter colonne de suppression
+        df_edit.insert(0, "🗑️", False)
+
+        # Afficher l'éditeur
+        df_edited = st.data_editor(
+            df_edit[["🗑️", "date", "type", "categorie", "sous_categorie", "montant", "description"]],
+            use_container_width=True,
+            num_rows="fixed",
+            hide_index=True,
+            key="editor_v3",
+            column_config={
+                "🗑️": st.column_config.CheckboxColumn("🗑️ Suppr.", help="Cocher pour supprimer"),
+                "date": st.column_config.DateColumn("Date", format="DD/MM/YYYY"),
+                "type": st.column_config.SelectboxColumn("Type", options=["dépense", "revenu"]),
+                "categorie": st.column_config.TextColumn("Catégorie"),
+                "sous_categorie": st.column_config.TextColumn("Sous-catégorie"),
+                "montant": st.column_config.NumberColumn("Montant (€)", format="%.2f", min_value=0),
+                "description": st.column_config.TextColumn("Description")
+            }
+        )
+
+        # Boutons d'action
+        col1, col2, col3 = st.columns([2, 2, 4])
+
+        with col1:
+            if st.button("💾 Enregistrer les modifications", type="primary", key="save_v3"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                modified = 0
+
+                for idx in df_edited.index:
+                    # Récupérer l'ID de la transaction
+                    trans_id = df_edit.iloc[idx]["id"]
+                    original = df_edit.iloc[idx]
+                    edited = df_edited.iloc[idx]
+
+                    # Vérifier les changements
+                    has_changes = False
+                    for col in ["date", "type", "categorie", "sous_categorie", "montant", "description"]:
+                        if str(edited[col]) != str(original[col]):
+                            has_changes = True
+                            break
+
+                    if has_changes:
+                        # Mise à jour
+                        cursor.execute("""
+                            UPDATE transactions
+                            SET type = ?, categorie = ?, sous_categorie = ?, montant = ?,
+                                date = ?, description = ?
+                            WHERE id = ?
+                        """, (
+                            edited["type"],
+                            edited["categorie"],
+                            edited["sous_categorie"],
+                            safe_convert(edited["montant"]),
+                            safe_date_convert(edited["date"]).isoformat(),
+                            edited.get("description", ""),
+                            trans_id
+                        ))
+                        modified += 1
+
+                conn.commit()
+                conn.close()
+
+                if modified > 0:
+                    toast_success(f"{modified} transaction(s) modifiée(s) !")
+                    refresh_and_rerun()
+                else:
+                    st.info("Aucune modification détectée")
+
+        with col2:
+            to_delete = df_edited[df_edited["🗑️"] == True]
+            if len(to_delete) > 0:
+                if st.button(f"🗑️ Supprimer ({len(to_delete)})", type="secondary", key="delete_v3"):
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+
+                    for idx in to_delete.index:
+                        trans_id = df_edit.iloc[idx]["id"]
+                        cursor.execute("DELETE FROM transactions WHERE id = ?", (trans_id,))
+
+                    conn.commit()
+                    conn.close()
+
+                    toast_success(f"{len(to_delete)} transaction(s) supprimée(s) !")
+                    refresh_and_rerun()
+
+    # === GÉRER LES RÉCURRENCES (EN EXPANDER) ===
+    st.markdown("---")
+    with st.expander("🔁 Gérer les récurrences"):
+        interface_gerer_recurrences()
+
 def interface_gerer_transactions():
     st.subheader("🛠️ Gérer les transactions (modifier ou supprimer) V2")
 
@@ -5252,22 +5528,8 @@ def main():
             interface_transactions_simplifiee()
                 
         elif page == "📊 Voir Transactions":
-            st.header("📊 Voir Transactions V2")
-            
-            tab1, tab2, tab3 = st.tabs([
-                "📋 Transactions",
-                "🗑️ Gérer les transactions", 
-                "🔁 Gérer les récurrences"
-            ])
-
-            with tab1:
-                interface_voir_transactions()
-
-            with tab2:
-                interface_gerer_transactions()
-
-            with tab3:
-                interface_gerer_recurrences()
+            # Afficher la nouvelle interface unifiée (voir + gérer)
+            interface_voir_transactions_v3()
                 
         elif page == "📈 Solde prévisionnel":
             interface_solde_previsionnel()
