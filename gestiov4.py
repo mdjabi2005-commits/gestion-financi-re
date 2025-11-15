@@ -5637,6 +5637,378 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
             """)
 
 
+# =============================
+# 💼 ONGLET PORTEFEUILLE
+# =============================
+def interface_portefeuille():
+    """Interface de gestion du portefeuille : budgets, notes et statistiques"""
+    st.title("💼 Mon Portefeuille")
+
+    # Initialiser les tables si elles n'existent pas
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Table budgets par catégorie
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS budgets_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categorie TEXT UNIQUE NOT NULL,
+            budget_mensuel REAL NOT NULL,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
+    # Table notes
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes_portefeuille (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titre TEXT NOT NULL,
+            contenu TEXT,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
+    conn.commit()
+
+    # Onglets principaux
+    tab1, tab2, tab3 = st.tabs(["💰 Budgets par catégorie", "📝 Notes", "📊 Vue d'ensemble"])
+
+    # ===== ONGLET 1: BUDGETS PAR CATÉGORIE =====
+    with tab1:
+        st.subheader("💰 Gérer les budgets par catégorie")
+
+        # Charger les catégories de dépenses existantes
+        df_transactions = load_transactions()
+        if not df_transactions.empty:
+            categories_depenses = sorted(
+                df_transactions[df_transactions["type"] == "dépense"]["categorie"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+        else:
+            categories_depenses = []
+
+        # Charger les budgets existants
+        df_budgets = pd.read_sql_query(
+            "SELECT * FROM budgets_categories ORDER BY categorie",
+            conn
+        )
+
+        st.markdown("#### 📌 Budgets actuels")
+
+        if df_budgets.empty:
+            st.info("💡 Aucun budget défini. Commencez par en ajouter ci-dessous !")
+        else:
+            # Calculer les dépenses du mois en cours pour chaque catégorie
+            today = datetime.now()
+            premier_jour_mois = today.replace(day=1).date()
+
+            # Préparer l'affichage avec pourcentages
+            budgets_display = []
+
+            for _, budget in df_budgets.iterrows():
+                categorie = budget["categorie"]
+                budget_mensuel = budget["budget_mensuel"]
+
+                # Calculer les dépenses du mois pour cette catégorie
+                if not df_transactions.empty:
+                    depenses_mois = df_transactions[
+                        (df_transactions["type"] == "dépense") &
+                        (df_transactions["categorie"] == categorie) &
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                    ]["montant"].sum()
+                else:
+                    depenses_mois = 0.0
+
+                # Calculer le pourcentage utilisé
+                if budget_mensuel > 0:
+                    pourcentage = (depenses_mois / budget_mensuel) * 100
+                else:
+                    pourcentage = 0
+
+                # Déterminer la couleur
+                if pourcentage >= 100:
+                    couleur = "🔴"
+                    status = "Dépassé"
+                elif pourcentage >= 80:
+                    couleur = "🟠"
+                    status = "Attention"
+                elif pourcentage >= 50:
+                    couleur = "🟡"
+                    status = "Bon"
+                else:
+                    couleur = "🟢"
+                    status = "Excellent"
+
+                budgets_display.append({
+                    "Catégorie": f"{couleur} {categorie}",
+                    "Budget (€)": f"{budget_mensuel:.2f}",
+                    "Dépensé (€)": f"{depenses_mois:.2f}",
+                    "Reste (€)": f"{budget_mensuel - depenses_mois:.2f}",
+                    "% utilisé": f"{pourcentage:.1f}%",
+                    "État": status
+                })
+
+            # Afficher le tableau
+            st.dataframe(
+                pd.DataFrame(budgets_display),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.markdown("---")
+        st.markdown("#### ➕ Ajouter/Modifier un budget")
+
+        col1, col2, col3 = st.columns([2, 1, 1])
+
+        with col1:
+            # Choix entre catégorie existante ou nouvelle
+            mode_ajout = st.radio(
+                "Mode",
+                ["Catégorie existante", "Nouvelle catégorie"],
+                horizontal=True,
+                key="mode_budget"
+            )
+
+            if mode_ajout == "Catégorie existante":
+                if categories_depenses:
+                    categorie_budget = st.selectbox(
+                        "Catégorie",
+                        categories_depenses,
+                        key="cat_budget_existante"
+                    )
+                else:
+                    st.warning("Aucune catégorie de dépense trouvée")
+                    categorie_budget = None
+            else:
+                categorie_budget = st.text_input(
+                    "Nom de la catégorie",
+                    key="cat_budget_nouvelle"
+                )
+
+        with col2:
+            montant_budget = st.number_input(
+                "Budget mensuel (€)",
+                min_value=0.0,
+                step=10.0,
+                value=100.0,
+                key="montant_budget"
+            )
+
+        with col3:
+            st.write("")  # Espacement
+            st.write("")  # Espacement
+            if st.button("💾 Enregistrer", type="primary", key="save_budget"):
+                if categorie_budget and categorie_budget.strip():
+                    try:
+                        cursor.execute("""
+                            INSERT INTO budgets_categories (categorie, budget_mensuel, date_creation, date_modification)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(categorie) DO UPDATE SET
+                                budget_mensuel = excluded.budget_mensuel,
+                                date_modification = excluded.date_modification
+                        """, (
+                            categorie_budget.strip(),
+                            montant_budget,
+                            datetime.now().isoformat(),
+                            datetime.now().isoformat()
+                        ))
+                        conn.commit()
+                        toast_success(f"Budget pour '{categorie_budget}' enregistré !")
+                        refresh_and_rerun()
+                    except Exception as e:
+                        toast_error(f"Erreur : {e}")
+                else:
+                    toast_warning("Veuillez sélectionner ou saisir une catégorie")
+
+        # Option de suppression
+        if not df_budgets.empty:
+            st.markdown("---")
+            st.markdown("#### 🗑️ Supprimer un budget")
+
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                budget_to_delete = st.selectbox(
+                    "Catégorie à supprimer",
+                    df_budgets["categorie"].tolist(),
+                    key="budget_delete"
+                )
+
+            with col2:
+                st.write("")  # Espacement
+                st.write("")  # Espacement
+                if st.button("🗑️ Supprimer", type="secondary", key="delete_budget"):
+                    cursor.execute(
+                        "DELETE FROM budgets_categories WHERE categorie = ?",
+                        (budget_to_delete,)
+                    )
+                    conn.commit()
+                    toast_success(f"Budget '{budget_to_delete}' supprimé")
+                    refresh_and_rerun()
+
+    # ===== ONGLET 2: NOTES =====
+    with tab2:
+        st.subheader("📝 Mes notes")
+
+        # Charger les notes
+        df_notes = pd.read_sql_query(
+            "SELECT * FROM notes_portefeuille ORDER BY date_modification DESC",
+            conn
+        )
+
+        # Afficher les notes existantes
+        if not df_notes.empty:
+            st.markdown("#### 📌 Notes enregistrées")
+
+            for _, note in df_notes.iterrows():
+                with st.expander(f"📝 {note['titre']}", expanded=False):
+                    st.markdown(note['contenu'])
+                    st.caption(f"Modifié le : {note['date_modification'][:10]}")
+
+                    col1, col2 = st.columns([1, 4])
+                    with col1:
+                        if st.button("🗑️ Supprimer", key=f"delete_note_{note['id']}"):
+                            cursor.execute(
+                                "DELETE FROM notes_portefeuille WHERE id = ?",
+                                (note['id'],)
+                            )
+                            conn.commit()
+                            toast_success("Note supprimée")
+                            refresh_and_rerun()
+        else:
+            st.info("💡 Aucune note pour le moment")
+
+        # Ajouter une nouvelle note
+        st.markdown("---")
+        st.markdown("#### ➕ Ajouter une note")
+
+        titre_note = st.text_input("Titre de la note", key="titre_note")
+        contenu_note = st.text_area(
+            "Contenu",
+            height=150,
+            key="contenu_note",
+            placeholder="Écrivez vos notes ici..."
+        )
+
+        if st.button("💾 Enregistrer la note", type="primary", key="save_note"):
+            if titre_note and titre_note.strip():
+                cursor.execute("""
+                    INSERT INTO notes_portefeuille (titre, contenu, date_creation, date_modification)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    titre_note.strip(),
+                    contenu_note.strip(),
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+                toast_success("Note enregistrée !")
+                refresh_and_rerun()
+            else:
+                toast_warning("Veuillez saisir un titre")
+
+    # ===== ONGLET 3: VUE D'ENSEMBLE =====
+    with tab3:
+        st.subheader("📊 Vue d'ensemble du mois")
+
+        if df_budgets.empty:
+            st.info("💡 Définissez des budgets pour voir les statistiques")
+        else:
+            # Calculer les totaux
+            budget_total = df_budgets["budget_mensuel"].sum()
+
+            # Calculer les dépenses du mois
+            today = datetime.now()
+            premier_jour_mois = today.replace(day=1).date()
+
+            if not df_transactions.empty:
+                depenses_mois_total = df_transactions[
+                    (df_transactions["type"] == "dépense") &
+                    (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                ]["montant"].sum()
+            else:
+                depenses_mois_total = 0.0
+
+            reste_total = budget_total - depenses_mois_total
+            pourcentage_total = (depenses_mois_total / budget_total * 100) if budget_total > 0 else 0
+
+            # Afficher les métriques
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("💰 Budget total", f"{budget_total:.0f} €")
+
+            with col2:
+                st.metric("💸 Dépensé", f"{depenses_mois_total:.0f} €")
+
+            with col3:
+                delta_color = "normal" if reste_total >= 0 else "inverse"
+                st.metric("💵 Reste", f"{reste_total:.0f} €", delta_color=delta_color)
+
+            with col4:
+                st.metric("📊 % utilisé", f"{pourcentage_total:.1f}%")
+
+            # Graphique de répartition
+            st.markdown("---")
+            st.markdown("#### 📊 Répartition des dépenses par catégorie")
+
+            if not df_transactions.empty:
+                depenses_par_cat = []
+
+                for _, budget in df_budgets.iterrows():
+                    categorie = budget["categorie"]
+                    budget_mensuel = budget["budget_mensuel"]
+
+                    depenses = df_transactions[
+                        (df_transactions["type"] == "dépense") &
+                        (df_transactions["categorie"] == categorie) &
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                    ]["montant"].sum()
+
+                    depenses_par_cat.append({
+                        "Catégorie": categorie,
+                        "Dépensé": depenses,
+                        "Budget": budget_mensuel,
+                        "% du budget": (depenses / budget_mensuel * 100) if budget_mensuel > 0 else 0
+                    })
+
+                df_depenses = pd.DataFrame(depenses_par_cat)
+
+                if not df_depenses.empty:
+                    # Graphique en barres
+                    fig = go.Figure()
+
+                    fig.add_trace(go.Bar(
+                        name='Budget',
+                        x=df_depenses['Catégorie'],
+                        y=df_depenses['Budget'],
+                        marker_color='lightblue'
+                    ))
+
+                    fig.add_trace(go.Bar(
+                        name='Dépensé',
+                        x=df_depenses['Catégorie'],
+                        y=df_depenses['Dépensé'],
+                        marker_color='salmon'
+                    ))
+
+                    fig.update_layout(
+                        barmode='group',
+                        title='Budget vs Dépenses par catégorie',
+                        xaxis_title='Catégorie',
+                        yaxis_title='Montant (€)',
+                        height=400
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+    conn.close()
+
+
 def main():
     """Fonction principale V2"""
     try:
@@ -5652,7 +6024,7 @@ def main():
             
             page = st.radio(
                 "Navigation",
-                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "📈 Solde prévisionnel", "🔬 Analyse"]
+                ["🏠 Accueil", "💸 Transactions", "📊 Voir Transactions", "💼 Portefeuille", "📈 Solde prévisionnel", "🔬 Analyse"]
             )
             
             # 🔄 BOUTON DE RAFRAÎCHISSEMENT DES DONNÉES (discret en bas)
@@ -5672,7 +6044,10 @@ def main():
         elif page == "📊 Voir Transactions":
             # Afficher la nouvelle interface unifiée (voir + gérer)
             interface_voir_transactions_v3()
-                
+
+        elif page == "💼 Portefeuille":
+            interface_portefeuille()
+
         elif page == "📈 Solde prévisionnel":
             interface_solde_previsionnel()
 
