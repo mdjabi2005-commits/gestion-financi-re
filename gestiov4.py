@@ -3594,7 +3594,41 @@ def interface_voir_transactions_v3():
                     st.success(message)
                     refresh_and_rerun()
                 else:
-                    st.info("ℹ️ Aucune modification détectée")
+                    st.warning("⚠️ Aucune modification détectée")
+
+                    # DEBUG : Afficher quelques exemples de comparaison
+                    with st.expander("🔍 DEBUG : Pourquoi aucun changement ?"):
+                        st.write("**Comparaison de la première ligne :**")
+                        if len(df_edited) > 0:
+                            idx = df_edited.index[0]
+                            orig = df_edit.loc[idx]
+                            edit = df_edited.loc[idx]
+
+                            st.write(f"**Original (df_edit) :**")
+                            st.json({
+                                "date": str(orig["date"]),
+                                "type": str(orig.get("type")),
+                                "categorie": str(orig.get("categorie")),
+                                "sous_categorie": str(orig.get("sous_categorie")),
+                                "montant": str(orig.get("montant")),
+                                "description": str(orig.get("description"))
+                            })
+
+                            st.write(f"**Édité (df_edited) :**")
+                            st.json({
+                                "date": str(edit["date"]),
+                                "type": str(edit.get("type")),
+                                "categorie": str(edit.get("categorie")),
+                                "sous_categorie": str(edit.get("sous_categorie")),
+                                "montant": str(edit.get("montant")),
+                                "description": str(edit.get("description"))
+                            })
+
+                            st.write("**Les DataFrames sont-ils identiques ?**")
+                            st.write(f"Date égale: {str(orig['date']) == str(edit['date'])}")
+                            st.write(f"Type égal: {str(orig.get('type')) == str(edit.get('type'))}")
+                            st.write(f"Catégorie égale: {str(orig.get('categorie')) == str(edit.get('categorie'))}")
+                            st.write(f"Montant égal: {str(orig.get('montant')) == str(edit.get('montant'))}")
 
         with col2:
             to_delete = df_edited[df_edited["🗑️"] == True]
