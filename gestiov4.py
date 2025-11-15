@@ -4800,6 +4800,118 @@ def interface_transactions_simplifiee():
 # =============================
 # 💼 ONGLET PORTEFEUILLE
 # =============================
+# 🎯 FONCTIONS D'ANALYSE DES BUDGETS
+# =============================
+
+def analyze_budget_history():
+    """
+    Analyse l'historique des budgets depuis le début (première transaction).
+    Retourne un DataFrame avec:
+    - Dépenses totales par catégorie
+    - Nombre de mois écoulés
+    - Respect du budget historique
+    - Montant à réduire pour respecter le budget
+    """
+    df_transactions = load_transactions()
+
+    conn = sqlite3.connect(DB_PATH)
+    df_budgets = pd.read_sql_query("SELECT * FROM budgets_categories", conn)
+    conn.close()
+
+    if df_budgets.empty or df_transactions.empty:
+        return pd.DataFrame()
+
+    analysis = []
+
+    # Calculer le nombre de mois depuis le début
+    if not df_transactions.empty:
+        first_date = pd.to_datetime(df_transactions["date"]).min().date()
+        last_date = pd.to_datetime(df_transactions["date"]).max().date()
+        months_elapsed = max(1, (last_date.year - first_date.year) * 12 + (last_date.month - first_date.month) + 1)
+    else:
+        months_elapsed = 1
+
+    for _, budget in df_budgets.iterrows():
+        categorie = budget["categorie"]
+        budget_mensuel = budget["budget_mensuel"]
+
+        # Calculer les dépenses totales pour cette catégorie
+        depenses_totales = df_transactions[
+            (df_transactions["type"] == "dépense") &
+            (df_transactions["categorie"] == categorie)
+        ]["montant"].sum()
+
+        # Budget total pour la période
+        budget_total_periode = budget_mensuel * months_elapsed
+
+        # Moyenne par mois réellement dépensée
+        moyenne_par_mois = depenses_totales / months_elapsed if months_elapsed > 0 else 0
+
+        # Montant à réduire pour respecter le budget
+        surdepassement = max(0, depenses_totales - budget_total_periode)
+
+        # Déterminer le statut
+        if surdepassement > 0:
+            status = "🔴 Dépassé"
+        elif depenses_totales > budget_total_periode:
+            status = "🔴 Dépassé"
+        else:
+            status = "🟢 Respecté"
+
+        analysis.append({
+            "Catégorie": categorie,
+            "Budget mensuel (€)": f"{budget_mensuel:.2f}",
+            "Budget total {m} mois (€)".format(m=months_elapsed): f"{budget_total_periode:.2f}",
+            "Dépensé total (€)": f"{depenses_totales:.2f}",
+            "Moy/mois (€)": f"{moyenne_par_mois:.2f}",
+            "À réduire (€)": f"{surdepassement:.2f}",
+            "Statut": status
+        })
+
+    return pd.DataFrame(analysis), months_elapsed
+
+
+def analyze_exceptional_expenses():
+    """
+    Analyse les dépenses exceptionnelles (catégories sans budget défini).
+    Retourne un DataFrame avec les dépenses par catégorie exceptionnelle.
+    """
+    df_transactions = load_transactions()
+
+    conn = sqlite3.connect(DB_PATH)
+    df_budgets = pd.read_sql_query("SELECT categorie FROM budgets_categories", conn)
+    conn.close()
+
+    if df_transactions.empty:
+        return pd.DataFrame(), 0.0
+
+    # Récupérer les catégories avec budget
+    categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
+
+    # Filtrer les dépenses
+    df_depenses = df_transactions[df_transactions["type"] == "dépense"].copy()
+
+    # Récupérer les catégories sans budget
+    df_exceptionnelles = df_depenses[~df_depenses["categorie"].isin(categories_avec_budget)]
+
+    if df_exceptionnelles.empty:
+        return pd.DataFrame(), 0.0
+
+    # Grouper par catégorie
+    expenses_by_cat = df_exceptionnelles.groupby("categorie")["montant"].agg([
+        ("Montant total (€)", lambda x: f"{x.sum():.2f}"),
+        ("Nombre", "count"),
+        ("Moyenne (€)", lambda x: f"{x.mean():.2f}")
+    ]).reset_index()
+
+    expenses_by_cat.columns = ["Catégorie", "Montant total (€)", "Nombre", "Moyenne (€)"]
+
+    total_exceptional = df_exceptionnelles["montant"].sum()
+
+    return expenses_by_cat, total_exceptional
+
+
+# =============================
 def interface_portefeuille():
     """Interface de gestion du portefeuille : budgets, notes et statistiques"""
     st.title("💼 Mon Portefeuille")
@@ -5039,6 +5151,101 @@ def interface_portefeuille():
                     conn.commit()
                     toast_success(f"Budget '{budget_to_delete}' supprimé")
                     refresh_and_rerun()
+
+        # ===== ANALYSE HISTORIQUE DES BUDGETS =====
+        st.markdown("---")
+        st.markdown("#### 📈 Analyse Historique des Budgets")
+        st.info("💡 Analyse depuis la première transaction jusqu'à aujourd'hui")
+
+        df_history, months_count = analyze_budget_history()
+
+        if not df_history.empty:
+            # Afficher le tableau d'analyse
+            st.dataframe(
+                df_history,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # Résumé statistique
+            st.markdown("**Résumé de la période:**")
+            col1, col2, col3 = st.columns(3)
+
+            # Calculer les totaux
+            with col1:
+                st.metric("Mois écoulés", months_count)
+
+            with col2:
+                # Total dépensé vs budget pour les catégories avec budget
+                try:
+                    total_depense = 0
+                    total_budget = 0
+                    for _, row in df_history.iterrows():
+                        # Extraire les valeurs numériques des strings formatées
+                        total_depense += float(row["Dépensé total (€)"].replace("€", "").strip())
+                        total_budget += float(row["Budget total {m} mois (€)".format(m=months_count)].replace("€", "").strip())
+
+                    delta = total_depense - total_budget
+                    st.metric("Budget planifié vs dépensé", f"{total_depense:.0f} € vs {total_budget:.0f} €",
+                              delta=f"{delta:+.0f} €" if delta != 0 else "Équilibré")
+                except:
+                    st.metric("Budgets avec détection", len(df_history))
+
+            with col3:
+                # Nombre de budgets respectés
+                try:
+                    budgets_respectes = len(df_history[df_history["Statut"] == "🟢 Respecté"])
+                    total_budgets = len(df_history)
+                    st.metric("Budgets respectés", f"{budgets_respectes}/{total_budgets}")
+                except:
+                    st.metric("Période", f"{months_count} mois")
+        else:
+            st.warning("📭 Aucun budget défini pour l'analyse historique")
+
+        # ===== DÉPENSES EXCEPTIONNELLES =====
+        st.markdown("---")
+        st.markdown("#### ⚠️ Dépenses Exceptionnelles (sans budget)")
+        st.info("💡 Ces catégories n'ont pas de budget défini. Elles peuvent impacter votre solde.")
+
+        df_exceptional, total_exceptional = analyze_exceptional_expenses()
+
+        if not df_exceptional.empty:
+            st.dataframe(
+                df_exceptional,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # Résumé des dépenses exceptionnelles
+            st.markdown("**Impacts des dépenses exceptionnelles:**")
+
+            # Calculer les totaux
+            try:
+                total_revenue = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
+                total_expenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
+                solde = total_revenue - total_expenses
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric("Total exceptionnel (€)", f"{total_exceptional:.2f}")
+
+                with col2:
+                    percentage = (total_exceptional / total_expenses * 100) if total_expenses > 0 else 0
+                    st.metric("% des dépenses", f"{percentage:.1f}%")
+
+                with col3:
+                    st.metric("Solde total (€)", f"{solde:.2f}")
+
+                with col4:
+                    solde_sans_exceptional = solde + total_exceptional
+                    delta_solde = solde - (solde + total_exceptional)
+                    st.metric("Solde sans exceptionnel", f"{solde_sans_exceptional:.2f}",
+                              delta=f"{delta_solde:+.2f} €")
+            except Exception as e:
+                st.warning(f"⚠️ Impossible de calculer les statistiques: {str(e)}")
+        else:
+            st.success("✅ Aucune dépense exceptionnelle! Toutes les dépenses sont dans les catégories budgétées.")
 
     # ===== ONGLET 2: OBJECTIFS =====
     with tab2:
