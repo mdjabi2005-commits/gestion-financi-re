@@ -116,10 +116,10 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
         print(f"[OCR-LOG] Écriture dans {OCR_SCAN_LOG}")
         with open(OCR_SCAN_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(scan_entry, ensure_ascii=False) + "\n")
-        print(f"[OCR-LOG] Historique enregistre")
+        print("[OCR-LOG] Historique enregistre")
 
         # 2. Mettre à jour les statistiques de performance
-        print(f"[OCR-LOG] Mise à jour performance stats...")
+        print("[OCR-LOG] Mise à jour performance stats...")
         update_performance_stats(document_type, success_level)
 
         # 3. Mettre à jour les statistiques par pattern
@@ -127,7 +127,7 @@ def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, mon
             print(f"[OCR-LOG] Mise à jour pattern stats ({len(patterns_detectes)} patterns)...")
             update_pattern_stats(patterns_detectes, success_level)
 
-        print(f"[OCR-LOG] Log OCR termine avec succes")
+        print("[OCR-LOG] Log OCR termine avec succes")
 
     except Exception as e:
         logger.error(f"[OCR-LOG] Erreur lors de l'enregistrement du scan : {e}")
@@ -402,13 +402,13 @@ def get_ocr_performance_report():
     try:
         print(f"[DEBUG] get_ocr_performance_report() - Chemin: {OCR_PERFORMANCE_LOG}")
         if os.path.exists(OCR_PERFORMANCE_LOG):
-            print(f"[DEBUG] Fichier existe, lecture...")
+            print("[DEBUG] Fichier existe, lecture...")
             with open(OCR_PERFORMANCE_LOG, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 print(f"[DEBUG] Données chargées: {data}")
                 return data
         else:
-            print(f"[DEBUG] Fichier n'existe pas")
+            print("[DEBUG] Fichier n'existe pas")
     except Exception as e:
         print(f"[DEBUG] ERREUR lors de la lecture: {e}")
         import traceback
@@ -1258,7 +1258,7 @@ def afficher_documents_associes(transaction):
                         st.text_area("Texte du ticket:", texte_ocr, height=150)
                         
                 except Exception as e:
-                    toast_error("Impossible d'afficher l'image: {e}")
+                    toast_error(f"Impossible d'afficher l'image: {e}")
                     
             elif fichier.lower().endswith('.pdf'):
                 # Afficher les infos du PDF
@@ -2238,7 +2238,7 @@ def interface_accueil():
                 st.pyplot(fig)
 
                 # Liste détaillée dessous
-                st.markdown(f"**📋 Détails des transactions**")
+                st.markdown("**📋 Détails des transactions**")
                 for idx, trans in top_trans.iterrows():
                     col_a, col_b = st.columns([4, 1])
                     with col_a:
