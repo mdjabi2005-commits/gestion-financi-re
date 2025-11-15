@@ -4810,7 +4810,7 @@ def analyze_budget_history():
     - Dépenses totales par catégorie
     - Nombre de mois écoulés
     - Respect du budget historique
-    - Montant à réduire pour respecter le budget
+    - Montant restant/dépassé pour respecter le budget
     """
     df_transactions = load_transactions()
 
@@ -4819,7 +4819,7 @@ def analyze_budget_history():
     conn.close()
 
     if df_budgets.empty or df_transactions.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), 0
 
     analysis = []
 
@@ -4835,7 +4835,7 @@ def analyze_budget_history():
         categorie = budget["categorie"]
         budget_mensuel = budget["budget_mensuel"]
 
-        # Calculer les dépenses totales pour cette catégorie
+        # Calculer les dépenses totales pour cette catégorie (inclut les récurrences backfill)
         depenses_totales = df_transactions[
             (df_transactions["type"] == "dépense") &
             (df_transactions["categorie"] == categorie)
@@ -4847,16 +4847,16 @@ def analyze_budget_history():
         # Moyenne par mois réellement dépensée
         moyenne_par_mois = depenses_totales / months_elapsed if months_elapsed > 0 else 0
 
-        # Montant à réduire pour respecter le budget
-        surdepassement = max(0, depenses_totales - budget_total_periode)
+        # Montant restant ou dépassé
+        reste = budget_total_periode - depenses_totales
 
         # Déterminer le statut
-        if surdepassement > 0:
-            status = "🔴 Dépassé"
-        elif depenses_totales > budget_total_periode:
-            status = "🔴 Dépassé"
-        else:
+        if reste >= 0:
             status = "🟢 Respecté"
+            reste_display = f"{reste:.2f}"
+        else:
+            status = "🔴 Dépassé"
+            reste_display = f"{abs(reste):.2f}"  # Afficher la valeur positive mais avec le statut dépassé
 
         analysis.append({
             "Catégorie": categorie,
@@ -4864,7 +4864,7 @@ def analyze_budget_history():
             "Budget total {m} mois (€)".format(m=months_elapsed): f"{budget_total_periode:.2f}",
             "Dépensé total (€)": f"{depenses_totales:.2f}",
             "Moy/mois (€)": f"{moyenne_par_mois:.2f}",
-            "À réduire (€)": f"{surdepassement:.2f}",
+            "Reste (€)": reste_display,
             "Statut": status
         })
 
@@ -4973,6 +4973,10 @@ def interface_portefeuille():
         conn.commit()
 
     conn.commit()
+
+    # Backfill les transactions récurrentes jusqu'à aujourd'hui
+    # IMPORTANT: Cela doit être fait AVANT de charger les transactions
+    backfill_recurrences_to_today(DB_PATH)
 
     # Onglets principaux
     tab1, tab2, tab3, tab4 = st.tabs(["💰 Budgets par catégorie", "🎯 Objectifs", "📊 Vue d'ensemble", "📅 Prévisions"])
@@ -5185,9 +5189,9 @@ def interface_portefeuille():
                         total_depense += float(row["Dépensé total (€)"].replace("€", "").strip())
                         total_budget += float(row["Budget total {m} mois (€)".format(m=months_count)].replace("€", "").strip())
 
-                    delta = total_depense - total_budget
-                    st.metric("Budget planifié vs dépensé", f"{total_depense:.0f} € vs {total_budget:.0f} €",
-                              delta=f"{delta:+.0f} €" if delta != 0 else "Équilibré")
+                    reste = total_budget - total_depense
+                    st.metric("Budget planifié vs dépensé", f"{total_budget:.0f} € vs {total_depense:.0f} €",
+                              delta=f"{reste:+.0f} €" if reste != 0 else "Équilibré")
                 except:
                     st.metric("Budgets avec détection", len(df_history))
 
@@ -5239,7 +5243,7 @@ def interface_portefeuille():
 
                 with col4:
                     solde_sans_exceptional = solde + total_exceptional
-                    delta_solde = solde - (solde + total_exceptional)
+                    delta_solde = total_exceptional
                     st.metric("Solde sans exceptionnel", f"{solde_sans_exceptional:.2f}",
                               delta=f"{delta_solde:+.2f} €")
             except Exception as e:
