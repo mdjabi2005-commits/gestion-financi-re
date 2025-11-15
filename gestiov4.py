@@ -3585,7 +3585,7 @@ def interface_voir_transactions_v3():
                             orig = df_edit.loc[idx]
                             edit = df_edited.loc[idx]
 
-                            st.write(f"**Original (df_edit) :**")
+                            st.write("**Original (df_edit) :**")
                             st.json({
                                 "date": str(orig["date"]),
                                 "type": str(orig.get("type")),
@@ -3595,7 +3595,7 @@ def interface_voir_transactions_v3():
                                 "description": str(orig.get("description"))
                             })
 
-                            st.write(f"**Édité (df_edited) :**")
+                            st.write("**Édité (df_edited) :**")
                             st.json({
                                 "date": str(edit["date"]),
                                 "type": str(edit.get("type")),
