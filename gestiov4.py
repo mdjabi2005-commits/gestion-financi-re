@@ -3514,17 +3514,44 @@ def interface_voir_transactions_v3():
                 fichiers_deplaces = 0
 
                 for idx in df_edited.index:
-                    # Récupérer l'ID de la transaction (utiliser .loc pour éviter index out-of-bounds)
+                    # Récupérer l'ID de la transaction
                     trans_id = df_edit.loc[idx, "id"]
                     original = df_edit.loc[idx]
                     edited = df_edited.loc[idx]
 
-                    # Vérifier les changements
+                    # Vérifier les changements (amélioration de la détection)
                     has_changes = False
-                    for col in ["date", "type", "categorie", "sous_categorie", "montant", "description"]:
-                        if str(edited[col]) != str(original[col]):
+
+                    # Comparaison pour chaque champ
+                    # Date : comparer comme dates
+                    try:
+                        date_orig = pd.to_datetime(original["date"]).date()
+                        date_edit = pd.to_datetime(edited["date"]).date() if not isinstance(edited["date"], pd.Timestamp) else edited["date"].date()
+                        if date_orig != date_edit:
                             has_changes = True
-                            break
+                    except:
+                        if str(original["date"]) != str(edited["date"]):
+                            has_changes = True
+
+                    # Autres champs : comparaison directe
+                    if not has_changes:
+                        for col in ["type", "categorie", "sous_categorie", "description"]:
+                            val_orig = str(original.get(col, "")).strip().lower()
+                            val_edit = str(edited.get(col, "")).strip().lower()
+                            if val_orig != val_edit:
+                                has_changes = True
+                                break
+
+                    # Montant : comparaison numérique
+                    if not has_changes:
+                        try:
+                            montant_orig = float(original["montant"])
+                            montant_edit = float(edited["montant"])
+                            if abs(montant_orig - montant_edit) > 0.01:  # Tolérance de 1 centime
+                                has_changes = True
+                        except:
+                            if str(original["montant"]) != str(edited["montant"]):
+                                has_changes = True
 
                     if has_changes:
                         # Déplacer les fichiers si nécessaire (catégorie/sous-catégorie changées)
@@ -3546,12 +3573,12 @@ def interface_voir_transactions_v3():
                                 date = ?, description = ?
                             WHERE id = ?
                         """, (
-                            edited["type"],
-                            edited["categorie"],
-                            edited["sous_categorie"],
-                            safe_convert(edited["montant"]),
+                            str(edited["type"]).strip(),
+                            str(edited["categorie"]).strip(),
+                            str(edited["sous_categorie"]).strip(),
+                            safe_convert(edited["montant"], float, 0.0),
                             safe_date_convert(edited["date"]).isoformat(),
-                            edited.get("description", ""),
+                            str(edited.get("description", "")).strip(),
                             trans_id
                         ))
                         modified += 1
@@ -3560,13 +3587,14 @@ def interface_voir_transactions_v3():
                 conn.close()
 
                 if modified > 0:
-                    message = f"{modified} transaction(s) modifiée(s) !"
+                    message = f"✅ {modified} transaction(s) modifiée(s) !"
                     if fichiers_deplaces > 0:
                         message += f" ({fichiers_deplaces} fichier(s) déplacé(s))"
                     toast_success(message)
+                    st.success(message)
                     refresh_and_rerun()
                 else:
-                    st.info("Aucune modification détectée")
+                    st.info("ℹ️ Aucune modification détectée")
 
         with col2:
             to_delete = df_edited[df_edited["🗑️"] == True]
