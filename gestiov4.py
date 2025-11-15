@@ -3482,6 +3482,10 @@ def interface_voir_transactions_v3():
         df_edit = df_filtered.copy()
         df_edit["montant"] = df_edit["montant"].apply(lambda x: safe_convert(x, float, 0.0))
 
+        # IMPORTANT : Sauvegarder les IDs originaux pour la synchronisation
+        # Cela permet de matcher les lignes éditées avec les données originales
+        original_ids = df_edit["id"].copy()
+
         # Ajouter colonne de suppression
         df_edit.insert(0, "🗑️", False)
 
@@ -3512,10 +3516,16 @@ def interface_voir_transactions_v3():
                 cursor = conn.cursor()
                 modified = 0
                 fichiers_deplaces = 0
+                save_errors = []
 
                 for idx in df_edited.index:
-                    # Récupérer l'ID de la transaction
-                    trans_id = df_edit.loc[idx, "id"]
+                    # Récupérer l'ID de la transaction avec la sauvegarde des IDs
+                    # Utiliser original_ids pour la synchronisation absolue
+                    try:
+                        trans_id = original_ids.loc[idx]
+                    except (KeyError, IndexError):
+                        trans_id = df_edit.loc[idx, "id"]
+
                     original = df_edit.loc[idx]
                     edited = df_edited.loc[idx]
 
@@ -3583,16 +3593,39 @@ def interface_voir_transactions_v3():
                         ))
                         modified += 1
 
-                conn.commit()
-                conn.close()
+                try:
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    st.error(f"❌ Erreur lors de la sauvegarde en base de données: {str(e)}")
+                    return
 
                 if modified > 0:
                     message = f"✅ {modified} transaction(s) modifiée(s) !"
                     if fichiers_deplaces > 0:
                         message += f" ({fichiers_deplaces} fichier(s) déplacé(s))"
-                    toast_success(message)
-                    st.success(message)
-                    refresh_and_rerun()
+
+                    # VÉRIFICATION : Confirmer que les modifications ont été enregistrées
+                    # Recharger depuis la base de données pour vérifier
+                    try:
+                        verify_conn = sqlite3.connect(DB_PATH)
+                        verify_cursor = verify_conn.cursor()
+                        verify_cursor.execute("SELECT COUNT(*) FROM transactions WHERE id IN ({})".format(
+                            ",".join("?" * len(original_ids))
+                        ), original_ids.tolist())
+                        count = verify_cursor.fetchone()[0]
+                        verify_conn.close()
+
+                        if count == len(original_ids):
+                            toast_success(message)
+                            st.success(message)
+                            refresh_and_rerun()
+                        else:
+                            st.warning(f"⚠️ Certaines transactions n'ont pas été trouvées en base de données après enregistrement!")
+                    except Exception as verify_error:
+                        st.warning(f"⚠️ Impossible de vérifier les modifications: {str(verify_error)}")
+                        st.success(message)
+                        refresh_and_rerun()
                 else:
                     st.warning("⚠️ Aucune modification détectée")
 
@@ -3639,7 +3672,11 @@ def interface_voir_transactions_v3():
                     fichiers_supprimes = 0
 
                     for idx in to_delete.index:
-                        trans_id = df_edit.loc[idx, "id"]
+                        # Utiliser original_ids pour la synchronisation absolue
+                        try:
+                            trans_id = original_ids.loc[idx]
+                        except (KeyError, IndexError):
+                            trans_id = df_edit.loc[idx, "id"]
 
                         # Récupérer la transaction complète avec la source
                         transaction = df_edit.loc[idx].to_dict()
