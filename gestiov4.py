@@ -5681,11 +5681,19 @@ def interface_portefeuille():
             date_echeance TEXT NOT NULL,
             recurrence TEXT,
             statut TEXT DEFAULT 'active',
+            type_echeance TEXT DEFAULT 'prévue',
             description TEXT,
             date_creation TEXT,
             date_modification TEXT
         )
     """)
+
+    # Migration : Ajouter la colonne type_echeance si elle n'existe pas
+    try:
+        cursor.execute("SELECT type_echeance FROM echeances LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE echeances ADD COLUMN type_echeance TEXT DEFAULT 'prévue'")
+        conn.commit()
 
     conn.commit()
 
@@ -6051,8 +6059,8 @@ def interface_portefeuille():
             else:
                 solde_actuel = 0.0
 
-            # Période de projection
-            col1, col2 = st.columns([2, 2])
+            # Période de projection et options
+            col1, col2, col3 = st.columns([2, 2, 2])
 
             with col1:
                 date_projection = st.date_input(
@@ -6063,6 +6071,14 @@ def interface_portefeuille():
 
             with col2:
                 st.metric("💰 Solde actuel", f"{solde_actuel:,.2f} €")
+
+            with col3:
+                inclure_previsoires = st.checkbox(
+                    "🔮 Inclure échéances prévisoires",
+                    value=False,
+                    key="inclure_previsoires",
+                    help="Activer pour voir l'impact des échéances prévisoires (hypothétiques) sur votre solde"
+                )
 
             # Collecter toutes les prévisions futures
             previsions_futures = []
@@ -6105,8 +6121,21 @@ def interface_portefeuille():
             # 2. ÉCHÉANCES (de la table echeances)
             if not df_echeances.empty:
                 for _, ech in df_echeances.iterrows():
+                    # Filtrer selon le type d'échéance
+                    type_ech = ech.get("type_echeance", "prévue")
+
+                    # Si prévisoire et qu'on ne veut pas les inclure, on skip
+                    if type_ech == "prévisoire" and not inclure_previsoires:
+                        continue
+
                     date_ech = pd.Timestamp(ech["date_echeance"])
                     recurrence = ech.get("recurrence")
+
+                    # Déterminer l'icône selon le type
+                    if type_ech == "prévisoire":
+                        source_icon = "🔮 Échéance prévisoire"
+                    else:
+                        source_icon = "✅ Échéance prévue"
 
                     # Ajouter l'échéance si elle est dans la période future
                     if date_ech >= today_ts and date_ech <= proj_ts:
@@ -6117,7 +6146,7 @@ def interface_portefeuille():
                             "sous_categorie": ech.get("sous_categorie", ""),
                             "montant": ech["montant"],
                             "description": ech.get("description", ""),
-                            "source": "📅 Échéance"
+                            "source": source_icon
                         })
 
                     # Si récurrente, générer les occurrences futures
@@ -6135,6 +6164,8 @@ def interface_portefeuille():
                                 break
 
                             if current_date >= today_ts and current_date <= proj_ts:
+                                # Utiliser l'icône appropriée selon le type
+                                source_rec = f"{source_icon} (récurrent)"
                                 previsions_futures.append({
                                     "date": current_date,
                                     "type": ech["type"],
@@ -6142,7 +6173,7 @@ def interface_portefeuille():
                                     "sous_categorie": ech.get("sous_categorie", ""),
                                     "montant": ech["montant"],
                                     "description": f"{ech.get('description', '')} (récurrent)",
-                                    "source": "📅 Échéance récurrente"
+                                    "source": source_rec
                                 })
 
             if previsions_futures:
@@ -6254,14 +6285,18 @@ def interface_portefeuille():
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    # Vérifier si le solde passe en négatif
+                    # Calculer le solde minimum
+                    min_solde = min(solde_cum[1:])
                     solde_negatif = [s for s in solde_cum[1:] if s < 0]
+
                     if solde_negatif:
                         st.warning(f"⚠️ **Attention** : Votre solde passera en négatif {len(solde_negatif)} fois pendant cette période !")
-                        min_solde = min(solde_cum[1:])
-                        st.error(f"🔻 Solde minimum prévu : **{min_solde:,.2f} €**")
+                        st.error(f"🔻 **Solde minimum prévu** : **{min_solde:,.2f} €**")
+                        st.caption("💡 Le solde minimum est le point le plus bas que votre solde atteindra")
                     else:
                         st.success("✅ Votre solde restera positif sur toute la période")
+                        st.info(f"🔻 **Solde minimum prévu** : **{min_solde:,.2f} €**")
+                        st.caption("💡 C'est le montant minimum que vous aurez sur votre compte. Gardez au moins ce montant disponible.")
 
                 with col2:
                     # Recommandations
@@ -6269,6 +6304,9 @@ def interface_portefeuille():
                         st.info(f"💡 **Recommandation** : Prévoyez d'économiser environ **{abs(variation):,.2f} €** pour compenser")
                     elif variation > 0:
                         st.success(f"🎉 **Bonne nouvelle** : Vous devriez économiser environ **{variation:,.2f} €** !")
+
+                    # Explication supplémentaire
+                    st.caption("📊 **Astuce** : Activez/désactivez les échéances prévisoires pour comparer différents scénarios")
 
             else:
                 st.info("💡 Aucune prévision future trouvée. Ajoutez des échéances ou des transactions récurrentes pour voir les projections.")
@@ -6315,6 +6353,14 @@ def interface_portefeuille():
                 sous_categorie_prev = st.text_input("Sous-catégorie", key="souscat_prev")
 
             with col2:
+                type_echeance_prev = st.radio(
+                    "Nature de l'échéance",
+                    ["✅ Prévue (certaine)", "🔮 Prévisoire (hypothétique)"],
+                    horizontal=True,
+                    key="type_ech_prev",
+                    help="Prévue = échéance certaine (ex: loyer). Prévisoire = simulation pour tester l'impact (ex: achat potentiel)"
+                )
+
                 montant_prev = st.number_input(
                     "Montant (€)",
                     min_value=0.0,
@@ -6350,11 +6396,13 @@ def interface_portefeuille():
                 if st.button("💾 Enregistrer comme échéance", type="primary", key="save_echeance_unified"):
                     if categorie_prev and categorie_prev.strip():
                         rec_value = None if recurrence_prev == "Aucune" else recurrence_prev.lower()
+                        # Déterminer le type d'échéance
+                        type_ech_value = "prévisoire" if "Prévisoire" in type_echeance_prev else "prévue"
 
                         cursor.execute("""
                             INSERT INTO echeances
-                            (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, description, date_creation, date_modification)
-                            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+                            (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, type_echeance, description, date_creation, date_modification)
+                            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
                         """, (
                             type_prev,
                             categorie_prev.strip(),
@@ -6362,12 +6410,15 @@ def interface_portefeuille():
                             montant_prev,
                             date_prev.isoformat(),
                             rec_value,
+                            type_ech_value,
                             description_prev.strip() if description_prev else "",
                             datetime.now().isoformat(),
                             datetime.now().isoformat()
                         ))
                         conn.commit()
-                        toast_success(f"Échéance {type_prev} ajoutée pour le {date_prev.strftime('%d/%m/%Y')}")
+
+                        label_type = "prévisoire" if type_ech_value == "prévisoire" else "prévue"
+                        toast_success(f"Échéance {label_type} {type_prev} ajoutée pour le {date_prev.strftime('%d/%m/%Y')}")
                         refresh_and_rerun()
                     else:
                         toast_warning("Veuillez saisir une catégorie")
@@ -6394,10 +6445,12 @@ def interface_portefeuille():
                         ))
 
                         # Ajouter aussi dans la table echeances pour la cohérence
+                        type_ech_value = "prévisoire" if "Prévisoire" in type_echeance_prev else "prévue"
+
                         cursor.execute("""
                             INSERT INTO echeances
-                            (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, description, date_creation, date_modification)
-                            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+                            (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, type_echeance, description, date_creation, date_modification)
+                            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
                         """, (
                             type_prev,
                             categorie_prev.strip(),
@@ -6405,6 +6458,7 @@ def interface_portefeuille():
                             montant_prev,
                             date_prev.isoformat(),
                             rec_value,
+                            type_ech_value,
                             description_prev.strip() if description_prev else "",
                             datetime.now().isoformat(),
                             datetime.now().isoformat()
@@ -6433,8 +6487,13 @@ def interface_portefeuille():
                         rec_icon = {"hebdomadaire": "🔁 Hebdo", "mensuelle": "🔁 Mensuel", "annuelle": "🔁 Annuel"}.get(ech["recurrence"], "🔁")
                         rec_text = f" {rec_icon}"
 
+                    # Afficher le type d'échéance
+                    type_ech = ech.get("type_echeance", "prévue")
+                    type_ech_icon = "✅" if type_ech == "prévue" else "🔮"
+
                     echeances_display.append({
                         "ID": ech["id"],
+                        "Nature": f"{type_ech_icon} {type_ech.capitalize()}",
                         "Type": f"{icon} {ech['type'].capitalize()}",
                         "Date": pd.to_datetime(ech["date_echeance"]).strftime("%d/%m/%Y"),
                         "Catégorie": ech["categorie"],
