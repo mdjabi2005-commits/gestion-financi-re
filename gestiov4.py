@@ -4984,99 +4984,85 @@ def correct_category_name(name):
     return matches[0] if matches else name
 
 # ==============================
-# 📋 MENU LATÉRAL V2
+# 💸 INTERFACE FUSIONNÉE AJOUT MANUEL + IMPORT CSV
 # ==============================
-def interface_transactions_simplifiee():
-    """Interface simplifiée pour ajouter des transactions (sans sous-onglets)"""
-    st.title("💸 Ajouter une Transaction")
+def interface_ajouter_depenses_fusionnee():
+    """Interface fusionnée pour ajouter des dépenses : manuel ou import CSV"""
+    st.subheader("💸 Ajouter des dépenses")
 
-    # Menu de sélection principal
-    col1, col2 = st.columns([3, 1])
+    # Tabs pour séparer clairement les deux méthodes
+    tab1, tab2 = st.tabs(["✍️ Ajout manuel", "📄 Import CSV"])
 
-    with col1:
-        type_action = st.selectbox(
-            "Que voulez-vous faire ?",
-            [
-                "📸 Scanner un ticket (OCR)",
-                "✍️ Ajouter une dépense manuelle",
-                "🔁 Créer une dépense récurrente",
-                "💰 Ajouter un revenu",
-                "📄 Importer depuis CSV"
-            ],
-            key="type_action_transaction"
-        )
+    # ===== TAB 1: AJOUT MANUEL =====
+    with tab1:
+        st.markdown("### ✍️ Ajouter une dépense manuellement")
+        st.info("💡 Remplissez le formulaire ci-dessous pour ajouter une seule dépense")
 
-    with col2:
-        st.caption("")
-        st.caption("")
-        if st.button("🔄 Actualiser", key="refresh_transactions"):
-            refresh_and_rerun()
+        with st.form("add_manual_depense"):
+            col1, col2, col3 = st.columns(3)
 
-    st.markdown("---")
+            with col1:
+                date_tr = st.date_input("📅 Date", value=date.today())
+                type_tr = st.selectbox("📊 Type", ["dépense", "revenu"])
 
-    # === SCANNER UN TICKET ===
-    if type_action == "📸 Scanner un ticket (OCR)":
-        st.subheader("📸 Scanner les tickets automatiquement")
-        st.info(f"**📂 Dossier de scan :** `{TO_SCAN_DIR}`")
+            with col2:
+                cat = st.text_input("🏷️ Catégorie principale", placeholder="Ex: Alimentation")
+                sous_cat = st.text_input("📌 Sous-catégorie", placeholder="Ex: Courses")
 
-        with st.expander("ℹ️ Comment ça marche ?", expanded=False):
-            st.markdown("""
-            ### Mode d'emploi :
-            1. **Nommer votre ticket** avec le format : `nom.categorie.sous_categorie.extension`
-               - Exemple : `carrefour.alimentation.courses.jpg`
-               - Exemple : `shell.transport.essence.jpg`
-            2. **Déposer le fichier** dans le dossier : `{}`
-            3. **Cliquer sur "Scanner"** ci-dessous
-            4. **Vérifier et valider** les informations détectées
+            with col3:
+                montant = st.number_input("💰 Montant (€)", min_value=0.0, step=0.01, format="%.2f")
+                desc = st.text_input("📝 Description", placeholder="Ex: Carrefour")
 
-            **Formats acceptés :** JPG, PNG, PDF
-            """.format(TO_SCAN_DIR))
+            valider = st.form_submit_button("✅ Ajouter la transaction", type="primary")
 
-        process_all_tickets_in_folder()
+        if valider:
+            if not cat or montant <= 0:
+                toast_error("Veuillez entrer au moins une catégorie et un montant valide.")
+            else:
+                transaction_data = {
+                    "type": type_tr,
+                    "categorie": cat.strip().lower(),
+                    "sous_categorie": sous_cat.strip().lower(),
+                    "description": desc.strip(),
+                    "montant": float(montant),
+                    "date": date_tr.isoformat(),
+                    "source": "manuel"
+                }
 
-    # === DÉPENSE MANUELLE ===
-    elif type_action == "✍️ Ajouter une dépense manuelle":
-        st.subheader("✍️ Ajouter une dépense manuelle")
+                # 🔥 V2: Traitement Uber pour les revenus
+                if type_tr == "revenu":
+                    transaction_data, uber_msg = process_uber_revenue(transaction_data)
+                    if uber_msg:
+                        st.success(uber_msg)
 
-        interface_transactions_unifiee()
+                insert_transaction_batch([transaction_data])
+                toast_success(f"✅ Transaction ajoutée : {cat} — {transaction_data['montant']:.2f} €")
+                st.balloons()
+                st.info("💡 N'oubliez pas d'actualiser la page pour voir vos changements")
 
-    # === DÉPENSE RÉCURRENTE ===
-    elif type_action == "🔁 Créer une dépense récurrente":
-        st.subheader("🔁 Créer une dépense récurrente")
-
-        st.info("💡 Les dépenses récurrentes sont automatiquement ajoutées chaque mois/semaine")
-
-        interface_transaction_recurrente()
-
-    # === REVENU ===
-    elif type_action == "💰 Ajouter un revenu":
-        st.subheader("💰 Ajouter un revenu")
-
-        interface_ajouter_revenu()
-
-    # === IMPORT CSV ===
-    elif type_action == "📄 Importer depuis CSV":
-        st.subheader("📄 Importer des transactions depuis CSV")
+    # ===== TAB 2: IMPORT CSV =====
+    with tab2:
+        st.markdown("### 📄 Importer plusieurs dépenses depuis un fichier CSV")
 
         # Guide étape par étape
-        st.markdown("### 📋 Guide d'importation")
+        st.markdown("#### 📋 Guide d'importation")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown("#### 1️⃣ Télécharger le modèle")
-            st.markdown("Téléchargez le fichier modèle CSV avec les colonnes requises")
+            st.markdown("##### 1️⃣ Télécharger le modèle")
+            st.caption("Téléchargez le fichier modèle CSV avec les colonnes requises")
 
             # Créer un modèle CSV
             modele_csv = """type,date,categorie,sous_categorie,montant,description
-dépense,2024-01-15,Alimentation,Courses,45.50,Carrefour
-dépense,2024-01-16,Transport,Essence,60.00,Shell Station
-revenu,2024-01-01,Salaire,Mensuel,2500.00,Salaire janvier
-dépense,2024-01-20,Loisirs,Restaurant,35.80,Pizza
-revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
+dépense,2024-01-15,alimentation,courses,45.50,Carrefour
+dépense,2024-01-16,transport,essence,60.00,Shell Station
+revenu,2024-01-01,salaire,mensuel,2500.00,Salaire janvier
+dépense,2024-01-20,loisirs,restaurant,35.80,Pizza
+revenu,2024-01-15,freelance,mission,450.00,Projet X"""
 
             st.download_button(
-                label="⬇️ Télécharger le modèle CSV",
+                label="⬇️ Télécharger le modèle",
                 data=modele_csv,
                 file_name="modele_transactions.csv",
                 mime="text/csv",
@@ -5084,40 +5070,41 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
             )
 
         with col2:
-            st.markdown("#### 2️⃣ Compléter le fichier")
+            st.markdown("##### 2️⃣ Compléter le fichier")
+            st.caption("Ouvrez le fichier dans Excel/LibreOffice et ajoutez vos transactions")
             st.markdown("""
-            Ouvrez le fichier dans Excel/LibreOffice et ajoutez vos transactions :
-            - **type** : `dépense` ou `revenu`
-            - **date** : Format `AAAA-MM-JJ`
-            - **categorie** : Catégorie principale
-            - **sous_categorie** : Sous-catégorie
-            - **montant** : Montant (formats EU et US acceptés)
-            - **description** : Description (optionnel)
+            **Colonnes requises :**
+            - `type` : dépense ou revenu
+            - `date` : AAAA-MM-JJ
+            - `categorie` : Catégorie principale
+            - `sous_categorie` : Sous-catégorie
+            - `montant` : Montant (avec . ou ,)
+            - `description` : Description
             """)
 
         with col3:
-            st.markdown("#### 3️⃣ Importer le fichier")
-            st.markdown("Une fois complété, uploadez votre fichier CSV ci-dessous")
+            st.markdown("##### 3️⃣ Importer le fichier")
+            st.caption("Uploadez votre fichier CSV complété ci-dessous")
 
         st.markdown("---")
 
         # Zone d'upload
         uploaded_file = st.file_uploader(
-            "📤 Uploader votre fichier CSV",
+            "📤 Sélectionner votre fichier CSV",
             type=['csv'],
             help="Sélectionnez le fichier CSV avec vos transactions",
-            key="csv_uploader_transactions"
+            key="csv_uploader_depenses"
         )
 
         if uploaded_file is not None:
-            st.success(f"✅ Fichier '{uploaded_file.name}' chargé avec succès !")
+            st.success(f"✅ Fichier '{uploaded_file.name}' chargé !")
 
             try:
                 # Lire le CSV
                 import io
                 df_import = pd.read_csv(io.StringIO(uploaded_file.getvalue().decode('utf-8')))
 
-                st.markdown("### 📊 Aperçu des données")
+                st.markdown("#### 📊 Aperçu des données")
                 st.dataframe(df_import.head(10), use_container_width=True)
 
                 st.info(f"📈 **{len(df_import)}** transactions détectées dans le fichier")
@@ -5133,14 +5120,10 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
                     )
 
                 with col2:
-                    verifier_donnees = st.checkbox(
-                        "🔍 Vérifier les données avant import",
-                        value=False,
-                        help="Affiche un aperçu détaillé avant l'import"
-                    )
+                    st.caption("")
 
                 # Bouton d'import
-                if st.button("✅ Importer les transactions", type="primary", key="import_csv_btn"):
+                if st.button("✅ Importer les transactions", type="primary", key="import_csv_depenses_btn"):
                     with st.spinner("Import en cours..."):
                         # Préparer les transactions
                         transactions_a_importer = []
@@ -5186,16 +5169,17 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
 
                                 if nouvelles:
                                     insert_transaction_batch(nouvelles)
-                                    toast_success(f"{len(nouvelles)} transaction(s) importée(s) avec succès !")
+                                    toast_success(f"✅ {len(nouvelles)} transaction(s) importée(s) avec succès !")
                                     if doublons > 0:
                                         st.warning(f"⚠️ {doublons} doublon(s) ignoré(s)")
                                 else:
                                     st.warning("⚠️ Toutes les transactions sont des doublons")
                             else:
                                 insert_transaction_batch(transactions_a_importer)
-                                toast_success(f"{len(transactions_a_importer)} transaction(s) importée(s) !")
+                                toast_success(f"✅ {len(transactions_a_importer)} transaction(s) importée(s) !")
 
                             st.balloons()
+                            st.info("💡 N'oubliez pas d'actualiser la page pour voir vos changements")
                         else:
                             toast_error("Aucune transaction valide trouvée dans le fichier")
 
@@ -5203,28 +5187,73 @@ revenu,2024-01-15,Freelance,Mission,450.00,Projet X"""
                 st.error(f"❌ Erreur lors de la lecture du fichier : {e}")
                 st.caption("Vérifiez que le fichier respecte bien le format du modèle")
 
-        # Informations supplémentaires
-        with st.expander("ℹ️ Format du fichier CSV"):
+# ==============================
+# 📋 MENU LATÉRAL V2
+# ==============================
+def interface_transactions_simplifiee():
+    """Interface simplifiée pour ajouter des transactions (sans sous-onglets)"""
+    st.title("💸 Ajouter une Transaction")
+
+    # Menu de sélection principal
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        type_action = st.selectbox(
+            "Que voulez-vous faire ?",
+            [
+                "📸 Scanner un ticket (OCR)",
+                "💸 Ajouter des dépenses",
+                "🔁 Créer une dépense récurrente",
+                "💰 Ajouter un revenu"
+            ],
+            key="type_action_transaction"
+        )
+
+    with col2:
+        st.caption("")
+        st.caption("")
+        if st.button("🔄 Actualiser", key="refresh_transactions"):
+            refresh_and_rerun()
+
+    st.markdown("---")
+
+    # === SCANNER UN TICKET ===
+    if type_action == "📸 Scanner un ticket (OCR)":
+        st.subheader("📸 Scanner les tickets automatiquement")
+        st.info(f"**📂 Dossier de scan :** `{TO_SCAN_DIR}`")
+
+        with st.expander("ℹ️ Comment ça marche ?", expanded=False):
             st.markdown("""
-            ### Spécifications du format :
+            ### Mode d'emploi :
+            1. **Nommer votre ticket** avec le format : `nom.categorie.sous_categorie.extension`
+               - Exemple : `carrefour.alimentation.courses.jpg`
+               - Exemple : `shell.transport.essence.jpg`
+            2. **Déposer le fichier** dans le dossier : `{}`
+            3. **Cliquer sur "Scanner"** ci-dessous
+            4. **Vérifier et valider** les informations détectées
 
-            **Colonnes obligatoires :**
-            - `type` : "dépense" ou "revenu"
-            - `date` : Format AAAA-MM-JJ (ex: 2024-01-15)
-            - `categorie` : Catégorie principale (ex: Alimentation, Transport)
-            - `sous_categorie` : Sous-catégorie (ex: Courses, Essence)
-            - `montant` : Montant numérique (ex: 45.50 ou 45,50)
+            **Formats acceptés :** JPG, PNG, PDF
+            """.format(TO_SCAN_DIR))
 
-            **Colonnes optionnelles :**
-            - `description` : Description de la transaction
+        process_all_tickets_in_folder()
 
-            **Formats de montants acceptés :**
-            - Format européen : `1.234,56`
-            - Format américain : `1,234.56`
-            - Sans séparateurs : `1234.56` ou `1234,56`
+    # === AJOUTER DES DÉPENSES (MANUEL + CSV) ===
+    elif type_action == "💸 Ajouter des dépenses":
+        interface_ajouter_depenses_fusionnee()
 
-            **Encodage :** UTF-8 recommandé
-            """)
+    # === DÉPENSE RÉCURRENTE ===
+    elif type_action == "🔁 Créer une dépense récurrente":
+        st.subheader("🔁 Créer une dépense récurrente")
+
+        st.info("💡 Les dépenses récurrentes sont automatiquement ajoutées chaque mois/semaine")
+
+        interface_transaction_recurrente()
+
+    # === REVENU ===
+    elif type_action == "💰 Ajouter un revenu":
+        st.subheader("💰 Ajouter un revenu")
+
+        interface_ajouter_revenu()
 
 
 # =============================
