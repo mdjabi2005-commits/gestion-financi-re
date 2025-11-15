@@ -3533,11 +3533,11 @@ def interface_voir_transactions_v3():
                         if str(original["date"]) != str(edited["date"]):
                             has_changes = True
 
-                    # Autres champs : comparaison directe
+                    # Autres champs : comparaison directe (sans normalisation de casse)
                     if not has_changes:
                         for col in ["type", "categorie", "sous_categorie", "description"]:
-                            val_orig = str(original.get(col, "")).strip().lower()
-                            val_edit = str(edited.get(col, "")).strip().lower()
+                            val_orig = str(original.get(col, "")).strip()
+                            val_edit = str(edited.get(col, "")).strip()
                             if val_orig != val_edit:
                                 has_changes = True
                                 break
@@ -3573,9 +3573,9 @@ def interface_voir_transactions_v3():
                                 date = ?, description = ?
                             WHERE id = ?
                         """, (
-                            str(edited["type"]).strip(),
-                            str(edited["categorie"]).strip(),
-                            str(edited["sous_categorie"]).strip(),
+                            str(edited["type"]).strip().lower(),
+                            str(edited["categorie"]).strip().lower(),
+                            str(edited["sous_categorie"]).strip().lower(),
                             safe_convert(edited["montant"], float, 0.0),
                             safe_date_convert(edited["date"]).isoformat(),
                             str(edited.get("description", "")).strip(),
