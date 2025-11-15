@@ -3370,6 +3370,12 @@ def interface_voir_transactions_v3():
                     couleur = "#00D4AA" if trans["type"] == "revenu" else "#FF6B6B"
                     signe = "+" if trans["type"] == "revenu" else "-"
                     st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{abs(trans['Montant']):.2f} €</p>", unsafe_allow_html=True)
+
+                # 📎 Afficher les documents associés si OCR ou PDF
+                if trans.get('source') in ['OCR', 'PDF']:
+                    with st.expander(f"📎 Voir les documents ({get_badge_icon(trans.to_dict())})", expanded=False):
+                        afficher_documents_associes(trans.to_dict())
+
                 st.markdown("---")
 
     # === MODE ÉDITION ===
@@ -3413,10 +3419,10 @@ def interface_voir_transactions_v3():
                 modified = 0
 
                 for idx in df_edited.index:
-                    # Récupérer l'ID de la transaction
-                    trans_id = df_edit.iloc[idx]["id"]
-                    original = df_edit.iloc[idx]
-                    edited = df_edited.iloc[idx]
+                    # Récupérer l'ID de la transaction (utiliser .loc pour éviter index out-of-bounds)
+                    trans_id = df_edit.loc[idx, "id"]
+                    original = df_edit.loc[idx]
+                    edited = df_edited.loc[idx]
 
                     # Vérifier les changements
                     has_changes = False
@@ -3460,7 +3466,7 @@ def interface_voir_transactions_v3():
                     cursor = conn.cursor()
 
                     for idx in to_delete.index:
-                        trans_id = df_edit.iloc[idx]["id"]
+                        trans_id = df_edit.loc[idx, "id"]
                         cursor.execute("DELETE FROM transactions WHERE id = ?", (trans_id,))
 
                     conn.commit()
