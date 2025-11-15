@@ -5670,10 +5670,27 @@ def interface_portefeuille():
         )
     """)
 
+    # Table échéances pour gérer les prévisions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS echeances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            categorie TEXT NOT NULL,
+            sous_categorie TEXT,
+            montant REAL NOT NULL,
+            date_echeance TEXT NOT NULL,
+            recurrence TEXT,
+            statut TEXT DEFAULT 'active',
+            description TEXT,
+            date_creation TEXT,
+            date_modification TEXT
+        )
+    """)
+
     conn.commit()
 
     # Onglets principaux
-    tab1, tab2, tab3 = st.tabs(["💰 Budgets par catégorie", "📝 Notes", "📊 Vue d'ensemble"])
+    tab1, tab2, tab3, tab4 = st.tabs(["💰 Budgets par catégorie", "📝 Notes", "📊 Vue d'ensemble", "📅 Prévisions"])
 
     # ===== ONGLET 1: BUDGETS PAR CATÉGORIE =====
     with tab1:
@@ -6005,6 +6022,331 @@ def interface_portefeuille():
                     )
 
                     st.plotly_chart(fig, use_container_width=True)
+
+    # ===== ONGLET 4: PRÉVISIONS =====
+    with tab4:
+        st.subheader("📅 Gérer les échéances et prévisions")
+
+        # Charger les échéances
+        df_echeances = pd.read_sql_query(
+            "SELECT * FROM echeances WHERE statut = 'active' ORDER BY date_echeance ASC",
+            conn
+        )
+
+        # Sous-onglets pour organiser l'interface
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📋 Mes échéances", "➕ Ajouter une échéance", "📈 Solde prévisionnel"])
+
+        # ===== SUB-TAB 1: MES ÉCHÉANCES =====
+        with sub_tab1:
+            st.markdown("#### 📌 Échéances actives")
+
+            if df_echeances.empty:
+                st.info("💡 Aucune échéance enregistrée. Ajoutez-en pour suivre vos prévisions !")
+            else:
+                # Afficher les échéances par type
+                echeances_display = []
+
+                for _, ech in df_echeances.iterrows():
+                    icon = "💹" if ech["type"] == "revenu" else "💸"
+                    rec_text = ""
+                    if ech["recurrence"]:
+                        rec_icon = {"hebdomadaire": "🔁 Hebdo", "mensuelle": "🔁 Mensuel", "annuelle": "🔁 Annuel"}.get(ech["recurrence"], "🔁")
+                        rec_text = f" {rec_icon}"
+
+                    echeances_display.append({
+                        "ID": ech["id"],
+                        "Type": f"{icon} {ech['type'].capitalize()}",
+                        "Date": pd.to_datetime(ech["date_echeance"]).strftime("%d/%m/%Y"),
+                        "Catégorie": ech["categorie"],
+                        "Sous-catégorie": ech.get("sous_categorie", ""),
+                        "Montant (€)": f"{ech['montant']:.2f}",
+                        "Récurrence": rec_text if rec_text else "—",
+                        "Description": ech.get("description", "")[:50]
+                    })
+
+                df_display = pd.DataFrame(echeances_display)
+                st.dataframe(
+                    df_display.drop(columns=["ID"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # Options de gestion
+                st.markdown("---")
+                st.markdown("#### 🛠️ Gérer les échéances")
+
+                col1, col2 = st.columns([2, 1])
+
+                with col1:
+                    echeance_to_manage = st.selectbox(
+                        "Sélectionner une échéance",
+                        df_echeances["id"].tolist(),
+                        format_func=lambda x: f"#{x} - {df_echeances[df_echeances['id']==x].iloc[0]['categorie']} - {df_echeances[df_echeances['id']==x].iloc[0]['montant']:.2f}€",
+                        key="echeance_manage"
+                    )
+
+                with col2:
+                    action_col1, action_col2 = st.columns(2)
+
+                    with action_col1:
+                        if st.button("✅ Marquer payée", key="mark_paid"):
+                            cursor.execute(
+                                "UPDATE echeances SET statut = 'payée', date_modification = ? WHERE id = ?",
+                                (datetime.now().isoformat(), echeance_to_manage)
+                            )
+                            conn.commit()
+                            toast_success("Échéance marquée comme payée")
+                            refresh_and_rerun()
+
+                    with action_col2:
+                        if st.button("🗑️ Supprimer", key="delete_echeance"):
+                            cursor.execute(
+                                "DELETE FROM echeances WHERE id = ?",
+                                (echeance_to_manage,)
+                            )
+                            conn.commit()
+                            toast_success("Échéance supprimée")
+                            refresh_and_rerun()
+
+        # ===== SUB-TAB 2: AJOUTER UNE ÉCHÉANCE =====
+        with sub_tab2:
+            st.markdown("#### ➕ Nouvelle échéance")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                type_echeance = st.selectbox(
+                    "Type",
+                    ["dépense", "revenu"],
+                    key="type_echeance"
+                )
+
+                # Charger les catégories existantes
+                df_transactions = load_transactions()
+                if not df_transactions.empty:
+                    categories = sorted(
+                        df_transactions[df_transactions["type"] == type_echeance]["categorie"]
+                        .dropna()
+                        .unique()
+                        .tolist()
+                    )
+                else:
+                    categories = []
+
+                mode_cat = st.radio(
+                    "Catégorie",
+                    ["Existante", "Nouvelle"],
+                    horizontal=True,
+                    key="mode_cat_echeance"
+                )
+
+                if mode_cat == "Existante" and categories:
+                    categorie_echeance = st.selectbox("Sélectionner", categories, key="cat_ech_exist")
+                else:
+                    categorie_echeance = st.text_input("Nom de la catégorie", key="cat_ech_new")
+
+                sous_categorie_echeance = st.text_input("Sous-catégorie", key="souscat_ech")
+
+            with col2:
+                montant_echeance = st.number_input(
+                    "Montant (€)",
+                    min_value=0.0,
+                    step=10.0,
+                    value=100.0,
+                    key="montant_ech"
+                )
+
+                date_echeance = st.date_input(
+                    "Date d'échéance",
+                    value=date.today() + timedelta(days=30),
+                    key="date_ech"
+                )
+
+                recurrence_echeance = st.selectbox(
+                    "Récurrence",
+                    ["Aucune", "Hebdomadaire", "Mensuelle", "Annuelle"],
+                    key="rec_ech"
+                )
+
+            description_echeance = st.text_area(
+                "Description (optionnel)",
+                height=100,
+                key="desc_ech",
+                placeholder="Ex: Facture EDF, Salaire, etc."
+            )
+
+            if st.button("💾 Enregistrer l'échéance", type="primary", key="save_echeance"):
+                if categorie_echeance and categorie_echeance.strip():
+                    rec_value = None if recurrence_echeance == "Aucune" else recurrence_echeance.lower()
+
+                    cursor.execute("""
+                        INSERT INTO echeances
+                        (type, categorie, sous_categorie, montant, date_echeance, recurrence, statut, description, date_creation, date_modification)
+                        VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+                    """, (
+                        type_echeance,
+                        categorie_echeance.strip(),
+                        sous_categorie_echeance.strip() if sous_categorie_echeance else "",
+                        montant_echeance,
+                        date_echeance.isoformat(),
+                        rec_value,
+                        description_echeance.strip() if description_echeance else "",
+                        datetime.now().isoformat(),
+                        datetime.now().isoformat()
+                    ))
+                    conn.commit()
+                    toast_success(f"Échéance {type_echeance} ajoutée pour le {date_echeance.strftime('%d/%m/%Y')}")
+                    refresh_and_rerun()
+                else:
+                    toast_warning("Veuillez saisir une catégorie")
+
+        # ===== SUB-TAB 3: SOLDE PRÉVISIONNEL =====
+        with sub_tab3:
+            st.markdown("#### 📈 Évolution du solde prévisionnel")
+
+            # Calculer le solde actuel
+            df_transactions = load_transactions()
+            if not df_transactions.empty:
+                revenus = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
+                depenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
+                solde_actuel = revenus - depenses
+            else:
+                solde_actuel = 0.0
+
+            # Période de projection
+            col1, col2 = st.columns([2, 2])
+
+            with col1:
+                date_projection = st.date_input(
+                    "Projeter jusqu'au",
+                    value=date.today() + timedelta(days=90),
+                    key="date_proj"
+                )
+
+            with col2:
+                st.metric("💰 Solde actuel", f"{solde_actuel:,.2f} €")
+
+            # Récupérer toutes les échéances actives jusqu'à la date de projection
+            echeances_futures = []
+
+            if not df_echeances.empty:
+                for _, ech in df_echeances.iterrows():
+                    date_ech = pd.to_datetime(ech["date_echeance"])
+                    recurrence = ech.get("recurrence")
+
+                    # Ajouter l'échéance si elle est dans la période
+                    if date_ech.date() <= date_projection and date_ech.date() >= date.today():
+                        echeances_futures.append({
+                            "date": date_ech,
+                            "type": ech["type"],
+                            "categorie": ech["categorie"],
+                            "montant": ech["montant"],
+                            "description": ech.get("description", "")
+                        })
+
+                    # Si récurrente, générer les occurrences futures
+                    if recurrence:
+                        current_date = date_ech
+
+                        while current_date.date() <= date_projection:
+                            if recurrence == "hebdomadaire":
+                                current_date += pd.Timedelta(weeks=1)
+                            elif recurrence == "mensuelle":
+                                current_date += pd.DateOffset(months=1)
+                            elif recurrence == "annuelle":
+                                current_date += pd.DateOffset(years=1)
+                            else:
+                                break
+
+                            if current_date.date() <= date_projection and current_date.date() >= date.today():
+                                echeances_futures.append({
+                                    "date": current_date,
+                                    "type": ech["type"],
+                                    "categorie": ech["categorie"],
+                                    "montant": ech["montant"],
+                                    "description": f"{ech.get('description', '')} (récurrent)"
+                                })
+
+            if echeances_futures:
+                # Trier par date
+                df_prev = pd.DataFrame(echeances_futures).sort_values("date").reset_index(drop=True)
+
+                # Calculer le solde prévisionnel cumulé
+                solde_cum = [solde_actuel]
+                for _, row in df_prev.iterrows():
+                    dernier_solde = solde_cum[-1]
+                    if row["type"] == "revenu":
+                        solde_cum.append(dernier_solde + row["montant"])
+                    else:
+                        solde_cum.append(dernier_solde - row["montant"])
+
+                df_prev["solde_previsionnel"] = solde_cum[1:]
+
+                # Afficher le tableau
+                st.markdown("##### 📋 Échéances futures")
+                df_prev_display = df_prev.copy()
+                df_prev_display["date"] = df_prev_display["date"].dt.strftime("%d/%m/%Y")
+                df_prev_display["Type"] = df_prev_display["type"].apply(lambda x: "💹 Revenu" if x == "revenu" else "💸 Dépense")
+
+                st.dataframe(
+                    df_prev_display[["date", "Type", "categorie", "montant", "solde_previsionnel", "description"]].rename(columns={
+                        "date": "Date",
+                        "categorie": "Catégorie",
+                        "montant": "Montant (€)",
+                        "solde_previsionnel": "Solde prév. (€)",
+                        "description": "Description"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # Métrique finale
+                st.metric(
+                    f"💹 Solde prévisionnel au {date_projection.strftime('%d/%m/%Y')}",
+                    f"{solde_cum[-1]:,.2f} €",
+                    delta=f"{solde_cum[-1] - solde_actuel:+,.2f} €"
+                )
+
+                # Graphique d'évolution
+                st.markdown("---")
+                st.markdown("##### 📊 Graphique d'évolution")
+
+                # Créer le graphique avec Plotly
+                fig = go.Figure()
+
+                # Ligne du solde prévisionnel
+                fig.add_trace(go.Scatter(
+                    x=df_prev["date"],
+                    y=df_prev["solde_previsionnel"],
+                    mode='lines+markers',
+                    name='Solde prévisionnel',
+                    line=dict(color='royalblue', width=3),
+                    marker=dict(size=8)
+                ))
+
+                # Ligne horizontale à 0
+                fig.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="Seuil 0€")
+
+                # Ligne horizontale du solde actuel
+                fig.add_hline(
+                    y=solde_actuel,
+                    line_dash="dot",
+                    line_color="green",
+                    annotation_text=f"Solde actuel: {solde_actuel:.0f}€"
+                )
+
+                fig.update_layout(
+                    title="Évolution du solde prévisionnel",
+                    xaxis_title="Date",
+                    yaxis_title="Solde (€)",
+                    height=400,
+                    hovermode='x unified'
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                st.info("💡 Aucune échéance future trouvée. Ajoutez des échéances pour voir les prévisions.")
 
     conn.close()
 
