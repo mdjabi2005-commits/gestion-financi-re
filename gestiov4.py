@@ -3393,7 +3393,7 @@ def interface_voir_transactions_v3():
         df_filtered = df_filtered[df_filtered["categorie"] == cat_filter]
 
     # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
-    df_filtered = df_filtered.sort_values("date", ascending=False)
+    df_filtered = df_filtered.sort_values("date", ascending=False).reset_index(drop=True)
 
     if df_filtered.empty:
         st.warning("🔍 Aucune transaction trouvée avec ces filtres")
