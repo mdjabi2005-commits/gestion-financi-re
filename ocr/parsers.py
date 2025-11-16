@@ -4,20 +4,23 @@ Module parsers - Partie de l'application gestiov4
 Généré automatiquement par migrate_to_modular.py
 """
 
+import os
 import re
+import logging
 from datetime import datetime
 from ocr.engine import extract_text_from_pdf
-
-
+from utils.converters import safe_convert
 from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
-# Créer les dossiers de logs OCR
+
+logger = logging.getLogger(__name__)
+
+# Créer les dossiers de logs OCR (configuration commune)
 OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
 os.makedirs(OCR_LOGS_DIR, exist_ok=True)
 LOG_PATH = os.path.join(OCR_LOGS_DIR, "pattern_log.json")
 OCR_PERFORMANCE_LOG = os.path.join(OCR_LOGS_DIR, "performance_stats.json")
 PATTERN_STATS_LOG = os.path.join(OCR_LOGS_DIR, "pattern_stats.json")
 OCR_SCAN_LOG = os.path.join(OCR_LOGS_DIR, "scan_history.jsonl")
-# === JOURNAL OCR ===
 
 def parse_ticket_metadata(ocr_text: str):
     """
