@@ -2831,13 +2831,17 @@ def interface_transactions_unifiee():
 # =============================
 # 🔁 AJOUTER UNE TRANSACTION RÉCURRENTE V2
 # =============================
-def interface_transaction_recurrente():
-    st.subheader("🔁 Ajouter une dépense récurrente V2")
+def interface_transaction_recurrente(type_transaction="dépense"):
+    """
+    Interface unifiée pour créer une transaction récurrente (dépense ou revenu).
 
+    Args:
+        type_transaction: str - "dépense" ou "revenu"
+    """
     with st.form("ajouter_transaction_recurrente", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            categorie = st.text_input("Catégorie principale (ex: logement, assurance, abonnement)")
+            categorie = st.text_input("Catégorie principale (ex: logement, assurance, salaire)")
             sous_categorie = st.text_input("Sous-catégorie (ex: EDF, Netflix, Loyer)")
             montant = st.number_input("Montant (€)", min_value=0.0, format="%.2f", step=0.01)
         with col2:
@@ -2870,7 +2874,7 @@ def interface_transaction_recurrente():
 
         transactions = [
             {
-                "type": "dépense",
+                "type": type_transaction,
                 "categorie": safe_categorie,
                 "sous_categorie": safe_sous_categorie,
                 "montant": montant,
@@ -2881,7 +2885,7 @@ def interface_transaction_recurrente():
             }
         ] + [
             {
-                "type": "dépense",
+                "type": type_transaction,
                 "categorie": safe_categorie,
                 "sous_categorie": safe_sous_categorie,
                 "montant": montant,
@@ -2893,31 +2897,36 @@ def interface_transaction_recurrente():
 
         insert_transaction_batch(transactions)
 
-        # AUTO-CREATE BUDGET for this recurring expense
-        # Calculate monthly budget amount based on recurrence frequency
-        if recurrence == "hebdomadaire":
-            monthly_amount = montant * 4.33  # approximately 4.33 weeks per month
-        elif recurrence == "mensuelle":
-            monthly_amount = montant
-        elif recurrence == "annuelle":
-            monthly_amount = montant / 12
+        # AUTO-CREATE BUDGET only for recurring expenses
+        if type_transaction == "dépense":
+            # Calculate monthly budget amount based on recurrence frequency
+            if recurrence == "hebdomadaire":
+                monthly_amount = montant * 4.33  # approximately 4.33 weeks per month
+            elif recurrence == "mensuelle":
+                monthly_amount = montant
+            elif recurrence == "annuelle":
+                monthly_amount = montant / 12
 
-        # Insert or update the budget for this category
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
+            # Insert or update the budget for this category
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            INSERT OR IGNORE INTO budgets_categories
-            (categorie, budget_mensuel, date_creation, date_modification)
-            VALUES (?, ?, ?, ?)
-        """, (safe_categorie, monthly_amount, now, now))
+            cursor.execute("""
+                INSERT OR IGNORE INTO budgets_categories
+                (categorie, budget_mensuel, date_creation, date_modification)
+                VALUES (?, ?, ?, ?)
+            """, (safe_categorie, monthly_amount, now, now))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
 
-        toast_success(f"Transaction récurrente ajoutée ({recurrence})")
-        st.success(f"✅ Budget auto-créé pour la catégorie '{safe_categorie}' : {monthly_amount:.2f}€/mois")
+            toast_success(f"Transaction récurrente ajoutée ({recurrence})")
+            st.success(f"✅ Budget auto-créé pour la catégorie '{safe_categorie}' : {monthly_amount:.2f}€/mois")
+        else:
+            toast_success(f"Transaction récurrente ajoutée ({recurrence})")
+            st.success(f"✅ Revenu récurrent créé pour la catégorie '{safe_categorie}'")
+
         st.info(f"{len(occurrences)} occurrence(s) passée(s) ajoutée(s).")
 
 
@@ -4769,7 +4778,7 @@ def interface_transactions_simplifiee():
             [
                 "📸 Scanner un ticket (OCR)",
                 "💸 Ajouter des dépenses",
-                "🔁 Créer une dépense récurrente",
+                "🔁 Créer une transaction récurrente",
                 "💰 Ajouter un revenu"
             ],
             key="type_action_transaction"
@@ -4807,15 +4816,31 @@ def interface_transactions_simplifiee():
     elif type_action == "💸 Ajouter des dépenses":
         interface_ajouter_depenses_fusionnee()
 
-    # === DÉPENSE RÉCURRENTE ===
-    elif type_action == "🔁 Créer une dépense récurrente":
-        st.subheader("🔁 Créer une dépense récurrente")
+    # === TRANSACTION RÉCURRENTE (DÉPENSE OU REVENU) ===
+    elif type_action == "🔁 Créer une transaction récurrente":
+        st.subheader("🔁 Créer une transaction récurrente")
 
-        st.info("💡 Les dépenses récurrentes sont automatiquement ajoutées chaque mois/semaine")
+        # Sélecteur de type
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            type_transaction = st.radio(
+                "Type",
+                ["💸 Dépense", "💰 Revenu"],
+                horizontal=True,
+                key="type_transaction_selector"
+            )
 
-        interface_transaction_recurrente()
+        type_val = "dépense" if "Dépense" in type_transaction else "revenu"
 
-    # === REVENU ===
+        if type_val == "dépense":
+            st.info("💡 Les dépenses récurrentes sont automatiquement ajoutées chaque mois/semaine")
+            st.info("📊 Un budget sera créé automatiquement pour cette catégorie")
+        else:
+            st.info("💡 Les revenus récurrents sont automatiquement ajoutés chaque mois/semaine")
+
+        interface_transaction_recurrente(type_transaction=type_val)
+
+    # === REVENU (NON-RÉCURRENT) ===
     elif type_action == "💰 Ajouter un revenu":
         st.subheader("💰 Ajouter un revenu")
 
