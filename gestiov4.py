@@ -5035,6 +5035,33 @@ def get_period_start_date(period):
         return None
 
 
+def calculate_months_in_period(start_date, end_date=None):
+    """
+    Calcule le nombre de mois dans une période.
+
+    Args:
+        start_date: date or None - Date de début (None = retourne 1)
+        end_date: date or None - Date de fin (None = aujourd'hui)
+
+    Returns:
+        int - Nombre de mois dans la période (minimum 1)
+    """
+    if start_date is None:
+        # Si pas de date de début (depuis le début), on ne peut pas calculer
+        # On retournera le nombre de mois depuis la première transaction
+        return None
+
+    if end_date is None:
+        end_date = date.today()
+
+    # Calculer la différence en mois
+    # On utilise relativedelta pour une différence précise en mois
+    delta = relativedelta(end_date, start_date)
+    months = delta.years * 12 + delta.months + 1  # +1 pour inclure le mois de début
+
+    return max(1, months)  # Au minimum 1 mois
+
+
 def analyze_exceptional_expenses(period_start_date=None):
     """
     Analyse complète des dépenses avec décomposition par budgets et exceptions.
@@ -5077,11 +5104,24 @@ def analyze_exceptional_expenses(period_start_date=None):
             "realite": 0.0
         }
 
+    # Calculer le nombre de mois dans la période
+    if period_start_date is None:
+        # "Depuis le début" - calculer depuis la première transaction
+        first_transaction_date = pd.to_datetime(df_transactions["date"]).min().date()
+        nb_mois = calculate_months_in_period(first_transaction_date)
+        if nb_mois is None:
+            nb_mois = 1
+    else:
+        nb_mois = calculate_months_in_period(period_start_date)
+        if nb_mois is None:
+            nb_mois = 1
+
     # SRR: Total revenus
     SRR = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
 
-    # SBT: Total budgets théoriques
-    SBT = df_budgets["budget_mensuel"].sum() if not df_budgets.empty else 0.0
+    # SBT: Total budgets théoriques (multiplié par le nombre de mois)
+    SBT_mensuel = df_budgets["budget_mensuel"].sum() if not df_budgets.empty else 0.0
+    SBT = SBT_mensuel * nb_mois
 
     # Récupérer les catégories avec budget
     categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
@@ -5339,12 +5379,20 @@ def interface_portefeuille():
             else:
                 start_date = period_start_date
 
+            # Calculer le nombre de mois dans la période
+            nb_mois = calculate_months_in_period(start_date)
+            if nb_mois is None:
+                nb_mois = 1
+
             # Préparer l'affichage avec pourcentages
             budgets_display = []
 
             for _, budget in df_budgets.iterrows():
                 categorie = budget["categorie"]
                 budget_mensuel = budget["budget_mensuel"]
+
+                # Budget pour toute la période
+                budget_periode = budget_mensuel * nb_mois
 
                 # Calculer les dépenses pour la période sélectionnée
                 if not df_transactions.empty:
@@ -5360,9 +5408,9 @@ def interface_portefeuille():
                 else:
                     depenses_mois = 0.0
 
-                # Calculer le pourcentage utilisé
-                if budget_mensuel > 0:
-                    pourcentage = (depenses_mois / budget_mensuel) * 100
+                # Calculer le pourcentage utilisé (par rapport au budget de la période)
+                if budget_periode > 0:
+                    pourcentage = (depenses_mois / budget_periode) * 100
                 else:
                     pourcentage = 0
 
@@ -5382,9 +5430,9 @@ def interface_portefeuille():
 
                 budgets_display.append({
                     "Catégorie": f"{couleur} {categorie}",
-                    "Budget (€)": f"{budget_mensuel:.2f}",
+                    "Budget (€)": f"{budget_periode:.2f}",
                     "Dépensé (€)": f"{depenses_mois:.2f}",
-                    "Reste (€)": f"{budget_mensuel - depenses_mois:.2f}",
+                    "Reste (€)": f"{budget_periode - depenses_mois:.2f}",
                     "% utilisé": f"{pourcentage:.1f}%",
                     "État": status
                 })
