@@ -5065,7 +5065,72 @@ def interface_portefeuille():
                 hide_index=True
             )
 
-        st.markdown("---")
+            # ===== VÉRIFICATION SUFFISANCE DES REVENUS =====
+            st.markdown("---")
+            st.markdown("#### 💰 Suffisance des revenus pour ce mois")
+
+            # Calculer les revenus du mois
+            today = datetime.now()
+            premier_jour_mois = today.replace(day=1).date()
+
+            revenus_mois = df_transactions[
+                (df_transactions["type"] == "revenu") &
+                (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+            ]["montant"].sum()
+
+            # Calculer le budget total du mois (somme de tous les budgets)
+            budget_total_mois = df_budgets["budget_mensuel"].sum()
+
+            # Calculer les dépenses actuelles du mois (récurrences incluses)
+            depenses_actuelles_mois = df_transactions[
+                (df_transactions["type"] == "dépense") &
+                (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+            ]["montant"].sum()
+
+            # Déterminer le statut
+            solde_previsionnel = revenus_mois - budget_total_mois
+            solde_actuel = revenus_mois - depenses_actuelles_mois
+
+            if revenus_mois >= budget_total_mois:
+                status_budget = "✅ Suffisant"
+                couleur_status = "green"
+            else:
+                status_budget = "⚠️ Insuffisant"
+                couleur_status = "red"
+
+            # Afficher les métriques
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("Revenus du mois (€)", f"{revenus_mois:.2f}")
+
+            with col2:
+                st.metric("Budget total du mois (€)", f"{budget_total_mois:.2f}")
+
+            with col3:
+                difference = revenus_mois - budget_total_mois
+                st.metric("Revenus vs Budget", f"{difference:+.2f} €",
+                          delta_color="inverse" if difference < 0 else "normal")
+
+            with col4:
+                st.metric("Status", status_budget)
+
+            # Afficher le solde prévisionnel vs actuel
+            st.markdown("**Bilan du mois:**")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Dépenses actuelles (€)", f"{depenses_actuelles_mois:.2f}")
+
+            with col2:
+                st.metric("Solde actuel (€)", f"{solde_actuel:.2f}",
+                          delta_color="inverse" if solde_actuel < 0 else "normal")
+
+            with col3:
+                st.metric("Solde si on respecte le budget (€)", f"{solde_previsionnel:.2f}",
+                          delta_color="inverse" if solde_previsionnel < 0 else "normal")
+
+
         st.markdown("#### ➕ Ajouter/Modifier un budget")
 
         col1, col2, col3 = st.columns([2, 1, 1])
