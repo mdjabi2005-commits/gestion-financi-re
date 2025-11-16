@@ -4959,53 +4959,78 @@ def analyze_monthly_budget_coverage():
     return pd.DataFrame(analysis)
 
 
+def normalize_recurrence_column():
+    """
+    Normalise la colonne recurrence en remplaçant 'ponctuelle' par NULL.
+    Cela assure la cohérence avec la nouvelle approche où les transactions
+    uniques ont une recurrence vide/NULL au lieu de 'ponctuelle'.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Compter avant migration
+        cursor.execute("SELECT COUNT(*) FROM transactions WHERE recurrence = 'ponctuelle'")
+        count_before = cursor.fetchone()[0]
+
+        if count_before > 0:
+            # Remplacer 'ponctuelle' par NULL
+            cursor.execute("UPDATE transactions SET recurrence = NULL WHERE recurrence = 'ponctuelle'")
+            conn.commit()
+            logger.info(f"✅ Normalisation recurrence: {count_before} transactions 'ponctuelle' converties à NULL")
+
+        conn.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Normalisation recurrence: {str(e)}")
+
+
 def analyze_exceptional_expenses():
     """
-    Analyse les dépenses exceptionnelles (catégories sans budget défini).
-    Exclut les dépenses récurrentes (seules les dépenses ponctuelles).
-    Retourne un DataFrame avec les dépenses par catégorie exceptionnelle.
+    Analyse les dépenses exceptionnelles basées sur la comparaison des soldes.
+    Dépenses exceptionnelles = Dépenses réelles - Budgets planifiés
+    Retourne les métriques de comparaison solde réel vs solde budgété.
     """
     df_transactions = load_transactions()
 
     conn = sqlite3.connect(DB_PATH)
-    df_budgets = pd.read_sql_query("SELECT categorie FROM budgets_categories", conn)
+    df_budgets = pd.read_sql_query("SELECT categorie, budget_mensuel FROM budgets_categories", conn)
     conn.close()
 
     if df_transactions.empty:
-        return pd.DataFrame(), 0.0
+        return {
+            "total_revenue": 0.0,
+            "total_expenses": 0.0,
+            "total_budgets": 0.0,
+            "solde_reel": 0.0,
+            "solde_budgete": 0.0,
+            "dépenses_exceptionnelles": 0.0
+        }
 
-    # Récupérer les catégories avec budget
-    categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
+    # Calculer les totaux globaux
+    total_revenue = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
+    total_expenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
+    total_budgets = df_budgets["budget_mensuel"].sum() if not df_budgets.empty else 0.0
 
-    # Filtrer les dépenses NON-RÉCURRENTES UNIQUEMENT (exclut les vraies récurrences)
-    # Inclut: empty, None, ou "ponctuelle" (dépenses ponctuelles)
-    df_depenses = df_transactions[
-        (df_transactions["type"] == "dépense") &
-        (
-            (df_transactions["recurrence"].isna()) |
-            (df_transactions["recurrence"] == "") |
-            (df_transactions["recurrence"] == "ponctuelle")
-        )
-    ].copy()
+    # Solde réel = revenus - dépenses réelles
+    solde_reel = total_revenue - total_expenses
 
-    # Récupérer les catégories sans budget
-    df_exceptionnelles = df_depenses[~df_depenses["categorie"].isin(categories_avec_budget)]
+    # Solde budgété = revenus - budgets définis
+    solde_budgete = total_revenue - total_budgets
 
-    if df_exceptionnelles.empty:
-        return pd.DataFrame(), 0.0
+    # Dépenses exceptionnelles = différence entre les deux
+    # C'est ce qui échappe aux budgets planifiés
+    dépenses_exceptionnelles = total_expenses - total_budgets
+    if dépenses_exceptionnelles < 0:
+        dépenses_exceptionnelles = 0  # Si les budgets couvrent tout, pas de dépassement
 
-    # Grouper par catégorie
-    expenses_by_cat = df_exceptionnelles.groupby("categorie")["montant"].agg([
-        ("Montant total (€)", lambda x: f"{x.sum():.2f}"),
-        ("Nombre", "count"),
-        ("Moyenne (€)", lambda x: f"{x.mean():.2f}")
-    ]).reset_index()
-
-    expenses_by_cat.columns = ["Catégorie", "Montant total (€)", "Nombre", "Moyenne (€)"]
-
-    total_exceptional = df_exceptionnelles["montant"].sum()
-
-    return expenses_by_cat, total_exceptional
+    return {
+        "total_revenue": total_revenue,
+        "total_expenses": total_expenses,
+        "total_budgets": total_budgets,
+        "solde_reel": solde_reel,
+        "solde_budgete": solde_budgete,
+        "dépenses_exceptionnelles": dépenses_exceptionnelles
+    }
 
 
 # =============================
@@ -5070,6 +5095,9 @@ def interface_portefeuille():
         conn.commit()
 
     conn.commit()
+
+    # Normaliser la colonne recurrence pour la cohérence des données
+    normalize_recurrence_column()
 
     # Backfill les transactions récurrentes jusqu'à aujourd'hui
     # IMPORTANT: Cela doit être fait AVANT de charger les transactions
@@ -5257,9 +5285,7 @@ def interface_portefeuille():
                 budgets_display.append({
                     "Catégorie": f"{couleur} {categorie}",
                     "Budget (€)": f"{budget_mensuel:.2f}",
-                    "Dépensé (€)": f"{depenses_non_recurrentes:.2f}",
-                    "Récurrences (€)": f"{depenses_recurrentes:.2f}",
-                    "Total (€)": f"{depenses_mois:.2f}",
+                    "Dépensé (€)": f"{depenses_mois:.2f}",
                     "Reste (€)": f"{budget_mensuel - depenses_mois:.2f}",
                     "% utilisé": f"{pourcentage:.1f}%",
                     "État": status
@@ -5273,48 +5299,46 @@ def interface_portefeuille():
             )
 
         st.markdown("---")
-        st.markdown("#### ⚠️ Dépenses Exceptionnelles (sans budget)")
-        st.info("💡 Ces catégories n'ont pas de budget défini. Elles peuvent impacter votre solde.")
+        st.markdown("#### 💰 Analyse Solde vs Budgets")
+        st.info("💡 Comparaison entre votre solde réel et votre solde budgété. La différence représente vos dépenses exceptionnelles.")
 
-        df_exceptional, total_exceptional = analyze_exceptional_expenses()
+        metrics = analyze_exceptional_expenses()
 
-        if not df_exceptional.empty:
-            st.dataframe(
-                df_exceptional,
-                use_container_width=True,
-                hide_index=True
-            )
+        col1, col2, col3, col4 = st.columns(4)
 
-            # Résumé des dépenses exceptionnelles
-            st.markdown("**Impacts des dépenses exceptionnelles:**")
+        with col1:
+            st.metric("Total Revenus (€)", f"{metrics['total_revenue']:.2f}")
 
-            # Calculer les totaux
-            try:
-                total_revenue = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
-                total_expenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
-                solde = total_revenue - total_expenses
+        with col2:
+            st.metric("Total Budgets (€)", f"{metrics['total_budgets']:.2f}")
 
-                col1, col2, col3, col4 = st.columns(4)
+        with col3:
+            st.metric("Total Dépenses (€)", f"{metrics['total_expenses']:.2f}")
 
-                with col1:
-                    st.metric("Total exceptionnel (€)", f"{total_exceptional:.2f}")
+        with col4:
+            st.metric("Solde Réel (€)", f"{metrics['solde_reel']:.2f}")
 
-                with col2:
-                    percentage = (total_exceptional / total_expenses * 100) if total_expenses > 0 else 0
-                    st.metric("% des dépenses", f"{percentage:.1f}%")
+        st.markdown("---")
 
-                with col3:
-                    st.metric("Solde total (€)", f"{solde:.2f}")
+        col1, col2, col3 = st.columns(3)
 
-                with col4:
-                    solde_sans_exceptional = solde + total_exceptional
-                    delta_solde = total_exceptional
-                    st.metric("Solde sans exceptionnel", f"{solde_sans_exceptional:.2f}",
-                              delta=f"{delta_solde:+.2f} €")
-            except Exception as e:
-                st.warning(f"⚠️ Impossible de calculer les statistiques: {str(e)}")
-        else:
-            st.success("✅ Aucune dépense exceptionnelle! Toutes les dépenses sont dans les catégories budgétées.")
+        with col1:
+            st.metric("Solde si budgets respectés (€)", f"{metrics['solde_budgete']:.2f}")
+
+        with col2:
+            if metrics['dépenses_exceptionnelles'] > 0:
+                st.metric("⚠️ Dépenses exceptionnelles (€)", f"{metrics['dépenses_exceptionnelles']:.2f}",
+                         delta=f"-{metrics['dépenses_exceptionnelles']:.2f} € (impact négatif)")
+            else:
+                st.metric("✅ Dépenses exceptionnelles (€)", f"{metrics['dépenses_exceptionnelles']:.2f}",
+                         delta="0.00 € (bien maîtrisées)")
+
+        with col3:
+            if metrics['total_expenses'] > 0:
+                percentage = (metrics['dépenses_exceptionnelles'] / metrics['total_expenses'] * 100)
+            else:
+                percentage = 0
+            st.metric("% des dépenses", f"{percentage:.1f}%")
 
     # ===== ONGLET 2: OBJECTIFS =====
     with tab2:
