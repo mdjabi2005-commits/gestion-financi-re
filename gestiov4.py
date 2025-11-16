@@ -4984,7 +4984,33 @@ def normalize_recurrence_column():
         logger.warning(f"⚠️ Normalisation recurrence: {str(e)}")
 
 
-def analyze_exceptional_expenses():
+def get_period_start_date(period):
+    """
+    Calcule la date de début selon la période sélectionnée.
+
+    Args:
+        period: str - "Ce mois", "2 derniers mois", "3 derniers mois", "Depuis le début"
+
+    Returns:
+        date or None - Date de début (None = depuis le début)
+    """
+    today = date.today()
+
+    if period == "Ce mois":
+        return today.replace(day=1)
+    elif period == "2 derniers mois":
+        return (today.replace(day=1) - relativedelta(months=1)).replace(day=1)
+    elif period == "3 derniers mois":
+        return (today.replace(day=1) - relativedelta(months=2)).replace(day=1)
+    elif period == "6 derniers mois":
+        return (today.replace(day=1) - relativedelta(months=5)).replace(day=1)
+    elif period == "Depuis le début":
+        return None
+    else:
+        return None
+
+
+def analyze_exceptional_expenses(period_start_date=None):
     """
     Analyse complète des dépenses avec décomposition par budgets et exceptions.
 
@@ -4999,8 +5025,16 @@ def analyze_exceptional_expenses():
     - Écart budgets = SRB - SBT (positif = dépassement, négatif = économies)
     - Capacité théorique = SRR - SBT (si positif, marge pour exceptions)
     - Réalité = SRR - SDR (solde final réel)
+
+    Args:
+        period_start_date: date or None - Date de début du filtre (None = depuis le début)
     """
     df_transactions = load_transactions()
+
+    # Filtrer par période si fournie
+    if period_start_date is not None:
+        df_transactions["date"] = pd.to_datetime(df_transactions["date"])
+        df_transactions = df_transactions[df_transactions["date"].dt.date >= period_start_date]
 
     conn = sqlite3.connect(DB_PATH)
     df_budgets = pd.read_sql_query("SELECT categorie, budget_mensuel FROM budgets_categories", conn)
@@ -5143,6 +5177,18 @@ def interface_portefeuille():
     with tab1:
         st.subheader("💰 Gérer les budgets par catégorie")
 
+        # Sélecteur de période
+        st.markdown("#### ⏰ Période d'analyse")
+        period = st.selectbox(
+            "Visualiser la période:",
+            ["Ce mois", "2 derniers mois", "3 derniers mois", "6 derniers mois", "Depuis le début"],
+            index=4,  # Par défaut "Depuis le début"
+            key="period_selector"
+        )
+        period_start_date = get_period_start_date(period)
+        st.markdown(f"*Affichage depuis: **{period_start_date.strftime('%d/%m/%Y') if period_start_date else 'le début'}***")
+        st.markdown("---")
+
         # Charger les catégories de dépenses existantes
         df_transactions = load_transactions()
         if not df_transactions.empty:
@@ -5258,9 +5304,15 @@ def interface_portefeuille():
         if df_budgets.empty:
             st.info("💡 Aucun budget défini. Commencez par en ajouter ci-dessous !")
         else:
-            # Calculer les dépenses du mois en cours pour chaque catégorie
-            today = datetime.now()
-            premier_jour_mois = today.replace(day=1).date()
+            # Déterminer la date de début du filtre
+            if period_start_date is None:
+                # "Depuis le début" - utiliser la première transaction
+                if not df_transactions.empty:
+                    start_date = pd.to_datetime(df_transactions["date"]).min().date()
+                else:
+                    start_date = date.today().replace(day=1)
+            else:
+                start_date = period_start_date
 
             # Préparer l'affichage avec pourcentages
             budgets_display = []
@@ -5269,31 +5321,19 @@ def interface_portefeuille():
                 categorie = budget["categorie"]
                 budget_mensuel = budget["budget_mensuel"]
 
-                # Calculer les dépenses du mois pour cette catégorie
+                # Calculer les dépenses pour la période sélectionnée
                 if not df_transactions.empty:
-                    # Dépenses non-récurrentes
-                    depenses_non_recurrentes = df_transactions[
+                    # Dépenses pour cette période
+                    depenses_periode = df_transactions[
                         (df_transactions["type"] == "dépense") &
                         (df_transactions["categorie"] == categorie) &
-                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois) &
-                        ((df_transactions["recurrence"].isna()) | (df_transactions["recurrence"] == ""))
-                    ]["montant"].sum()
-
-                    # Dépenses récurrentes (backfill)
-                    depenses_recurrentes = df_transactions[
-                        (df_transactions["type"] == "dépense") &
-                        (df_transactions["categorie"] == categorie) &
-                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois) &
-                        (df_transactions["recurrence"].notna()) &
-                        (df_transactions["recurrence"] != "")
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= start_date)
                     ]["montant"].sum()
 
                     # Total dépenses
-                    depenses_mois = depenses_non_recurrentes + depenses_recurrentes
+                    depenses_mois = depenses_periode
                 else:
                     depenses_mois = 0.0
-                    depenses_non_recurrentes = 0.0
-                    depenses_recurrentes = 0.0
 
                 # Calculer le pourcentage utilisé
                 if budget_mensuel > 0:
@@ -5334,7 +5374,7 @@ def interface_portefeuille():
         st.markdown("---")
         st.markdown("#### 💰 Analyse Solde - Vue d'ensemble")
 
-        metrics = analyze_exceptional_expenses()
+        metrics = analyze_exceptional_expenses(period_start_date)
 
         # Section 1: Revenus
         st.markdown("**1️⃣ Revenus**")
