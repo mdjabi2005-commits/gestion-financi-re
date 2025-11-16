@@ -5,13 +5,18 @@ Généré automatiquement par migrate_to_modular.py
 """
 
 import sqlite3
-import logger
+import os
+import logging
 from config import DB_PATH
-from ui.component import toast_error
+
+logger = logging.getLogger(__name__)
 
 
 def get_db_connection():
     """Retourne une connexion SQLite cohérente avec DB_PATH."""
+    # Import local pour éviter les imports circulaires
+    from ui.components import toast_error
+
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA foreign_keys = ON")  #Bloquer les clès étrangères
