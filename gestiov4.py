@@ -4986,9 +4986,19 @@ def normalize_recurrence_column():
 
 def analyze_exceptional_expenses():
     """
-    Analyse les dépenses exceptionnelles basées sur la comparaison des soldes.
-    Dépenses exceptionnelles = Dépenses réelles - Budgets planifiés
-    Retourne les métriques de comparaison solde réel vs solde budgété.
+    Analyse complète des dépenses avec décomposition par budgets et exceptions.
+
+    Métriques calculées:
+    - SRR: Solde Revenus Réelle = somme de tous les revenus
+    - SBT: Solde Budget Théorique = somme de tous les budgets planifiés
+    - SRB: Solde Réel Budget = somme des dépenses pour catégories avec budget
+    - SE: Solde Exceptionnel = somme des dépenses sans budget
+    - SDR: Solde Dépense Réelle = SRB + SE (total dépenses)
+
+    Comparaisons:
+    - Écart budgets = SRB - SBT (positif = dépassement, négatif = économies)
+    - Capacité théorique = SRR - SBT (si positif, marge pour exceptions)
+    - Réalité = SRR - SDR (solde final réel)
     """
     df_transactions = load_transactions()
 
@@ -4998,38 +5008,61 @@ def analyze_exceptional_expenses():
 
     if df_transactions.empty:
         return {
-            "total_revenue": 0.0,
-            "total_expenses": 0.0,
-            "total_budgets": 0.0,
-            "solde_reel": 0.0,
-            "solde_budgete": 0.0,
-            "dépenses_exceptionnelles": 0.0
+            "SRR": 0.0,  # Solde Revenus Réelle
+            "SBT": 0.0,  # Solde Budget Théorique
+            "SRB": 0.0,  # Solde Réel Budget
+            "SE": 0.0,   # Solde Exceptionnel
+            "SDR": 0.0,  # Solde Dépense Réelle
+            "ecart_budgets": 0.0,
+            "capacite_theorique": 0.0,
+            "realite": 0.0
         }
 
-    # Calculer les totaux globaux
-    total_revenue = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
-    total_expenses = df_transactions[df_transactions["type"] == "dépense"]["montant"].sum()
-    total_budgets = df_budgets["budget_mensuel"].sum() if not df_budgets.empty else 0.0
+    # SRR: Total revenus
+    SRR = df_transactions[df_transactions["type"] == "revenu"]["montant"].sum()
 
-    # Solde réel = revenus - dépenses réelles
-    solde_reel = total_revenue - total_expenses
+    # SBT: Total budgets théoriques
+    SBT = df_budgets["budget_mensuel"].sum() if not df_budgets.empty else 0.0
 
-    # Solde budgété = revenus - budgets définis
-    solde_budgete = total_revenue - total_budgets
+    # Récupérer les catégories avec budget
+    categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
 
-    # Dépenses exceptionnelles = différence entre les deux
-    # C'est ce qui échappe aux budgets planifiés
-    dépenses_exceptionnelles = total_expenses - total_budgets
-    if dépenses_exceptionnelles < 0:
-        dépenses_exceptionnelles = 0  # Si les budgets couvrent tout, pas de dépassement
+    # SRB: Dépenses réelles pour catégories avec budget
+    if categories_avec_budget:
+        SRB = df_transactions[
+            (df_transactions["type"] == "dépense") &
+            (df_transactions["categorie"].isin(categories_avec_budget))
+        ]["montant"].sum()
+    else:
+        SRB = 0.0
+
+    # SE: Dépenses exceptionnelles (sans budget)
+    SE = df_transactions[
+        (df_transactions["type"] == "dépense") &
+        (~df_transactions["categorie"].isin(categories_avec_budget))
+    ]["montant"].sum()
+
+    # SDR: Total dépenses réelles = SRB + SE
+    SDR = SRB + SE
+
+    # Écart budgets = SRB - SBT
+    ecart_budgets = SRB - SBT
+
+    # Capacité théorique = SRR - SBT
+    capacite_theorique = SRR - SBT
+
+    # Réalité = SRR - SDR
+    realite = SRR - SDR
 
     return {
-        "total_revenue": total_revenue,
-        "total_expenses": total_expenses,
-        "total_budgets": total_budgets,
-        "solde_reel": solde_reel,
-        "solde_budgete": solde_budgete,
-        "dépenses_exceptionnelles": dépenses_exceptionnelles
+        "SRR": SRR,
+        "SBT": SBT,
+        "SRB": SRB,
+        "SE": SE,
+        "SDR": SDR,
+        "ecart_budgets": ecart_budgets,
+        "capacite_theorique": capacite_theorique,
+        "realite": realite
     }
 
 
@@ -5299,46 +5332,86 @@ def interface_portefeuille():
             )
 
         st.markdown("---")
-        st.markdown("#### 💰 Analyse Solde vs Budgets")
-        st.info("💡 Comparaison entre votre solde réel et votre solde budgété. La différence représente vos dépenses exceptionnelles.")
+        st.markdown("#### 💰 Analyse Solde - Vue d'ensemble")
 
         metrics = analyze_exceptional_expenses()
 
-        col1, col2, col3, col4 = st.columns(4)
-
+        # Section 1: Revenus
+        st.markdown("**1️⃣ Revenus**")
+        col1 = st.columns(1)[0]
         with col1:
-            st.metric("Total Revenus (€)", f"{metrics['total_revenue']:.2f}")
+            st.metric("💵 Revenus totaux (SRR)", f"{metrics['SRR']:.2f} €")
 
-        with col2:
-            st.metric("Total Budgets (€)", f"{metrics['total_budgets']:.2f}")
+        st.markdown("")
 
-        with col3:
-            st.metric("Total Dépenses (€)", f"{metrics['total_expenses']:.2f}")
-
-        with col4:
-            st.metric("Solde Réel (€)", f"{metrics['solde_reel']:.2f}")
-
-        st.markdown("---")
-
+        # Section 2: Décomposition des dépenses et budgets
+        st.markdown("**2️⃣ Budgets vs Dépenses réelles**")
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric("Solde si budgets respectés (€)", f"{metrics['solde_budgete']:.2f}")
+            st.metric("📊 Budgets planifiés (SBT)", f"{metrics['SBT']:.2f} €")
 
         with col2:
-            if metrics['dépenses_exceptionnelles'] > 0:
-                st.metric("⚠️ Dépenses exceptionnelles (€)", f"{metrics['dépenses_exceptionnelles']:.2f}",
-                         delta=f"-{metrics['dépenses_exceptionnelles']:.2f} € (impact négatif)")
-            else:
-                st.metric("✅ Dépenses exceptionnelles (€)", f"{metrics['dépenses_exceptionnelles']:.2f}",
-                         delta="0.00 € (bien maîtrisées)")
+            st.metric("💸 Dépenses budgétées (SRB)", f"{metrics['SRB']:.2f} €")
 
         with col3:
-            if metrics['total_expenses'] > 0:
-                percentage = (metrics['dépenses_exceptionnelles'] / metrics['total_expenses'] * 100)
+            # Écart = SRB - SBT
+            ecart = metrics['ecart_budgets']
+            if ecart > 0:
+                st.metric("📈 Dépassement budgets", f"{ecart:.2f} €", delta=f"⚠️ +{ecart:.2f} €")
+            elif ecart < 0:
+                st.metric("📉 Économies budgets", f"{abs(ecart):.2f} €", delta=f"✅ -{abs(ecart):.2f} €")
             else:
-                percentage = 0
-            st.metric("% des dépenses", f"{percentage:.1f}%")
+                st.metric("✅ Budgets respectés", f"0.00 €", delta="Parfait!")
+
+        st.markdown("")
+
+        # Section 3: Dépenses exceptionnelles
+        st.markdown("**3️⃣ Dépenses exceptionnelles**")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("⚠️ Dépenses sans budget (SE)", f"{metrics['SE']:.2f} €")
+
+        with col2:
+            st.metric("📌 Total dépenses (SDR)", f"{metrics['SDR']:.2f} €")
+
+        with col3:
+            if metrics['SDR'] > 0:
+                pct_exceptional = (metrics['SE'] / metrics['SDR'] * 100)
+                st.metric("% exceptionnel", f"{pct_exceptional:.1f}%")
+            else:
+                st.metric("% exceptionnel", f"0.0%")
+
+        st.markdown("")
+
+        # Section 4: Capacité de gestion
+        st.markdown("**4️⃣ Capacité et réalité**")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Capacité théorique = SRR - SBT
+            capacite = metrics['capacite_theorique']
+            if capacite > 0:
+                st.metric("🎯 Marge pour exceptions (SRR-SBT)", f"{capacite:.2f} €",
+                         delta=f"✅ Marge positive")
+            elif capacite < 0:
+                st.metric("🎯 Déficit théorique (SRR-SBT)", f"{capacite:.2f} €",
+                         delta=f"⚠️ Déficit")
+            else:
+                st.metric("🎯 Équilibre théorique", f"0.00 €")
+
+        with col2:
+            # Réalité = SRR - SDR
+            solde = metrics['realite']
+            if solde > 0:
+                st.metric("💰 Solde réel final (SRR-SDR)", f"{solde:.2f} €",
+                         delta=f"✅ Surplus")
+            elif solde < 0:
+                st.metric("💰 Solde réel final (SRR-SDR)", f"{solde:.2f} €",
+                         delta=f"⚠️ Déficit")
+            else:
+                st.metric("💰 Solde réel final", f"0.00 €")
 
     # ===== ONGLET 2: OBJECTIFS =====
     with tab2:
