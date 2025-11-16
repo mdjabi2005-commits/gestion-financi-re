@@ -6,14 +6,21 @@ Généré automatiquement par migrate_to_modular.py
 
 import streamlit as st
 import os
+import pandas as pd
+import logging
 from PIL import Image
 from datetime import datetime, date
-from ocr.engine import full_ocr
+from ocr.engine import full_ocr, extract_text_from_pdf
 from ocr.parsers import parse_ticket_metadata
 from ocr.logging import log_ocr_scan
 from services.file_manager import move_ticket_to_sorted
 from core.database import get_db_connection
-from ui.components import toast_success, toast_error, refresh_and_rerun
+from core.transactions import insert_transaction_batch, load_transactions
+from utils.converters import safe_convert, safe_date_convert
+from ui.components import toast_success, toast_error, toast_warning, refresh_and_rerun
+from config import TO_SCAN_DIR
+
+logger = logging.getLogger(__name__)
 
 
 def interface_ajouter_depenses_fusionnee():
@@ -85,6 +92,137 @@ def interface_ajouter_depenses_fusionnee():
 
             # Créer un modèle CSV
             modele_csv = """type,date,categorie,sous_categorie,montant,description
+dépense,2024-01-15,alimentation,courses,45.50,Carrefour
+dépense,2024-01-16,transport,essence,60.00,Shell Station
+revenu,2024-01-01,salaire,mensuel,2500.00,Salaire janvier
+dépense,2024-01-20,loisirs,restaurant,35.80,Pizza
+revenu,2024-01-15,freelance,mission,450.00,Projet X"""
+
+            st.download_button(
+                label="⬇️ Télécharger le modèle",
+                data=modele_csv,
+                file_name="modele_transactions.csv",
+                mime="text/csv",
+                help="Modèle avec exemples de transactions"
+            )
+
+        with col2:
+            st.markdown("##### 2️⃣ Compléter le fichier")
+            st.caption("Ouvrez le fichier dans Excel/LibreOffice et ajoutez vos transactions")
+            st.markdown("""
+            **Colonnes requises :**
+            - `type` : dépense ou revenu
+            - `date` : AAAA-MM-JJ
+            - `categorie` : Catégorie principale
+            - `sous_categorie` : Sous-catégorie
+            - `montant` : Montant (avec . ou ,)
+            - `description` : Description
+            """)
+
+        with col3:
+            st.markdown("##### 3️⃣ Importer le fichier")
+            st.caption("Uploadez votre fichier CSV complété ci-dessous")
+
+        st.markdown("---")
+
+        # Zone d'upload
+        uploaded_file = st.file_uploader(
+            "📤 Sélectionner votre fichier CSV",
+            type=['csv'],
+            help="Sélectionnez le fichier CSV avec vos transactions",
+            key="csv_uploader_depenses"
+        )
+
+        if uploaded_file is not None:
+            st.success(f"✅ Fichier '{uploaded_file.name}' chargé !")
+
+            try:
+                # Lire le CSV
+                import io
+                df_import = pd.read_csv(io.StringIO(uploaded_file.getvalue().decode('utf-8')))
+
+                st.markdown("#### 📊 Aperçu des données")
+                st.dataframe(df_import.head(10), use_container_width=True)
+
+                st.info(f"📈 **{len(df_import)}** transactions détectées dans le fichier")
+
+                # Options d'import
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    ignorer_doublons = st.checkbox(
+                        "🔒 Ignorer les doublons",
+                        value=True,
+                        help="Évite d'importer plusieurs fois la même transaction"
+                    )
+
+                with col2:
+                    st.caption("")
+
+                # Bouton d'import
+                if st.button("✅ Importer les transactions", type="primary", key="import_csv_depenses_btn"):
+                    with st.spinner("Import en cours..."):
+                        # Préparer les transactions
+                        transactions_a_importer = []
+
+                        for idx, row in df_import.iterrows():
+                            # Conversion sécurisée
+                            transaction = {
+                                "type": str(row.get('type', 'dépense')).strip().lower(),
+                                "date": str(row.get('date', datetime.now().date())),
+                                "categorie": str(row.get('categorie', 'Divers')).strip(),
+                                "sous_categorie": str(row.get('sous_categorie', 'Autre')).strip(),
+                                "montant": safe_convert(row.get('montant', 0)),
+                                "description": str(row.get('description', '')).strip() if pd.notna(row.get('description')) else "",
+                                "source": "CSV Import"
+                            }
+
+                            # Validation basique
+                            if transaction["montant"] > 0:
+                                transactions_a_importer.append(transaction)
+
+                        if transactions_a_importer:
+                            # Insertion
+                            if ignorer_doublons:
+                                # Charger transactions existantes pour vérifier doublons
+                                df_existant = load_transactions()
+                                nouvelles = []
+                                doublons = 0
+
+                                for trans in transactions_a_importer:
+                                    # Vérification doublon simple (même date, montant, catégorie)
+                                    est_doublon = False
+                                    if not df_existant.empty:
+                                        est_doublon = (
+                                            (df_existant['date'] == pd.Timestamp(trans['date'])) &
+                                            (df_existant['montant'] == trans['montant']) &
+                                            (df_existant['categorie'] == trans['categorie'])
+                                        ).any()
+
+                                    if not est_doublon:
+                                        nouvelles.append(trans)
+                                    else:
+                                        doublons += 1
+
+                                if nouvelles:
+                                    insert_transaction_batch(nouvelles)
+                                    toast_success(f"✅ {len(nouvelles)} transaction(s) importée(s) avec succès !")
+                                    if doublons > 0:
+                                        st.warning(f"⚠️ {doublons} doublon(s) ignoré(s)")
+                                else:
+                                    st.warning("⚠️ Toutes les transactions sont des doublons")
+                            else:
+                                insert_transaction_batch(transactions_a_importer)
+                                toast_success(f"✅ {len(transactions_a_importer)} transaction(s) importée(s) !")
+
+                            st.balloons()
+                            st.info("💡 N'oubliez pas d'actualiser la page pour voir vos changements")
+                        else:
+                            toast_error("Aucune transaction valide trouvée dans le fichier")
+
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la lecture du fichier : {e}")
+                st.caption("Vérifiez que le fichier respecte bien le format du modèle")
 
 
 def process_all_tickets_in_folder():
