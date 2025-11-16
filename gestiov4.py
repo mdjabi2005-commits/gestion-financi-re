@@ -5146,121 +5146,7 @@ def interface_portefeuille():
                 hide_index=True
             )
 
-            # ===== VÉRIFICATION SUFFISANCE DES REVENUS =====
-            st.markdown("---")
-            st.markdown("#### 💰 Suffisance des revenus pour ce mois")
-
-            # Calculer les revenus du mois
-            today = datetime.now()
-            premier_jour_mois = today.replace(day=1).date()
-
-            revenus_mois = df_transactions[
-                (df_transactions["type"] == "revenu") &
-                (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
-            ]["montant"].sum()
-
-            # Calculer le budget total du mois (somme de tous les budgets)
-            budget_total_mois = df_budgets["budget_mensuel"].sum()
-
-            # Calculer les dépenses actuelles du mois (récurrences incluses)
-            depenses_actuelles_mois = df_transactions[
-                (df_transactions["type"] == "dépense") &
-                (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
-            ]["montant"].sum()
-
-            # Déterminer le statut
-            solde_previsionnel = revenus_mois - budget_total_mois
-            solde_actuel = revenus_mois - depenses_actuelles_mois
-
-            if revenus_mois >= budget_total_mois:
-                status_budget = "✅ Suffisant"
-                couleur_status = "green"
-            else:
-                status_budget = "⚠️ Insuffisant"
-                couleur_status = "red"
-
-            # Afficher les métriques
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric("Revenus du mois (€)", f"{revenus_mois:.2f}")
-
-            with col2:
-                st.metric("Budget total du mois (€)", f"{budget_total_mois:.2f}")
-
-            with col3:
-                difference = revenus_mois - budget_total_mois
-                st.metric("Revenus vs Budget", f"{difference:+.2f} €",
-                          delta_color="inverse" if difference < 0 else "normal")
-
-            with col4:
-                st.metric("Status", status_budget)
-
-            # Afficher le solde prévisionnel vs actuel
-            st.markdown("**Bilan du mois:**")
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("Dépenses actuelles (€)", f"{depenses_actuelles_mois:.2f}")
-
-            with col2:
-                st.metric("Solde actuel (€)", f"{solde_actuel:.2f}",
-                          delta_color="inverse" if solde_actuel < 0 else "normal")
-
-            with col3:
-                st.metric("Solde si on respecte le budget (€)", f"{solde_previsionnel:.2f}",
-                          delta_color="inverse" if solde_previsionnel < 0 else "normal")
-
-        # ===== ANALYSE HISTORIQUE MENSUELLE =====
         st.markdown("---")
-        st.markdown("#### 📅 Analyse mensuelle: Revenus vs Budget")
-        st.info("💡 Pour chaque mois, vérification si les revenus couvrent le budget total")
-
-        df_monthly = analyze_monthly_budget_coverage()
-
-        if not df_monthly.empty:
-            st.dataframe(
-                df_monthly,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            # Statistiques récapitulatives
-            st.markdown("**Résumé historique:**")
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                # Nombre de mois avec revenus suffisants
-                try:
-                    mois_suffisants = len(df_monthly[df_monthly["Status"] == "✅ Revenus suffisants"])
-                    total_mois = len(df_monthly)
-                    st.metric("Mois avec revenus suffisants", f"{mois_suffisants}/{total_mois}")
-                except:
-                    st.metric("Total des mois", len(df_monthly))
-
-            with col2:
-                # Solde moyen
-                try:
-                    df_monthly_copy = df_monthly.copy()
-                    df_monthly_copy["Solde (€)"] = df_monthly_copy["Solde (€)"].str.replace("€", "").str.strip().astype(float)
-                    solde_moyen = df_monthly_copy["Solde (€)"].mean()
-                    st.metric("Solde moyen mensuel (€)", f"{solde_moyen:.2f}",
-                              delta_color="inverse" if solde_moyen < 0 else "normal")
-                except:
-                    st.metric("Données disponibles", len(df_monthly))
-
-            with col3:
-                # Taux de couverture
-                try:
-                    taux_couverture = (mois_suffisants / total_mois * 100) if total_mois > 0 else 0
-                    st.metric("Taux de couverture", f"{taux_couverture:.1f}%")
-                except:
-                    st.metric("Périodes analysées", len(df_monthly))
-        else:
-            st.warning("📭 Pas assez de données pour l'analyse mensuelle")
-
-        st.markdown("---")
-        st.markdown("#### ➕ Ajouter/Modifier un budget")
 
         col1, col2, col3 = st.columns([2, 1, 1])
 
@@ -5350,55 +5236,91 @@ def interface_portefeuille():
                     toast_success(f"Budget '{budget_to_delete}' supprimé")
                     refresh_and_rerun()
 
-        # ===== ANALYSE HISTORIQUE DES BUDGETS =====
+        # ===== ANALYSE BUDGÉTAIRE FUSIONNÉE =====
         st.markdown("---")
-        st.markdown("#### 📈 Analyse Historique des Budgets")
-        st.info("💡 Analyse depuis la première transaction jusqu'à aujourd'hui")
+        st.markdown("#### 📊 Analyse Budgétaire")
 
-        df_history, months_count = analyze_budget_history()
+        # Créer deux sous-onglets pour l'analyse
+        analysis_tab1, analysis_tab2 = st.tabs(["📅 Analyse Mensuelle", "📈 Analyse Historique"])
 
-        if not df_history.empty:
-            # Afficher le tableau d'analyse
-            st.dataframe(
-                df_history,
-                use_container_width=True,
-                hide_index=True
-            )
+        # ===== SOUS-ONGLET 1: ANALYSE MENSUELLE =====
+        with analysis_tab1:
+            df_monthly = analyze_monthly_budget_coverage()
 
-            # Résumé statistique
-            st.markdown("**Résumé de la période:**")
-            col1, col2, col3 = st.columns(3)
+            if not df_monthly.empty:
+                st.dataframe(
+                    df_monthly,
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("💡 Pas assez de données pour l'analyse mensuelle")
 
-            # Calculer les totaux
+        # ===== SOUS-ONGLET 2: ANALYSE HISTORIQUE =====
+        with analysis_tab2:
+            df_history, months_count = analyze_budget_history()
+
+            if not df_history.empty:
+                st.dataframe(
+                    df_history,
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("💡 Pas de budget défini pour l'analyse historique")
+
+        # ===== MÉTRIQUES SIMPLIFIÉES =====
+        if not df_monthly.empty or not df_history.empty:
+            st.markdown("---")
+            st.markdown("**📈 Résumé Budgétaire:**")
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            # Métrique 1: Mois analysés
             with col1:
-                st.metric("Mois écoulés", months_count)
+                try:
+                    total_mois = len(df_monthly) if not df_monthly.empty else 0
+                    st.metric("📅 Mois analysés", total_mois)
+                except:
+                    st.metric("📅 Période", "N/A")
 
+            # Métrique 2: Taux de suffisance (mois couverts)
             with col2:
-                # Total dépensé vs budget pour les catégories avec budget
                 try:
-                    total_depense = 0
-                    total_budget = 0
-                    for _, row in df_history.iterrows():
-                        # Extraire les valeurs numériques des strings formatées
-                        total_depense += float(row["Dépensé total (€)"].replace("€", "").strip())
-                        total_budget += float(row["Budget total {m} mois (€)".format(m=months_count)].replace("€", "").strip())
-
-                    reste = total_budget - total_depense
-                    st.metric("Budget planifié vs dépensé", f"{total_budget:.0f} € vs {total_depense:.0f} €",
-                              delta=f"{reste:+.0f} €" if reste != 0 else "Équilibré")
+                    if not df_monthly.empty:
+                        mois_suffisants = len(df_monthly[df_monthly["Status"] == "✅ Revenus suffisants"])
+                        taux = (mois_suffisants / len(df_monthly) * 100) if len(df_monthly) > 0 else 0
+                        st.metric("✅ Taux de couverture", f"{taux:.0f}%")
+                    else:
+                        st.metric("✅ Couverture", "N/A")
                 except:
-                    st.metric("Budgets avec détection", len(df_history))
+                    st.metric("✅ Couverture", "N/A")
 
+            # Métrique 3: Solde moyen
             with col3:
-                # Nombre de budgets respectés
                 try:
-                    budgets_respectes = len(df_history[df_history["Statut"] == "🟢 Respecté"])
-                    total_budgets = len(df_history)
-                    st.metric("Budgets respectés", f"{budgets_respectes}/{total_budgets}")
+                    if not df_monthly.empty:
+                        df_temp = df_monthly.copy()
+                        df_temp["Solde (€)"] = df_temp["Solde (€)"].str.replace("€", "").str.strip().astype(float)
+                        solde_moyen = df_temp["Solde (€)"].mean()
+                        st.metric("💰 Solde moyen", f"{solde_moyen:.0f} €",
+                                  delta_color="inverse" if solde_moyen < 0 else "normal")
+                    else:
+                        st.metric("💰 Solde moyen", "N/A")
                 except:
-                    st.metric("Période", f"{months_count} mois")
-        else:
-            st.warning("📭 Aucun budget défini pour l'analyse historique")
+                    st.metric("💰 Solde moyen", "N/A")
+
+            # Métrique 4: Budgets respectés
+            with col4:
+                try:
+                    if not df_history.empty:
+                        respectes = len(df_history[df_history["Statut"] == "🟢 Respecté"])
+                        total = len(df_history)
+                        st.metric("🎯 Budgets respectés", f"{respectes}/{total}")
+                    else:
+                        st.metric("🎯 Budgets", "N/A")
+                except:
+                    st.metric("🎯 Budgets", "N/A")
 
         # ===== DÉPENSES EXCEPTIONNELLES =====
         st.markdown("---")
