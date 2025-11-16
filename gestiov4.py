@@ -5,7 +5,6 @@ Created on Tue Nov 11 17:16:10 2025
 @author: djabi
 """
 
-from difflib import get_close_matches
 import os
 import shutil
 import sqlite3
@@ -730,7 +729,7 @@ def validate_transaction_data(transaction):
         errors.append("Date cannot be in the future")
     
     return errors
-#faire une fonction générique quip permet d'appliquer une taxe
+
 def apply_uber_tax(categorie, montant_brut, description=""):
     categorie_lower = str(categorie).lower().strip()
     description_lower = str(description).lower().strip()
