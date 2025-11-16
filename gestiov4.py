@@ -4937,6 +4937,7 @@ def analyze_monthly_budget_coverage():
 def analyze_exceptional_expenses():
     """
     Analyse les dépenses exceptionnelles (catégories sans budget défini).
+    Exclut les dépenses récurrentes (seules les dépenses ponctuelles).
     Retourne un DataFrame avec les dépenses par catégorie exceptionnelle.
     """
     df_transactions = load_transactions()
@@ -4951,8 +4952,11 @@ def analyze_exceptional_expenses():
     # Récupérer les catégories avec budget
     categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
 
-    # Filtrer les dépenses
-    df_depenses = df_transactions[df_transactions["type"] == "dépense"].copy()
+    # Filtrer les dépenses NON-RÉCURRENTES UNIQUEMENT
+    df_depenses = df_transactions[
+        (df_transactions["type"] == "dépense") &
+        ((df_transactions["recurrence"].isna()) | (df_transactions["recurrence"] == ""))
+    ].copy()
 
     # Récupérer les catégories sans budget
     df_exceptionnelles = df_depenses[~df_depenses["categorie"].isin(categories_avec_budget)]
@@ -5066,6 +5070,98 @@ def interface_portefeuille():
             conn
         )
 
+        # ===== AJOUTER/MODIFIER UN BUDGET =====
+        st.markdown("#### ➕ Ajouter/Modifier un budget")
+
+        col1, col2, col3 = st.columns([2, 1, 1])
+
+        with col1:
+            # Choix entre catégorie existante ou nouvelle
+            mode_ajout = st.radio(
+                "Mode",
+                ["Catégorie existante", "Nouvelle catégorie"],
+                horizontal=True,
+                key="mode_budget"
+            )
+
+            if mode_ajout == "Catégorie existante":
+                if categories_depenses:
+                    categorie_budget = st.selectbox(
+                        "Catégorie",
+                        categories_depenses,
+                        key="cat_budget_existante"
+                    )
+                else:
+                    st.warning("Aucune catégorie de dépense trouvée")
+                    categorie_budget = None
+            else:
+                categorie_budget = st.text_input(
+                    "Nom de la catégorie",
+                    key="cat_budget_nouvelle"
+                )
+
+        with col2:
+            montant_budget = st.number_input(
+                "Budget mensuel (€)",
+                min_value=0.0,
+                step=10.0,
+                value=100.0,
+                key="montant_budget"
+            )
+
+        with col3:
+            st.write("")  # Espacement
+            st.write("")  # Espacement
+            if st.button("💾 Enregistrer", type="primary", key="save_budget"):
+                if categorie_budget and categorie_budget.strip():
+                    try:
+                        cursor.execute("""
+                            INSERT INTO budgets_categories (categorie, budget_mensuel, date_creation, date_modification)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(categorie) DO UPDATE SET
+                                budget_mensuel = excluded.budget_mensuel,
+                                date_modification = excluded.date_modification
+                        """, (
+                            categorie_budget.strip(),
+                            montant_budget,
+                            datetime.now().isoformat(),
+                            datetime.now().isoformat()
+                        ))
+                        conn.commit()
+                        toast_success(f"Budget pour '{categorie_budget}' enregistré !")
+                        refresh_and_rerun()
+                    except Exception as e:
+                        toast_error(f"Erreur : {e}")
+                else:
+                    toast_warning("Veuillez sélectionner ou saisir une catégorie")
+
+        # ===== SUPPRIMER UN BUDGET =====
+        if not df_budgets.empty:
+            st.markdown("---")
+            st.markdown("#### 🗑️ Supprimer un budget")
+
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                budget_to_delete = st.selectbox(
+                    "Catégorie à supprimer",
+                    df_budgets["categorie"].tolist(),
+                    key="budget_delete"
+                )
+
+            with col2:
+                st.write("")  # Espacement
+                st.write("")  # Espacement
+                if st.button("🗑️ Supprimer", type="secondary", key="delete_budget"):
+                    cursor.execute(
+                        "DELETE FROM budgets_categories WHERE categorie = ?",
+                        (budget_to_delete,)
+                    )
+                    conn.commit()
+                    toast_success(f"Budget '{budget_to_delete}' supprimé")
+                    refresh_and_rerun()
+
+        st.markdown("---")
         st.markdown("#### 📌 Budgets actuels")
 
         if df_budgets.empty:
@@ -5146,183 +5242,6 @@ def interface_portefeuille():
                 hide_index=True
             )
 
-        st.markdown("---")
-
-        col1, col2, col3 = st.columns([2, 1, 1])
-
-        with col1:
-            # Choix entre catégorie existante ou nouvelle
-            mode_ajout = st.radio(
-                "Mode",
-                ["Catégorie existante", "Nouvelle catégorie"],
-                horizontal=True,
-                key="mode_budget"
-            )
-
-            if mode_ajout == "Catégorie existante":
-                if categories_depenses:
-                    categorie_budget = st.selectbox(
-                        "Catégorie",
-                        categories_depenses,
-                        key="cat_budget_existante"
-                    )
-                else:
-                    st.warning("Aucune catégorie de dépense trouvée")
-                    categorie_budget = None
-            else:
-                categorie_budget = st.text_input(
-                    "Nom de la catégorie",
-                    key="cat_budget_nouvelle"
-                )
-
-        with col2:
-            montant_budget = st.number_input(
-                "Budget mensuel (€)",
-                min_value=0.0,
-                step=10.0,
-                value=100.0,
-                key="montant_budget"
-            )
-
-        with col3:
-            st.write("")  # Espacement
-            st.write("")  # Espacement
-            if st.button("💾 Enregistrer", type="primary", key="save_budget"):
-                if categorie_budget and categorie_budget.strip():
-                    try:
-                        cursor.execute("""
-                            INSERT INTO budgets_categories (categorie, budget_mensuel, date_creation, date_modification)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(categorie) DO UPDATE SET
-                                budget_mensuel = excluded.budget_mensuel,
-                                date_modification = excluded.date_modification
-                        """, (
-                            categorie_budget.strip(),
-                            montant_budget,
-                            datetime.now().isoformat(),
-                            datetime.now().isoformat()
-                        ))
-                        conn.commit()
-                        toast_success(f"Budget pour '{categorie_budget}' enregistré !")
-                        refresh_and_rerun()
-                    except Exception as e:
-                        toast_error(f"Erreur : {e}")
-                else:
-                    toast_warning("Veuillez sélectionner ou saisir une catégorie")
-
-        # Option de suppression
-        if not df_budgets.empty:
-            st.markdown("---")
-            st.markdown("#### 🗑️ Supprimer un budget")
-
-            col1, col2 = st.columns([2, 1])
-
-            with col1:
-                budget_to_delete = st.selectbox(
-                    "Catégorie à supprimer",
-                    df_budgets["categorie"].tolist(),
-                    key="budget_delete"
-                )
-
-            with col2:
-                st.write("")  # Espacement
-                st.write("")  # Espacement
-                if st.button("🗑️ Supprimer", type="secondary", key="delete_budget"):
-                    cursor.execute(
-                        "DELETE FROM budgets_categories WHERE categorie = ?",
-                        (budget_to_delete,)
-                    )
-                    conn.commit()
-                    toast_success(f"Budget '{budget_to_delete}' supprimé")
-                    refresh_and_rerun()
-
-        # ===== ANALYSE BUDGÉTAIRE FUSIONNÉE =====
-        st.markdown("---")
-        st.markdown("#### 📊 Analyse Budgétaire")
-
-        # Créer deux sous-onglets pour l'analyse
-        analysis_tab1, analysis_tab2 = st.tabs(["📅 Analyse Mensuelle", "📈 Analyse Historique"])
-
-        # ===== SOUS-ONGLET 1: ANALYSE MENSUELLE =====
-        with analysis_tab1:
-            df_monthly = analyze_monthly_budget_coverage()
-
-            if not df_monthly.empty:
-                st.dataframe(
-                    df_monthly,
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("💡 Pas assez de données pour l'analyse mensuelle")
-
-        # ===== SOUS-ONGLET 2: ANALYSE HISTORIQUE =====
-        with analysis_tab2:
-            df_history, months_count = analyze_budget_history()
-
-            if not df_history.empty:
-                st.dataframe(
-                    df_history,
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("💡 Pas de budget défini pour l'analyse historique")
-
-        # ===== MÉTRIQUES SIMPLIFIÉES =====
-        if not df_monthly.empty or not df_history.empty:
-            st.markdown("---")
-            st.markdown("**📈 Résumé Budgétaire:**")
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            # Métrique 1: Mois analysés
-            with col1:
-                try:
-                    total_mois = len(df_monthly) if not df_monthly.empty else 0
-                    st.metric("📅 Mois analysés", total_mois)
-                except:
-                    st.metric("📅 Période", "N/A")
-
-            # Métrique 2: Taux de suffisance (mois couverts)
-            with col2:
-                try:
-                    if not df_monthly.empty:
-                        mois_suffisants = len(df_monthly[df_monthly["Status"] == "✅ Revenus suffisants"])
-                        taux = (mois_suffisants / len(df_monthly) * 100) if len(df_monthly) > 0 else 0
-                        st.metric("✅ Taux de couverture", f"{taux:.0f}%")
-                    else:
-                        st.metric("✅ Couverture", "N/A")
-                except:
-                    st.metric("✅ Couverture", "N/A")
-
-            # Métrique 3: Solde moyen
-            with col3:
-                try:
-                    if not df_monthly.empty:
-                        df_temp = df_monthly.copy()
-                        df_temp["Solde (€)"] = df_temp["Solde (€)"].str.replace("€", "").str.strip().astype(float)
-                        solde_moyen = df_temp["Solde (€)"].mean()
-                        st.metric("💰 Solde moyen", f"{solde_moyen:.0f} €",
-                                  delta_color="inverse" if solde_moyen < 0 else "normal")
-                    else:
-                        st.metric("💰 Solde moyen", "N/A")
-                except:
-                    st.metric("💰 Solde moyen", "N/A")
-
-            # Métrique 4: Budgets respectés
-            with col4:
-                try:
-                    if not df_history.empty:
-                        respectes = len(df_history[df_history["Statut"] == "🟢 Respecté"])
-                        total = len(df_history)
-                        st.metric("🎯 Budgets respectés", f"{respectes}/{total}")
-                    else:
-                        st.metric("🎯 Budgets", "N/A")
-                except:
-                    st.metric("🎯 Budgets", "N/A")
-
-        # ===== DÉPENSES EXCEPTIONNELLES =====
         st.markdown("---")
         st.markdown("#### ⚠️ Dépenses Exceptionnelles (sans budget)")
         st.info("💡 Ces catégories n'ont pas de budget défini. Elles peuvent impacter votre solde.")
