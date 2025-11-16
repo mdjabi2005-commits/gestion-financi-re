@@ -21,9 +21,6 @@ from alpha_vantage.timeseries import TimeSeries
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
-from io import BytesIO
-from pathlib import Path
-from chardet import detect
 import logging
 import json
 import streamlit.components.v1 as components
@@ -47,7 +44,7 @@ st.markdown("""
 # ==============================
 # 📂 CONFIGURATION DES DOSSIERS
 # ==============================
-from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
+from config import  DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
 
 # Créer les dossiers de logs OCR
 OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
@@ -75,20 +72,7 @@ def log_pattern_occurrence(pattern_name: str):
 def log_ocr_scan(document_type: str, filename: str, montants_detectes: list, montant_choisi: float,
                  categorie: str, sous_categorie: str, patterns_detectes: list = None, success_level: str = "exact",
                  methode_detection: str = "UNKNOWN"):
-    """
-    Enregistre un scan OCR complet avec son résultat.
-
-    Args:
-        document_type: "ticket" ou "revenu"
-        filename: nom du fichier scanné
-        montants_detectes: liste des montants trouvés par l'OCR
-        montant_choisi: montant finalement choisi par l'utilisateur
-        categorie: catégorie de la transaction
-        sous_categorie: sous-catégorie de la transaction
-        patterns_detectes: liste des patterns détectés (optionnel)
-        success_level: "exact" (montant exact détecté), "partial" (dans la liste), "failed" (corrigé manuellement)
-        methode_detection: "A-PATTERNS", "B-PAIEMENT", "C-HT+TVA", "D-FALLBACK" ou combinaison
-    """
+   
     try:
         print(f"[OCR-LOG] Début enregistrement : {filename}, type={document_type}, success={success_level}")
 
@@ -315,16 +299,6 @@ def toast_error(message: str, duration=3000):
 
 @st.cache_data(ttl=300)
 def load_transactions(sort_by="date", ascending=False):
-    """
-    Charge toutes les transactions depuis la base SQLite avec tri et conversions sécurisées.
-    
-    Args:
-        sort_by (str): Colonne de tri ('date' ou 'montant')
-        ascending (bool): Ordre croissant (True) ou décroissant (False)
-    
-    Returns:
-        pd.DataFrame: DataFrame trié avec conversions sécurisées appliquées
-    """
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM transactions", conn)
     conn.close()
@@ -346,12 +320,6 @@ def load_transactions(sort_by="date", ascending=False):
 
 @st.cache_data(ttl=300)
 def load_recurrent_transactions():
-    """
-    Charge uniquement les transactions récurrentes automatiques avec conversions sécurisées.
-    
-    Returns:
-        pd.DataFrame: DataFrame des récurrences trié par date (plus récent en premier)
-    """
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM transactions WHERE source='récurrente_auto'", conn)
     conn.close()
@@ -372,10 +340,6 @@ def load_recurrent_transactions():
     return df
 
 def refresh_and_rerun():
-    """
-    Vide le cache des données et recharge la page.
-    À utiliser après toute modification de données (ajout, suppression, modification).
-    """
     st.cache_data.clear()
     st.rerun()
 
@@ -769,9 +733,6 @@ def validate_transaction_data(transaction):
     return errors
 #faire une fonction générique quip permet d'appliquer une taxe
 def apply_uber_tax(categorie, montant_brut, description=""):
-    """
-    Applique automatiquement la réduction de 21% pour les revenus Uber
-    """
     categorie_lower = str(categorie).lower().strip()
     description_lower = str(description).lower().strip()
     
@@ -796,9 +757,6 @@ def apply_uber_tax(categorie, montant_brut, description=""):
     return montant_brut, ""
 
 def process_uber_revenue(transaction):
-    """
-    Traitement spécialisé pour les revenus Uber
-    """
     montant_initial = safe_convert(transaction.get('montant', 0))
     categorie = transaction.get('categorie', '')
     
@@ -950,10 +908,6 @@ def numero_to_mois(num: str) -> str:
 # 🧠 OCR ET TRAITEMENT DE TICKET ET REVENU
 # ==============================
 def full_ocr(image_path: str, show_ticket: bool = False) -> str:
-    """
-    Effectue un OCR complet sur une image de ticket.
-    Version robuste + option d'affichage du ticket dans Streamlit.
-    """
     try:
         # --- Lecture robuste du fichier image ---
         image_data = np.fromfile(image_path, dtype=np.uint8)
@@ -995,27 +949,16 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
         return ""
 
 def nettoyer_montant(montant_str):
-    """
-    Nettoie et convertit un montant en float
-    Gère les virgules, espaces, symboles monétaires
-    """
     return safe_convert(montant_str, float, 0.0)
 
 # 🔥 FONCTIONS UTILITAIRES AMÉLIORÉES
 
 def trouver_fichiers_associes(transaction, base_dirs=[SORTED_DIR, REVENUS_TRAITES]):
-    """
-    Trouve les fichiers (images/PDF) associés à une transaction basée sur:
-    - Catégorie et sous-catégorie
-    - Date (approximative)
-    - Montant (approximatif)
-    """
     fichiers_trouves = []
     
     categorie = transaction.get("categorie", "").strip()
     sous_categorie = transaction.get("sous_categorie", "").strip()
     date_transaction = transaction.get("date", "")
-    montant = transaction.get("montant", 0.0)
     source = transaction.get("source", "")
     
     # Déterminer le dossier de recherche selon la source
@@ -1058,10 +1001,6 @@ def trouver_fichiers_associes(transaction, base_dirs=[SORTED_DIR, REVENUS_TRAITE
     return fichiers_trouves[:5]  # Limiter à 5 fichiers maximum
 
 def supprimer_fichiers_associes(transaction):
-    """
-    Supprime les fichiers PDF/OCR associés à une transaction
-    Retourne le nombre de fichiers supprimés
-    """
     fichiers = trouver_fichiers_associes(transaction)
     nb_supprimes = 0
 
@@ -1089,10 +1028,6 @@ def supprimer_fichiers_associes(transaction):
     return nb_supprimes
 
 def deplacer_fichiers_associes(transaction_old, transaction_new):
-    """
-    Déplace les fichiers associés si la catégorie, sous-catégorie ou date a changé
-    Retourne le nombre de fichiers déplacés
-    """
     # Vérifier si un déplacement est nécessaire
     cat_changed = transaction_old.get("categorie") != transaction_new.get("categorie")
     souscat_changed = transaction_old.get("sous_categorie") != transaction_new.get("sous_categorie")
@@ -1285,18 +1220,9 @@ def afficher_documents_associes(transaction):
                     )
 
 def normaliser_date(date_str):
-    """
-    Convertit une date (JJ/MM/AAAA, JJ/MM/AA, AAAA-MM-JJ, etc.)
-    en format ISO (AAAA-MM-JJ) pour la base SQLite.
-    """
     return safe_date_convert(date_str).isoformat()
 
 def insert_transaction_batch(transactions):
-    """
-    Insère plusieurs transactions dans la base SQLite.
-    Évite les doublons basés sur (type, categorie, sous_categorie, montant, date).
-    Version V2 avec validation et traitement Uber.
-    """
     if not transactions:
         return
     conn = get_db_connection()
@@ -1384,10 +1310,6 @@ def insert_transaction_batch(transactions):
         st.info(f"ℹ️ {skipped} doublon(s) détecté(s) et ignoré(s).")
 
 def get_montant_from_line(label_pattern, all_lines, allow_next_line=True):
-    """
-    Recherche un montant à partir d'un label (ex: 'TOTAL', 'MONTANT RÉEL', etc.)
-    Retourne (montant, pattern_matched) où pattern_matched indique si le pattern a vraiment été trouvé.
-    """
     montant_regex = r"(\d{1,5}[.,]?\d{0,2})\s*(?:€|eur|euros?)?"
 
     def clean_ocr_text(txt):
@@ -1428,11 +1350,6 @@ def get_montant_from_line(label_pattern, all_lines, allow_next_line=True):
     return (0.0, False)
 
 def parse_ticket_metadata(ocr_text: str):
-    """
-    Analyse un texte OCR de ticket pour extraire les montants (total, paiements, TVA),
-    et choisit le montant final par validation croisée.
-    Version V2 avec conversions sécurisées.
-    """
     lines = [l.strip() for l in ocr_text.split("\n") if l.strip()]
 
     def normalize_line(l):
@@ -1554,8 +1471,6 @@ def parse_ticket_metadata(ocr_text: str):
     }
 
 def move_ticket_to_sorted(ticket_path, categorie, sous_categorie):
-    """Déplace un ticket traité vers le dossier 'tickets_scannes' classé par catégorie/sous-catégorie.
-       Gère automatiquement les doublons en renommant les fichiers si nécessaire."""
     cat_dir = os.path.join(SORTED_DIR, categorie.strip())
     souscat_dir = os.path.join(cat_dir, sous_categorie.strip())
     os.makedirs(souscat_dir, exist_ok=True)
@@ -1586,12 +1501,6 @@ def extract_text_from_pdf(pdf_path):
         return ""
 
 def parse_uber_pdf(pdf_path: str) -> dict:
-    """
-    Parseur spécifique pour les PDF Uber.
-    Objectif : extraire le montant net (net earnings) et la date de fin de période de facturation.
-    Renvoie dict avec clés : montant (float), date (datetime.date), categorie, sous_categorie, source.
-    Version V2 avec application automatique du 79%.
-    """
     text = extract_text_from_pdf(pdf_path)
     if not text:
         return {
@@ -1684,11 +1593,6 @@ def parse_uber_pdf(pdf_path: str) -> dict:
     }
 
 def parse_fiche_paie(pdf_path: str) -> dict:
-    """
-    Parseur spécifique pour fiche de paie.
-    Objectif : trouver la période (ou la date concernée) et le net à payer.
-    Renvoie dict similaire à parse_uber_pdf.
-    """
     text = extract_text_from_pdf(pdf_path)
     if not text:
         return {"montant": 0.0, "date": datetime.now().date(), "categorie": "Revenu", "sous_categorie": "Salaire", "source": "PDF Fiche de paie"}
@@ -1757,10 +1661,6 @@ def parse_fiche_paie(pdf_path: str) -> dict:
     }
 
 def parse_pdf_dispatcher(pdf_path: str, source_type: str) -> dict:
-    """
-    Dispatcher simple pour choisir le parseur adapté.
-    source_type attendu : 'uber', 'fiche_paie', 'ticket' (ou 'auto' pour tentative heuristique).
-    """
     stype = source_type.lower().strip()
     if stype in ("uber", "uber_pdf", "uber eats"):
         return parse_uber_pdf(pdf_path)
@@ -1789,10 +1689,6 @@ def _inc(d, recurrence):
     return d
 
 def backfill_recurrences_to_today(db_path):
-    """
-    Pour chaque modèle 'récurrente', génère toutes les occurrences manquantes
-    (source='récurrente_auto') jusqu'à aujourd'hui (ou date_fin si elle existe).
-    """
     today = date.today()
 
     conn = get_db_connection()
@@ -2277,14 +2173,6 @@ def interface_accueil():
             st.info("Aucune transaction")
 
 def process_all_tickets_in_folder():
-    """
-    Traite tous les tickets du dossier TO_SCAN_DIR :
-    - OCR
-    - extraction montants / date / infos clés
-    - confirmation utilisateur
-    - insertion en base + déplacement
-    Version V2 avec conversions sécurisées.
-    """
     print("\n" + "="*60)
     print("[DEBUG] FONCTION process_all_tickets_in_folder APPELEE")
     print("="*60 + "\n")
@@ -2611,12 +2499,6 @@ def interface_process_all_revenues_in_folder():
 # 🔁 AJOUTER UNE TRANSACTION RÉCURRENTE V2
 # =============================
 def interface_transaction_recurrente(type_transaction="dépense"):
-    """
-    Interface unifiée pour créer une transaction récurrente (dépense ou revenu).
-
-    Args:
-        type_transaction: str - "dépense" ou "revenu"
-    """
     with st.form("ajouter_transaction_recurrente", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -3462,94 +3344,6 @@ def interface_voir_transactions_v3():
     st.markdown("---")
     with st.expander("🔁 Gérer les récurrences"):
         interface_gerer_recurrences()
-
-# ==============================
-# 💹 Sous onglet voir les investissement V2
-# ==============================
-def interface_voir_investissements_alpha():
-    st.subheader("📊 Performances de ton portefeuille (Trade Republic + Alpha Vantage) V2")
-
-    api_key = st.text_input("🔑 Entre ta clé API Alpha Vantage :", type="password")
-    if not api_key:
-        st.info("Entre ta clé API Alpha Vantage pour continuer.")
-        return
-    ts = TimeSeries(key=api_key, output_format='pandas')
-
-    uploaded_file = st.file_uploader("📥 Importer ton fichier CSV Trade Republic", type=["csv"])
-    if uploaded_file is None:
-        st.info("Importe ton CSV pour analyser ton portefeuille.")
-        return
-
-    df_tr = pd.read_csv(uploaded_file)
-    st.markdown("### 💼 Données importées depuis Trade Republic")
-    st.dataframe(df_tr, use_container_width=True, height=250)
-
-    required_cols = {"Ticker", "Quantité", "Prix d'achat (€)"}
-    if not required_cols.issubset(df_tr.columns):
-        toast_error(f"Le fichier doit contenir les colonnes : {', '.join(required_cols)}")
-        return
-
-    tickers = df_tr["Ticker"].dropna().unique().tolist()
-
-    st.markdown("### 📈 Données de marché en direct (Alpha Vantage)")
-    data = {}
-    for t in tickers:
-        try:
-            df, meta = ts.get_daily(symbol=t, outputsize='compact')
-            df = df.rename(columns={
-                '1. open': 'Open', '2. high': 'High',
-                '3. low': 'Low', '4. close': 'Close', 
-                '5. volume': 'Volume'
-            })
-            data[t] = df
-        except Exception as e:
-            logger.error(f"Alpha Vantage failed for {t}: {e}")
-            toast_warning(f"Impossible de récupérer {t} ({e})")
-
-    if not data:
-        st.warning("Aucune donnée récupérée depuis Alpha Vantage.")
-        return
-
-    results = []
-    for _, row in df_tr.iterrows():
-        t = row["Ticker"]
-        qte = safe_convert(row["Quantité"], float, 0.0)
-        prix_achat = safe_convert(row["Prix d'achat (€)"], float, 0.0)
-        if t not in data or data[t].empty:
-            continue
-        prix_actuel = data[t]['Close'].iloc[-1]
-        perf = ((prix_actuel - prix_achat) / prix_achat) * 100
-        valeur_totale = prix_actuel * qte
-        results.append({
-            "Symbole": t,
-            "Quantité": qte,
-            "Prix d'achat (€)": prix_achat,
-            "Cours actuel (€)": round(prix_actuel, 2),
-            "Performance (%)": round(perf, 2),
-            "Valeur totale (€)": round(valeur_totale, 2)
-        })
-
-    df_results = pd.DataFrame(results)
-    st.markdown("### 💹 Performance actuelle de ton portefeuille")
-    st.dataframe(df_results, use_container_width=True, height=300)
-
-    valeur_totale_portefeuille = df_results["Valeur totale (€)"].sum()
-    perf_moyenne = df_results["Performance (%)"].mean()
-    st.metric("💰 Valeur totale du portefeuille", f"{valeur_totale_portefeuille:,.2f} €", f"{perf_moyenne:.2f}%")
-
-    premier_titre = df_results["Symbole"].iloc[0] if not df_results.empty else None
-    if premier_titre and premier_titre in data:
-        st.markdown(f"### 📊 Évolution récente de {premier_titre}")
-        fig, ax = plt.subplots()
-        ax.plot(data[premier_titre].index, data[premier_titre]["Close"], label=premier_titre)
-        ax.set_title(f"Historique de {premier_titre}")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Cours (€)")
-        ax.legend()
-        st.pyplot(fig)
-
-    toast_success("Portefeuille analysé avec succès !")
-
 # ==============================
 # 📊 INTERFACE PRINCIPALE
 # ==============================
@@ -4633,14 +4427,6 @@ def interface_transactions_simplifiee():
 # =============================
 
 def analyze_budget_history():
-    """
-    Analyse l'historique des budgets depuis le début (première transaction).
-    Retourne un DataFrame avec:
-    - Dépenses totales par catégorie
-    - Nombre de mois écoulés
-    - Respect du budget historique
-    - Montant restant/dépassé pour respecter le budget
-    """
     df_transactions = load_transactions()
 
     conn = sqlite3.connect(DB_PATH)
@@ -4701,14 +4487,6 @@ def analyze_budget_history():
 
 
 def analyze_monthly_budget_coverage():
-    """
-    Analyse la couverture budgétaire mois par mois.
-    Pour chaque mois avec des transactions, affiche:
-    - Revenus du mois
-    - Budget total du mois
-    - Dépenses réelles du mois
-    - Status: Revenus suffisants ou insuffisants
-    """
     df_transactions = load_transactions()
 
     conn = sqlite3.connect(DB_PATH)
@@ -4743,10 +4521,9 @@ def analyze_monthly_budget_coverage():
         # Déterminer le status
         if revenus >= budget_total:
             status = "✅ Revenus suffisants"
-            couleur = "green"
         else:
             status = "⚠️ Revenus insuffisants"
-            couleur = "red"
+            
 
         # Calculer le solde
         solde = revenus - depenses
@@ -4764,11 +4541,6 @@ def analyze_monthly_budget_coverage():
 
 
 def normalize_recurrence_column():
-    """
-    Normalise la colonne recurrence en remplaçant 'ponctuelle' par NULL.
-    Cela assure la cohérence avec la nouvelle approche où les transactions
-    uniques ont une recurrence vide/NULL au lieu de 'ponctuelle'.
-    """
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -4789,15 +4561,6 @@ def normalize_recurrence_column():
 
 
 def get_period_start_date(period):
-    """
-    Calcule la date de début selon la période sélectionnée.
-
-    Args:
-        period: str - "Ce mois", "2 derniers mois", "3 derniers mois", "Depuis le début"
-
-    Returns:
-        date or None - Date de début (None = depuis le début)
-    """
     today = date.today()
 
     if period == "Ce mois":
@@ -4815,16 +4578,7 @@ def get_period_start_date(period):
 
 
 def calculate_months_in_period(start_date, end_date=None):
-    """
-    Calcule le nombre de mois dans une période.
 
-    Args:
-        start_date: date or None - Date de début (None = retourne 1)
-        end_date: date or None - Date de fin (None = aujourd'hui)
-
-    Returns:
-        int - Nombre de mois dans la période (minimum 1)
-    """
     if start_date is None:
         # Si pas de date de début (depuis le début), on ne peut pas calculer
         # On retournera le nombre de mois depuis la première transaction
@@ -4842,24 +4596,6 @@ def calculate_months_in_period(start_date, end_date=None):
 
 
 def analyze_exceptional_expenses(period_start_date=None):
-    """
-    Analyse complète des dépenses avec décomposition par budgets et exceptions.
-
-    Métriques calculées:
-    - SRR: Solde Revenus Réelle = somme de tous les revenus
-    - SBT: Solde Budget Théorique = somme de tous les budgets planifiés
-    - SRB: Solde Réel Budget = somme des dépenses pour catégories avec budget
-    - SE: Solde Exceptionnel = somme des dépenses sans budget
-    - SDR: Solde Dépense Réelle = SRB + SE (total dépenses)
-
-    Comparaisons:
-    - Écart budgets = SRB - SBT (positif = dépassement, négatif = économies)
-    - Capacité théorique = SRR - SBT (si positif, marge pour exceptions)
-    - Réalité = SRR - SDR (solde final réel)
-
-    Args:
-        period_start_date: date or None - Date de début du filtre (None = depuis le début)
-    """
     df_transactions = load_transactions()
 
     # Filtrer par période si fournie
@@ -5254,7 +4990,7 @@ def interface_portefeuille():
             elif ecart < 0:
                 st.metric("📉 Économies budgets", f"{abs(ecart):.2f} €", delta=f"✅ -{abs(ecart):.2f} €")
             else:
-                st.metric("✅ Budgets respectés", f"0.00 €", delta="Parfait!")
+                st.metric("✅ Budgets respectés", "0.00 €", delta="Parfait!")
 
         st.markdown("")
 
@@ -5273,7 +5009,7 @@ def interface_portefeuille():
                 pct_exceptional = (metrics['SE'] / metrics['SDR'] * 100)
                 st.metric("% exceptionnel", f"{pct_exceptional:.1f}%")
             else:
-                st.metric("% exceptionnel", f"0.0%")
+                st.metric("% exceptionnel", "0.0%")
 
         st.markdown("")
 
@@ -5286,24 +5022,24 @@ def interface_portefeuille():
             capacite = metrics['capacite_theorique']
             if capacite > 0:
                 st.metric("🎯 Marge pour exceptions (SRR-SBT)", f"{capacite:.2f} €",
-                         delta=f"✅ Marge positive")
+                         delta="✅ Marge positive")
             elif capacite < 0:
                 st.metric("🎯 Déficit théorique (SRR-SBT)", f"{capacite:.2f} €",
-                         delta=f"⚠️ Déficit")
+                         delta="⚠️ Déficit")
             else:
-                st.metric("🎯 Équilibre théorique", f"0.00 €")
+                st.metric("🎯 Équilibre théorique", "0.00 €")
 
         with col2:
             # Réalité = SRR - SDR
             solde = metrics['realite']
             if solde > 0:
-                st.metric("💰 Solde réel final (SRR-SDR)", f"{solde:.2f} €",
-                         delta=f"✅ Surplus")
+                st.metric("💰 Solde réel final (SRR-SDR)", "{solde:.2f} €",
+                         delta="✅ Surplus")
             elif solde < 0:
-                st.metric("💰 Solde réel final (SRR-SDR)", f"{solde:.2f} €",
-                         delta=f"⚠️ Déficit")
+                st.metric("💰 Solde réel final (SRR-SDR)", "{solde:.2f} €",
+                         delta="⚠️ Déficit")
             else:
-                st.metric("💰 Solde réel final", f"0.00 €")
+                st.metric("💰 Solde réel final", "0.00 €")
 
     # ===== ONGLET 2: OBJECTIFS =====
     with tab2:
