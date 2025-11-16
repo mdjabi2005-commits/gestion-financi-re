@@ -17,7 +17,6 @@ import streamlit as st
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
-from alpha_vantage.timeseries import TimeSeries
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
@@ -947,10 +946,6 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
         toast_error("Erreur OCR sur {os.path.basename(image_path)} : {e}")
         show_toast(f"Erreur OCR: {os.path.basename(image_path)}", toast_type="error")
         return ""
-
-def nettoyer_montant(montant_str):
-    return safe_convert(montant_str, float, 0.0)
-
 # 🔥 FONCTIONS UTILITAIRES AMÉLIORÉES
 
 def trouver_fichiers_associes(transaction, base_dirs=[SORTED_DIR, REVENUS_TRAITES]):
@@ -1218,9 +1213,6 @@ def afficher_documents_associes(transaction):
                         mime="application/pdf",
                         use_container_width=True
                     )
-
-def normaliser_date(date_str):
-    return safe_date_convert(date_str).isoformat()
 
 def insert_transaction_batch(transactions):
     if not transactions:
@@ -4117,21 +4109,8 @@ def interface_diagnostic():
            - ROI estimé
         """)
 
-# Liste de catégories valides connues (tu peux l'étendre à volonté)
-KNOWN_CATEGORIES = [
-    "essence", "alimentation", "supermarché", "carrefour", "auchan",
-    "restaurant", "boulangerie", "loisirs", "santé", "logement", "transport"
-]
 
-def correct_category_name(name):
-    """Corrige les fautes simples dans les noms de catégorie/sous-catégorie."""
-    if not name:
-        return name
-    name = name.lower().strip()
-    matches = get_close_matches(name, KNOWN_CATEGORIES, n=1, cutoff=0.8)
-    return matches[0] if matches else name
-
-# ==============================
+# =============================
 # 💸 INTERFACE FUSIONNÉE AJOUT MANUEL + IMPORT CSV
 # ==============================
 def interface_ajouter_depenses_fusionnee():
