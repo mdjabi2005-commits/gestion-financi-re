@@ -4871,6 +4871,69 @@ def analyze_budget_history():
     return pd.DataFrame(analysis), months_elapsed
 
 
+def analyze_monthly_budget_coverage():
+    """
+    Analyse la couverture budgétaire mois par mois.
+    Pour chaque mois avec des transactions, affiche:
+    - Revenus du mois
+    - Budget total du mois
+    - Dépenses réelles du mois
+    - Status: Revenus suffisants ou insuffisants
+    """
+    df_transactions = load_transactions()
+
+    conn = sqlite3.connect(DB_PATH)
+    df_budgets = pd.read_sql_query("SELECT * FROM budgets_categories", conn)
+    conn.close()
+
+    if df_transactions.empty or df_budgets.empty:
+        return pd.DataFrame()
+
+    # Convertir les dates
+    df_transactions["date"] = pd.to_datetime(df_transactions["date"])
+
+    # Créer une colonne année-mois
+    df_transactions["year_month"] = df_transactions["date"].dt.to_period("M")
+
+    # Récupérer tous les mois uniques avec transactions
+    mois_uniques = sorted(df_transactions["year_month"].unique())
+
+    analysis = []
+    budget_total = df_budgets["budget_mensuel"].sum()
+
+    for year_month in mois_uniques:
+        # Filtrer les transactions du mois
+        df_mois = df_transactions[df_transactions["year_month"] == year_month]
+
+        # Revenus du mois
+        revenus = df_mois[df_mois["type"] == "revenu"]["montant"].sum()
+
+        # Dépenses du mois
+        depenses = df_mois[df_mois["type"] == "dépense"]["montant"].sum()
+
+        # Déterminer le status
+        if revenus >= budget_total:
+            status = "✅ Revenus suffisants"
+            couleur = "green"
+        else:
+            status = "⚠️ Revenus insuffisants"
+            couleur = "red"
+
+        # Calculer le solde
+        solde = revenus - depenses
+
+        analysis.append({
+            "Mois": str(year_month),
+            "Revenus (€)": f"{revenus:.2f}",
+            "Budget total (€)": f"{budget_total:.2f}",
+            "Dépenses (€)": f"{depenses:.2f}",
+            "Solde (€)": f"{solde:.2f}",
+            "Status": status
+        })
+
+    return pd.DataFrame(analysis)
+
+
 def analyze_exceptional_expenses():
     """
     Analyse les dépenses exceptionnelles (catégories sans budget défini).
@@ -5021,13 +5084,29 @@ def interface_portefeuille():
 
                 # Calculer les dépenses du mois pour cette catégorie
                 if not df_transactions.empty:
-                    depenses_mois = df_transactions[
+                    # Dépenses non-récurrentes
+                    depenses_non_recurrentes = df_transactions[
                         (df_transactions["type"] == "dépense") &
                         (df_transactions["categorie"] == categorie) &
-                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois)
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois) &
+                        ((df_transactions["recurrence"].isna()) | (df_transactions["recurrence"] == ""))
                     ]["montant"].sum()
+
+                    # Dépenses récurrentes (backfill)
+                    depenses_recurrentes = df_transactions[
+                        (df_transactions["type"] == "dépense") &
+                        (df_transactions["categorie"] == categorie) &
+                        (pd.to_datetime(df_transactions["date"]).dt.date >= premier_jour_mois) &
+                        (df_transactions["recurrence"].notna()) &
+                        (df_transactions["recurrence"] != "")
+                    ]["montant"].sum()
+
+                    # Total dépenses
+                    depenses_mois = depenses_non_recurrentes + depenses_recurrentes
                 else:
                     depenses_mois = 0.0
+                    depenses_non_recurrentes = 0.0
+                    depenses_recurrentes = 0.0
 
                 # Calculer le pourcentage utilisé
                 if budget_mensuel > 0:
@@ -5052,7 +5131,9 @@ def interface_portefeuille():
                 budgets_display.append({
                     "Catégorie": f"{couleur} {categorie}",
                     "Budget (€)": f"{budget_mensuel:.2f}",
-                    "Dépensé (€)": f"{depenses_mois:.2f}",
+                    "Dépensé (€)": f"{depenses_non_recurrentes:.2f}",
+                    "Récurrences (€)": f"{depenses_recurrentes:.2f}",
+                    "Total (€)": f"{depenses_mois:.2f}",
                     "Reste (€)": f"{budget_mensuel - depenses_mois:.2f}",
                     "% utilisé": f"{pourcentage:.1f}%",
                     "État": status
@@ -5130,7 +5211,55 @@ def interface_portefeuille():
                 st.metric("Solde si on respecte le budget (€)", f"{solde_previsionnel:.2f}",
                           delta_color="inverse" if solde_previsionnel < 0 else "normal")
 
+        # ===== ANALYSE HISTORIQUE MENSUELLE =====
+        st.markdown("---")
+        st.markdown("#### 📅 Analyse mensuelle: Revenus vs Budget")
+        st.info("💡 Pour chaque mois, vérification si les revenus couvrent le budget total")
 
+        df_monthly = analyze_monthly_budget_coverage()
+
+        if not df_monthly.empty:
+            st.dataframe(
+                df_monthly,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # Statistiques récapitulatives
+            st.markdown("**Résumé historique:**")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                # Nombre de mois avec revenus suffisants
+                try:
+                    mois_suffisants = len(df_monthly[df_monthly["Status"] == "✅ Revenus suffisants"])
+                    total_mois = len(df_monthly)
+                    st.metric("Mois avec revenus suffisants", f"{mois_suffisants}/{total_mois}")
+                except:
+                    st.metric("Total des mois", len(df_monthly))
+
+            with col2:
+                # Solde moyen
+                try:
+                    df_monthly_copy = df_monthly.copy()
+                    df_monthly_copy["Solde (€)"] = df_monthly_copy["Solde (€)"].str.replace("€", "").str.strip().astype(float)
+                    solde_moyen = df_monthly_copy["Solde (€)"].mean()
+                    st.metric("Solde moyen mensuel (€)", f"{solde_moyen:.2f}",
+                              delta_color="inverse" if solde_moyen < 0 else "normal")
+                except:
+                    st.metric("Données disponibles", len(df_monthly))
+
+            with col3:
+                # Taux de couverture
+                try:
+                    taux_couverture = (mois_suffisants / total_mois * 100) if total_mois > 0 else 0
+                    st.metric("Taux de couverture", f"{taux_couverture:.1f}%")
+                except:
+                    st.metric("Périodes analysées", len(df_monthly))
+        else:
+            st.warning("📭 Pas assez de données pour l'analyse mensuelle")
+
+        st.markdown("---")
         st.markdown("#### ➕ Ajouter/Modifier un budget")
 
         col1, col2, col3 = st.columns([2, 1, 1])
