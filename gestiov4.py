@@ -2892,7 +2892,32 @@ def interface_transaction_recurrente():
         ]
 
         insert_transaction_batch(transactions)
+
+        # AUTO-CREATE BUDGET for this recurring expense
+        # Calculate monthly budget amount based on recurrence frequency
+        if recurrence == "hebdomadaire":
+            monthly_amount = montant * 4.33  # approximately 4.33 weeks per month
+        elif recurrence == "mensuelle":
+            monthly_amount = montant
+        elif recurrence == "annuelle":
+            monthly_amount = montant / 12
+
+        # Insert or update the budget for this category
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute("""
+            INSERT OR IGNORE INTO budgets_categories
+            (categorie, budget_mensuel, date_creation, date_modification)
+            VALUES (?, ?, ?, ?)
+        """, (safe_categorie, monthly_amount, now, now))
+
+        conn.commit()
+        conn.close()
+
         toast_success(f"Transaction récurrente ajoutée ({recurrence})")
+        st.success(f"✅ Budget auto-créé pour la catégorie '{safe_categorie}' : {monthly_amount:.2f}€/mois")
         st.info(f"{len(occurrences)} occurrence(s) passée(s) ajoutée(s).")
 
 
@@ -4952,10 +4977,15 @@ def analyze_exceptional_expenses():
     # Récupérer les catégories avec budget
     categories_avec_budget = set(df_budgets["categorie"].tolist()) if not df_budgets.empty else set()
 
-    # Filtrer les dépenses NON-RÉCURRENTES UNIQUEMENT
+    # Filtrer les dépenses NON-RÉCURRENTES UNIQUEMENT (exclut les vraies récurrences)
+    # Inclut: empty, None, ou "ponctuelle" (dépenses ponctuelles)
     df_depenses = df_transactions[
         (df_transactions["type"] == "dépense") &
-        ((df_transactions["recurrence"].isna()) | (df_transactions["recurrence"] == ""))
+        (
+            (df_transactions["recurrence"].isna()) |
+            (df_transactions["recurrence"] == "") |
+            (df_transactions["recurrence"] == "ponctuelle")
+        )
     ].copy()
 
     # Récupérer les catégories sans budget
