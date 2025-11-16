@@ -4,12 +4,13 @@ Module patterns - Partie de l'application gestiov4
 Généré automatiquement par migrate_to_modular.py
 """
 
-import re
-import pandas as pd
-from datetime import datetime
+import os
+import json
+import streamlit as st
 
 
-from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
+
+from config import  DATA_DIR
 # Créer les dossiers de logs OCR
 OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
 os.makedirs(OCR_LOGS_DIR, exist_ok=True)

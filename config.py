@@ -12,7 +12,7 @@ import os
 # ==============================
 
 # 📍 Dossier racine du projet
-BASE_DIR = r"C:\Users\djabi\gestion-financière"
+BASE_DIR = r"C:\Users\djabi\doc"
 
 # ==============================
 # 📁 Dossiers principaux

@@ -5,8 +5,9 @@ Généré automatiquement par migrate_to_modular.py
 """
 
 import sqlite3
-import os
+import logger
 from config import DB_PATH
+from ui.component import toast_error
 
 
 def get_db_connection():
