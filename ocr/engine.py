@@ -14,7 +14,6 @@ import numpy as np
 import re
 from config import BASE_DIR, DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
 from ocr.logging import log_pattern_occurrence
-from ui.components import toast_warning, toast_error, show_toast
 from utils.converters import safe_convert
 
 logger = logging.getLogger(__name__)
@@ -32,6 +31,9 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
     Effectue un OCR complet sur une image de ticket.
     Version robuste + option d'affichage du ticket dans Streamlit.
     """
+    # Import local pour éviter les imports circulaires
+    from ui.components import toast_warning, toast_error, show_toast
+
     try:
         # --- Lecture robuste du fichier image ---
         image_data = np.fromfile(image_path, dtype=np.uint8)
@@ -50,7 +52,7 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
         # Utilise fra+eng pour mieux reconnaître TOTAL, PAYMENT, AMOUNT, etc.
         text = pytesseract.image_to_string(pil_img, lang="fra+eng")
         text = text.replace("\x0c", "").strip()
-        
+
         # Log les langues détectées pour statistiques
         if text:
             log_pattern_occurrence("ocr_success_fra+eng")
@@ -68,19 +70,22 @@ def full_ocr(image_path: str, show_ticket: bool = False) -> str:
 
     except Exception as e:
         logger.error(f"OCR error on {image_path}: {e}")
-        toast_error("Erreur OCR sur {os.path.basename(image_path)} : {e}")
+        toast_error(f"Erreur OCR sur {os.path.basename(image_path)} : {e}")
         show_toast(f"Erreur OCR: {os.path.basename(image_path)}", toast_type="error")
         return ""
 
 
 def extract_text_from_pdf(pdf_path):
     """Lit un PDF et renvoie le texte brut."""
+    # Import local pour éviter les imports circulaires
+    from ui.components import toast_warning
     from pdfminer.high_level import extract_text
+
     try:
         return extract_text(pdf_path)
     except Exception as e:
         logger.warning(f"Impossible de lire le PDF {pdf_path} ({e})")
-        toast_warning("Impossible de lire le PDF {pdf_path} ({e})")
+        toast_warning(f"Impossible de lire le PDF {pdf_path} ({e})")
         return ""
 
 
