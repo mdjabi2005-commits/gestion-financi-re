@@ -52,3 +52,6 @@ data/ocr_logs/
 *.tmp
 *.bak
 *.cache
+
+# Backup files from migration
+*.backup_*
