@@ -8,8 +8,8 @@ import os
 import streamlit as st
 from datetime import datetime
 from typing import Optional
-
-from config import TO_SCAN_DIR, logger
+import logger
+from config import TO_SCAN_DIR
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
