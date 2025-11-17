@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional
-
-from config import DB_PATH, logger
+import logger
+from config import DB_PATH
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
     load_recurrent_transactions,

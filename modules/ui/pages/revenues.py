@@ -13,14 +13,15 @@ import re
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional, Dict, Any
-
-from config import REVENUS_A_TRAITER, REVENUS_TRAITES, logger
+import logger
+from config import REVENUS_A_TRAITER, REVENUS_TRAITES
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import process_uber_revenue
-from modules.ocr.parsers import parse_uber_pdf, parse_fiche_paie, numero_to_mois
+from modules.ocr.parsers import parse_uber_pdf, parse_fiche_paie
+from modules.utils.formatters import numero_to_mois
 from modules.ocr.logging import log_ocr_scan, determine_success_level
 
 

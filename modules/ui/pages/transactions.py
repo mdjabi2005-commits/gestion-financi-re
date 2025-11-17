@@ -13,8 +13,8 @@ import io
 import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional
-
-from config import DB_PATH, TO_SCAN_DIR, logger
+import logger
+from config import DB_PATH, TO_SCAN_DIR
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
     load_transactions,
@@ -22,15 +22,13 @@ from modules.ui.helpers import (
     insert_transaction_batch,
     refresh_and_rerun
 )
-from modules.ui.components import toast_success, toast_error, toast_warning
+from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
 from modules.services.file_service import (
     deplacer_fichiers_associes,
-    supprimer_fichiers_associes,
-    afficher_documents_associes,
-    get_badge_icon
+    supprimer_fichiers_associes
 )
 
 

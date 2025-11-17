@@ -17,8 +17,8 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, date
 from typing import Optional, Dict, Any
-
-from config import DB_PATH, logger
+import logger
+from config import DB_PATH
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import load_transactions, refresh_and_rerun
 from modules.ui.components import toast_success, toast_error, toast_warning
