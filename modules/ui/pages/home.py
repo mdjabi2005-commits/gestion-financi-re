@@ -16,7 +16,7 @@ from typing import Optional
 import logger
 from modules.ui.helpers import load_transactions
 from modules.ui.components import toast_error, toast_warning
-from modules.ui.helpers.utils import refresh_and_rerun
+from modules.ui.helpers import refresh_and_rerun
 
 
 def interface_accueil() -> None:
