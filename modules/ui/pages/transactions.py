@@ -13,8 +13,8 @@ import io
 import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional
-
-from config import DB_PATH, TO_SCAN_DIR, logger
+import logger
+from config import DB_PATH, TO_SCAN_DIR, 
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
     load_transactions,
