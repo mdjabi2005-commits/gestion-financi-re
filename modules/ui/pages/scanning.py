@@ -14,8 +14,8 @@ from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
-from modules.ocr.scanner import full_ocr, extract_text_from_pdf
-from modules.ocr.parsers import parse_ticket_metadata
+from modules.ocr.scanner import full_ocr
+from modules.ocr.parsers import parse_ticket_metadata, extract_text_from_pdf
 from modules.ocr.logging import log_ocr_scan, determine_success_level
 from modules.services.file_service import move_ticket_to_sorted
 
