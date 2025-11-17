@@ -13,8 +13,8 @@ import re
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional, Dict, Any
-
-from config import REVENUS_A_TRAITER, REVENUS_TRAITES, logger
+import logger
+from config import REVENUS_A_TRAITER, REVENUS_TRAITES
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
