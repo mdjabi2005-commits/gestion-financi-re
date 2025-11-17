@@ -39,15 +39,15 @@ def get_montant_from_line(
 
     def clean_ocr_text(txt: str) -> str:
         """Correct common OCR reading errors (O/0, I/1, etc.)."""
-        # Replace O with 0 ONLY in numeric context (surrounded by digits)
+        # Replace O with 0 ONLY in numeric context
         txt = re.sub(r'(\d)[Oo](\d)', r'\g<1>0\g<2>', txt)  # 1O5 → 105
         txt = re.sub(r'(\d)[Oo](?=\s|$|,|\.)', r'\g<1>0', txt)  # 1O → 10
-        txt = re.sub(r'(?<=\s|^|,|\.)[Oo](\d)', r'0\g<1>', txt)  # O5 → 05
+        txt = re.sub(r'(^|[\s,\.])[Oo](\d)', r'\g<1>0\g<2>', txt)  # O5 at start/after delimiter → 05
 
         # Replace I/l with 1 ONLY in numeric context
         txt = re.sub(r'(\d)[Il](\d)', r'\g<1>1\g<2>', txt)  # 2I5 → 215
         txt = re.sub(r'(\d)[Il](?=\s|$|,|\.)', r'\g<1>1', txt)  # 2I → 21
-        txt = re.sub(r'(?<=\s|^|,|\.)[Il](\d)', r'1\g<1>', txt)  # I5 → 15
+        txt = re.sub(r'(^|[\s,\.])[Il](\d)', r'\g<1>1\g<2>', txt)  # I5 at start/after delimiter → 15
 
         # Clean spaces
         txt = re.sub(r"[\u200b\s]+", " ", txt)
