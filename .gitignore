@@ -20,7 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Virtual Environment
 venv/
 ENV/
 env/
@@ -32,26 +32,29 @@ env/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Logs
+# Application Data
+gestion_financiere_data/
+*.db
 *.log
-gestio_app.log
-data/ocr_logs/
-
-# Database
-*.db-journal
+*.jsonl
+*.json
 
 # Streamlit
 .streamlit/
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
 # Temporary files
 *.tmp
 *.bak
-*.cache
+*.backup
 
-# Backup files from migration
-*.backup_*
+# OS
+Thumbs.db
+.DS_Store
