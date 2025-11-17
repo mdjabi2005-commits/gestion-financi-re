@@ -22,14 +22,13 @@ from modules.ui.helpers import (
     insert_transaction_batch,
     refresh_and_rerun
 )
-from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes
+from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
 from modules.services.file_service import (
     deplacer_fichiers_associes,
-    supprimer_fichiers_associes,
-    get_badge_icon
+    supprimer_fichiers_associes
 )
 
 
