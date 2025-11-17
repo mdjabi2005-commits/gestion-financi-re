@@ -200,8 +200,19 @@ def interface_accueil() -> None:
             # Tableau compact
             st.markdown("**📋 Résumé mensuel**")
             df_display = df_evolution.copy()
-            df_display["Solde"] = df_display.get("revenu", 0) - df_display.get("dépense", 0)
+
+            # Ensure both columns exist with default 0
+            if "dépense" not in df_display.columns:
+                df_display["dépense"] = 0
+            if "revenu" not in df_display.columns:
+                df_display["revenu"] = 0
+
+            # Calculate balance
+            df_display["Solde"] = df_display["revenu"] - df_display["dépense"]
+
+            # Reset index and rename columns properly
             df_display = df_display.reset_index()
+            df_display = df_display[["mois_str", "dépense", "revenu", "Solde"]]
             df_display.columns = ["Mois", "Dépenses", "Revenus", "Solde"]
 
             st.dataframe(
