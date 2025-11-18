@@ -101,13 +101,8 @@ def main():
             "Navigation",
             [
                 "🏠 Accueil",
-                "💳 Transactions",
-                "➕ Ajouter Dépense",
+                "💳 Transactions,
                 "📊 Voir Transactions",
-                "📸 Scanner Tickets",
-                "💵 Ajouter Revenu",
-                "📁 Scanner Revenus (Dossier)",
-                "🔄 Transaction Récurrente",
                 "⚙️ Gérer Récurrences",
                 "💼 Portefeuille",
                 "🔍 Analyse OCR"
