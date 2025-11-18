@@ -22,6 +22,7 @@ LOG_PATH = os.path.join(OCR_LOGS_DIR, "pattern_log.json")
 OCR_PERFORMANCE_LOG = os.path.join(OCR_LOGS_DIR, "performance_stats.json")
 PATTERN_STATS_LOG = os.path.join(OCR_LOGS_DIR, "pattern_stats.json")
 OCR_SCAN_LOG = os.path.join(OCR_LOGS_DIR, "scan_history.jsonl")
+POTENTIAL_PATTERNS_LOG = os.path.join(OCR_LOGS_DIR, "potential_patterns.jsonl")
 
 # Create directories
 for directory in [DATA_DIR, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER,

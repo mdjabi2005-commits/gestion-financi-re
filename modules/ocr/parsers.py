@@ -74,6 +74,61 @@ def get_montant_from_line(
     return (0.0, False)
 
 
+def detect_potential_patterns(ocr_text: str, known_patterns: List[str]) -> List[Dict[str, Any]]:
+    """
+    Detect potential new patterns in OCR text that might contain amounts.
+
+    This function helps improve the OCR system by identifying amount labels
+    that are not yet in our known patterns list.
+
+    Args:
+        ocr_text: Raw OCR text
+        known_patterns: List of known pattern regexes
+
+    Returns:
+        List of potential patterns found, each containing:
+        - pattern: The detected label/keyword
+        - line: The complete line containing the pattern
+        - amount: The associated amount
+        - context: Surrounding text
+    """
+    lines = [l.strip() for l in ocr_text.split("\n") if l.strip()]
+    montant_regex = r"(\d{1,5}[.,]\d{1,2})\s*(?:€|eur|euros?)?"
+    potential_patterns = []
+
+    for line in lines:
+        # Find amounts in this line
+        amounts = re.findall(montant_regex, line, re.IGNORECASE)
+        if not amounts:
+            continue
+
+        # Extract the text before the amount (potential label)
+        # Look for 1-4 words before the amount
+        label_pattern = r"(\b[\w\-À-ÿ]+(?:\s+[\w\-À-ÿ]+){0,3})\s*[:=\-–]?\s*\d{1,5}[.,]\d{1,2}"
+        label_matches = re.findall(label_pattern, line, re.IGNORECASE)
+
+        for label in label_matches:
+            label_clean = label.strip().upper()
+
+            # Check if this label matches any known pattern
+            is_known = False
+            for known in known_patterns:
+                if re.search(known, label_clean, re.IGNORECASE):
+                    is_known = True
+                    break
+
+            # If not known, this is a potential new pattern
+            if not is_known and len(label_clean) >= 2:
+                potential_patterns.append({
+                    "pattern": label_clean,
+                    "line": line.strip(),
+                    "amount": amounts[0] if amounts else None,
+                    "raw_label": label.strip()
+                })
+
+    return potential_patterns
+
+
 def parse_ticket_metadata(ocr_text: str) -> Dict[str, Any]:
     """
     Extract metadata from receipt OCR text using multiple detection methods.
@@ -202,6 +257,15 @@ def parse_ticket_metadata(ocr_text: str) -> Dict[str, Any]:
         l for l in lines if any(re.search(p, l, re.IGNORECASE) for p in total_patterns + paiement_patterns)
     ]
 
+    # === DETECT POTENTIAL NEW PATTERNS ===
+    # Combine all known patterns for detection
+    all_known_patterns = total_patterns + paiement_patterns + [r"HT", r"NET", r"TVA", r"T\.V\.A"]
+    potential_new_patterns = detect_potential_patterns(ocr_text, all_known_patterns)
+
+    # === Determine reliability ===
+    # Fallback method is unreliable - mark amounts detected ONLY by fallback as not reliable
+    is_reliable = methode_detection != "D-FALLBACK" and methode_detection != "AUCUNE"
+
     # === Final result ===
     montants_possibles = sorted(set(candidats), reverse=True)
     return {
@@ -210,6 +274,8 @@ def parse_ticket_metadata(ocr_text: str) -> Dict[str, Any]:
         "date": detected_date,
         "infos": "\n".join(key_lines),
         "methode_detection": methode_detection,
+        "fiable": is_reliable,  # NEW: Mark fallback-only detections as unreliable
+        "patterns_potentiels": potential_new_patterns,  # NEW: Potential patterns for improvement
         "debug_info": {
             "methode_A": montants_A,
             "methode_B": somme_B,

@@ -16,7 +16,7 @@ from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.ocr.scanner import full_ocr
 from modules.ocr.parsers import parse_ticket_metadata, extract_text_from_pdf, move_ticket_to_sorted
-from modules.ocr.logging import log_ocr_scan, determine_success_level
+from modules.ocr.logging import log_ocr_scan, determine_success_level, log_potential_patterns
 
 
 def process_all_tickets_in_folder() -> None:
@@ -91,6 +91,17 @@ def process_all_tickets_in_folder() -> None:
         key_info = data.get("infos", "")
         methode_detection = data.get("methode_detection", "UNKNOWN")
         debug_info = data.get("debug_info", {})
+        potential_patterns = data.get("patterns_potentiels", [])
+        is_reliable = data.get("fiable", True)
+
+        # Log potential new patterns for future improvements
+        if potential_patterns:
+            log_potential_patterns(
+                filename=ticket_file,
+                potential_patterns=potential_patterns,
+                montant_final=montant_final,
+                methode_detection=methode_detection
+            )
 
         # Afficher la méthode de détection
         print(f"\n[OCR-DETECTION] Ticket: {ticket_file}")
@@ -117,6 +128,20 @@ def process_all_tickets_in_folder() -> None:
             sous_categorie_auto = "Autre"
 
         st.markdown(f"🧠 **Catégorie auto-détectée :** {categorie_auto} → {sous_categorie_auto}")
+
+        # Warn if amount detected by fallback method (unreliable)
+        if not is_reliable:
+            st.warning(
+                f"⚠️ **Montant peu fiable** : Détecté par méthode fallback ({methode_detection}). "
+                "Veuillez vérifier et corriger le montant manuellement."
+            )
+
+        # Show potential new patterns if found
+        if potential_patterns:
+            with st.expander(f"🔍 Patterns potentiels détectés ({len(potential_patterns)})"):
+                st.caption("Ces patterns pourraient être ajoutés au système de détection :")
+                for p in potential_patterns[:5]:  # Show max 5
+                    st.code(f"{p.get('pattern')} : {p.get('amount')} → {p.get('line')}")
 
         with st.expander("📜 Aperçu OCR (lignes clés)"):
             st.text(key_info)
