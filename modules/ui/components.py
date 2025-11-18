@@ -364,3 +364,292 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
                         mime="application/pdf",
                         use_container_width=True
                     )
+
+
+# ==============================
+# 🔵 BUBBLE FILTER COMPONENT
+# ==============================
+
+import pandas as pd
+from typing import List, Tuple
+
+def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+    """
+    Render interactive bubble filter for transactions with drill-down support.
+
+    Features:
+    - Display categories as clickable bubbles
+    - Multi-selection with session state
+    - Bubble size proportional to total amount
+    - Bubble color based on type (expense=red, revenue=green)
+    - Drill-down into subcategories
+    - Breadcrumb navigation
+    - Clear all filters button
+
+    Args:
+        df: DataFrame with transaction data
+
+    Returns:
+        Tuple of (selected_categories, selected_subcategories) for filtering
+
+    Example:
+        >>> df = load_transactions()
+        >>> categories, subcategories = render_bubble_filter(df)
+        >>> filtered = df[df['categorie'].isin(categories)]
+    """
+
+    # Initialize session state
+    if 'bubble_drill_level' not in st.session_state:
+        st.session_state.bubble_drill_level = 'categories'
+    if 'bubble_current_category' not in st.session_state:
+        st.session_state.bubble_current_category = None
+    if 'bubble_selected_categories' not in st.session_state:
+        st.session_state.bubble_selected_categories = []
+    if 'bubble_selected_subcategories' not in st.session_state:
+        st.session_state.bubble_selected_subcategories = []
+
+    # Inject bubble styles
+    bubble_css = """
+    <style>
+    .bubble-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 15px 0;
+        justify-content: flex-start;
+    }
+
+    .bubble {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 15px 20px;
+        border-radius: 25px;
+        border: 2px solid #ddd;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        font-size: 0.9em;
+        user-select: none;
+        background-color: #f8f9fa;
+        min-width: 80px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .bubble:hover {
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .bubble-selected {
+        border: 3px solid #4CAF50;
+        background: #e8f5e9;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .bubble-amount {
+        font-size: 0.8em;
+        opacity: 0.8;
+        margin-top: 4px;
+    }
+
+    .bubble-checkmark {
+        margin-right: 6px;
+        color: #4CAF50;
+        font-weight: bold;
+    }
+
+    .breadcrumb {
+        margin-bottom: 15px;
+        padding: 8px 0;
+        font-size: 0.95em;
+    }
+
+    .breadcrumb-item {
+        display: inline-block;
+        margin-right: 8px;
+        padding: 4px 8px;
+        background: #e8e9eb;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .breadcrumb-item:hover {
+        background: #d4d5d7;
+    }
+
+    .breadcrumb-item.active {
+        background: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+    """
+    st.markdown(bubble_css, unsafe_allow_html=True)
+
+    # Section header
+    st.subheader("🔍 Filtres par Bulles")
+
+    # Calculate stats by category/type
+    df_copy = df.copy()
+    df_copy['type'] = df_copy['type'].str.lower().str.strip()
+
+    # ===== CATEGORIES VIEW =====
+    if st.session_state.bubble_drill_level == 'categories':
+        # Get unique categories with their stats
+        categories_stats = df_copy.groupby('categorie').agg({
+            'montant': 'sum',
+            'type': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'dépense'
+        }).reset_index()
+        categories_stats.columns = ['categorie', 'total_montant', 'predominant_type']
+        categories_stats = categories_stats.sort_values('total_montant', ascending=False)
+
+        # Find min/max for bubble size calculation
+        min_amount = categories_stats['total_montant'].min()
+        max_amount = categories_stats['total_montant'].max()
+        amount_range = max(max_amount - min_amount, 1)  # Avoid division by 0
+
+        # Create breadcrumb
+        st.markdown("**📍 Catégories principales**", unsafe_allow_html=True)
+
+        # Clear all button
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("🔄 Effacer tous", key="clear_all_bubbles"):
+                st.session_state.bubble_selected_categories = []
+                st.session_state.bubble_selected_subcategories = []
+                st.rerun()
+
+        # Render category bubbles
+        col_count = 0
+        cols = st.columns(4)
+
+        for idx, row in categories_stats.iterrows():
+            cat_name = row['categorie']
+            total = row['total_montant']
+            cat_type = row['predominant_type']
+
+            # Calculate bubble size factor (scaling between 0.8 and 1.4)
+            size_factor = 0.8 + 0.6 * ((total - min_amount) / amount_range)
+
+            # Determine color based on type
+            if cat_type == 'revenu':
+                bubble_color = '#c8e6c9'
+                bubble_border = '#4CAF50'
+            else:
+                bubble_color = '#ffcdd2'
+                bubble_border = '#f44336'
+
+            is_selected = cat_name in st.session_state.bubble_selected_categories
+
+            bubble_html = f"""
+            <div class="bubble {'bubble-selected' if is_selected else ''}"
+                 style="background-color: {'#e8f5e9' if is_selected and cat_type == 'revenu' else '#ffebee' if is_selected else bubble_color};
+                        border-color: {bubble_border};
+                        transform: scale({size_factor});">
+                <div style="font-weight: bold;">{'✓ ' if is_selected else ''}{cat_name}</div>
+                <div class="bubble-amount">{total:.0f} €</div>
+            </div>
+            """
+
+            with cols[col_count % 4]:
+                col_inner1, col_inner2 = st.columns([3, 1])
+
+                with col_inner1:
+                    if st.button(bubble_html, key=f"bubble_cat_{cat_name}", use_container_width=True):
+                        # Toggle selection
+                        if cat_name in st.session_state.bubble_selected_categories:
+                            st.session_state.bubble_selected_categories.remove(cat_name)
+                        else:
+                            st.session_state.bubble_selected_categories.append(cat_name)
+                        st.rerun()
+
+                with col_inner2:
+                    if st.button("📂", key=f"drill_cat_{cat_name}", help="Voir sous-catégories", use_container_width=True):
+                        st.session_state.bubble_drill_level = 'subcategories'
+                        st.session_state.bubble_current_category = cat_name
+                        st.rerun()
+
+            col_count += 1
+
+    # ===== SUBCATEGORIES VIEW =====
+    elif st.session_state.bubble_drill_level == 'subcategories':
+        current_cat = st.session_state.bubble_current_category
+
+        # Create breadcrumb with back button
+        col1, col2, col3 = st.columns([1, 4, 1])
+        with col1:
+            if st.button("⬅️ Retour", key="back_to_categories"):
+                st.session_state.bubble_drill_level = 'categories'
+                st.session_state.bubble_current_category = None
+                st.rerun()
+
+        with col2:
+            st.markdown(f"**📍 Sous-catégories de _{current_cat}_**", unsafe_allow_html=True)
+
+        # Filter by parent category
+        df_filtered = df_copy[df_copy['categorie'] == current_cat]
+
+        # Get subcategories
+        subcats_stats = df_filtered.groupby('sous_categorie').agg({
+            'montant': 'sum',
+            'type': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'dépense'
+        }).reset_index()
+        subcats_stats.columns = ['sous_categorie', 'total_montant', 'predominant_type']
+        subcats_stats = subcats_stats.sort_values('total_montant', ascending=False)
+
+        # Find min/max for bubble size
+        min_amount = subcats_stats['total_montant'].min()
+        max_amount = subcats_stats['total_montant'].max()
+        amount_range = max(max_amount - min_amount, 1)
+
+        # Render subcategory bubbles
+        col_count = 0
+        cols = st.columns(4)
+
+        for idx, row in subcats_stats.iterrows():
+            subcat_name = row['sous_categorie']
+            total = row['total_montant']
+            subcat_type = row['predominant_type']
+
+            # Size factor
+            size_factor = 0.8 + 0.6 * ((total - min_amount) / amount_range)
+
+            # Color based on type
+            if subcat_type == 'revenu':
+                bubble_color = '#c8e6c9'
+                bubble_border = '#4CAF50'
+            else:
+                bubble_color = '#ffcdd2'
+                bubble_border = '#f44336'
+
+            is_selected = subcat_name in st.session_state.bubble_selected_subcategories
+
+            bubble_html = f"""
+            <div class="bubble {'bubble-selected' if is_selected else ''}"
+                 style="background-color: {'#e8f5e9' if is_selected and subcat_type == 'revenu' else '#ffebee' if is_selected else bubble_color};
+                        border-color: {bubble_border};
+                        transform: scale({size_factor});">
+                <div style="font-weight: bold;">{'✓ ' if is_selected else ''}{subcat_name}</div>
+                <div class="bubble-amount">{total:.0f} €</div>
+            </div>
+            """
+
+            with cols[col_count % 4]:
+                if st.button(bubble_html, key=f"bubble_subcat_{subcat_name}", use_container_width=True):
+                    # Toggle selection
+                    if subcat_name in st.session_state.bubble_selected_subcategories:
+                        st.session_state.bubble_selected_subcategories.remove(subcat_name)
+                    else:
+                        st.session_state.bubble_selected_subcategories.append(subcat_name)
+                    st.rerun()
+
+            col_count += 1
+
+    return (
+        st.session_state.bubble_selected_categories,
+        st.session_state.bubble_selected_subcategories
+    )

@@ -23,7 +23,7 @@ from modules.ui.helpers import (
     refresh_and_rerun
 )
 
-from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon
+from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon, render_bubble_filter
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
@@ -433,19 +433,20 @@ def interface_voir_transactions_v3() -> None:
         if st.button("🔄", help="Actualiser"):
             refresh_and_rerun()
 
-    # Filtres supplémentaires (simplifiés)
-    col1, col2, col3 = st.columns(3)
+    # Filtres supplémentaires simples (type + mode affichage)
+    col1, col2 = st.columns([2, 2])
 
     with col1:
         type_filter = st.selectbox("Type", ["Toutes", "Dépense", "Revenu"], key="type_v3")
 
     with col2:
-        categories = ["Toutes"] + sorted(df["categorie"].dropna().unique().tolist())
-        cat_filter = st.selectbox("Catégorie", categories, key="cat_v3")
-
-    with col3:
         # Mode affichage
         mode_affichage = st.selectbox("Mode", ["👁️ Consultation", "✏️ Édition"], key="mode_v3")
+
+    st.markdown("---")
+
+    # === FILTRE PAR BULLES (CATÉGORIES + SOUS-CATÉGORIES) ===
+    selected_categories, selected_subcategories = render_bubble_filter(df)
 
     st.markdown("---")
 
@@ -466,9 +467,14 @@ def interface_voir_transactions_v3() -> None:
     elif type_filter == "Revenu":
         df_filtered = df_filtered[df_filtered["type"] == "revenu"]
 
-    # Filtre catégorie
-    if cat_filter != "Toutes":
-        df_filtered = df_filtered[df_filtered["categorie"] == cat_filter]
+    # Filtre bulles (catégories et sous-catégories sélectionnées)
+    if selected_categories or selected_subcategories:
+        # Si des catégories sont sélectionnées, filtrer par catégories
+        if selected_categories:
+            df_filtered = df_filtered[df_filtered["categorie"].isin(selected_categories)]
+        # Si des sous-catégories sont sélectionnées (et on a drill-down actif), filtrer par sous-catégories
+        if selected_subcategories:
+            df_filtered = df_filtered[df_filtered["sous_categorie"].isin(selected_subcategories)]
 
     # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
     df_filtered = df_filtered.sort_values("date", ascending=False).reset_index(drop=True)
