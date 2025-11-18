@@ -131,8 +131,7 @@ def interface_transactions_simplifiee() -> None:
         st.subheader("💸 Ajouter une Transaction")
 
         # Import revenue function to avoid circular imports
-        from .transactions import  interface_transactions_simplifiee
-        interface_transactions_simplifiee()
+        interface_ajouter_depenses_fusionnee() 
 
 
 def interface_ajouter_depenses_fusionnee() -> None:
