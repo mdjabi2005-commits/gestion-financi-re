@@ -128,8 +128,7 @@ def interface_transactions_simplifiee() -> None:
 
     # === REVENU (NON-RÉCURRENT) ===
     elif type_action == "💸 Ajouter une Transaction":
-        st.subheader("💸 Ajouter une Transaction")
-
+        
         # Import revenue function to avoid circular imports
         interface_ajouter_depenses_fusionnee() 
 
