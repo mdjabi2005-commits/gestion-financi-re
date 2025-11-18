@@ -171,15 +171,6 @@ def interface_ajouter_depenses_fusionnee() -> None:
                 montant = st.number_input("💰 Montant (€)", min_value=0.0, step=0.01, format="%.2f")
                 desc = st.text_input("📝 Description", placeholder="Ex: Carrefour")
 
-            # Checkbox Uber (uniquement si type=revenu et catégorie contient "uber")
-            # Note: On ne peut pas détecter dynamiquement dans le formulaire
-            # L'utilisateur doit cocher manuellement si c'est Uber
-            apply_uber_tax = st.checkbox(
-                "🚗 Appliquer la taxe Uber (21%) pour ce revenu ?",
-                value=False,
-                help="Cochez cette case uniquement si c'est un revenu Uber. La taxe de 21% sera appliquée automatiquement. ⚠️ Ne pas ajouter les dépenses URSSAF séparément."
-            )
-
             valider = st.form_submit_button("✅ Ajouter la transaction", type="primary")
 
         if valider:
@@ -196,16 +187,19 @@ def interface_ajouter_depenses_fusionnee() -> None:
                     "source": "manuel"
                 }
 
-                # Apply Uber tax only if user checked the box AND it's a revenue
-                if type_tr == "revenu" and apply_uber_tax:
-                    # Verify it's actually an Uber transaction
-                    if is_uber_transaction(cat, desc):
-                        transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=True)
-                        if uber_msg:
-                            st.success(uber_msg)
-                    else:
-                        # User checked Uber but it's not detected as Uber
-                        st.warning("⚠️ Case 'Uber' cochée mais la catégorie ne contient pas 'Uber'. Aucune taxe appliquée.")
+                # Process Uber revenue if applicable (with confirmation)
+                if  is_uber_transaction(cat, desc):
+                    apply_tax = st.checkbox(
+                        "✅ Appliquer la taxe Uber (21%) ?",
+                        value=True,
+                        key="apply_uber_tax_manual",
+                        help="Si coché, applique automatiquement le prélèvement de 21%. Ne pas ajouter les dépenses URSSAF séparément."
+                    )
+                    transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=apply_tax)
+                    if uber_msg:
+                        st.info(uber_msg)
+                elif type_tr == "revenu":
+                    transaction_data, _ = process_uber_revenue(transaction_data, apply_tax=False)
 
                 insert_transaction_batch([transaction_data])
                 toast_success(f"✅ Transaction ajoutée : {cat} — {transaction_data['montant']:.2f} €")
@@ -357,6 +351,7 @@ revenu,2024-01-15,freelance,mission,450.00,Projet X"""
             except Exception as e:
                 st.error(f"❌ Erreur lors de la lecture du fichier : {e}")
                 st.caption("Vérifiez que le fichier respecte bien le format du modèle")
+
 
 
 def interface_voir_transactions_v3() -> None:
