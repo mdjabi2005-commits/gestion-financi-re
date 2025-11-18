@@ -18,31 +18,41 @@ logger = logging.getLogger(__name__)
 
 def is_uber_transaction(categorie: str, description: str = "") -> bool:
     """
-    Check if a transaction is Uber-related (strict detection).
+    Check if a transaction is Uber-related (strict word-boundary detection).
 
-    Only detects transactions with "uber" keyword (case-insensitive).
-    This is strict to avoid false positives with other delivery services.
+    Only detects transactions with "uber" as a complete word (case-insensitive).
+    This prevents false positives like "Aubergine" or "Bourse".
 
     Args:
         categorie: Transaction category name
         description: Transaction description
 
     Returns:
-        True if transaction contains "uber" keyword
+        True if transaction contains "uber" as a whole word
 
     Example:
         >>> is_uber_transaction("Uber Eats")
         True
         >>> is_uber_transaction("UBER")
         True
-        >>> is_uber_transaction("Deliveroo")
+        >>> is_uber_transaction("Aubergine")
+        False
+        >>> is_uber_transaction("Bourse")
         False
     """
+    import re
+
     categorie_lower = str(categorie).lower().strip()
     description_lower = str(description).lower().strip()
 
-    # Strict detection: only "uber" keyword
-    return 'uber' in categorie_lower or 'uber' in description_lower
+    # Strict detection: "uber" as a whole word (word boundaries)
+    # \b ensures "uber" is not part of another word
+    pattern = r'\buber\b'
+
+    return (
+        bool(re.search(pattern, categorie_lower)) or
+        bool(re.search(pattern, description_lower))
+    )
 
 
 def apply_uber_tax(
