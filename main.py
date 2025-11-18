@@ -54,7 +54,8 @@ from modules.ui.pages import (
     interface_transactions_simplifiee,
     interface_voir_transactions_v3,
     interface_portefeuille,
-    interface_ocr_analysis_complete
+    interface_ocr_analysis_complete,
+    render_problematic_tickets_page
 )
 
 # ==============================
@@ -105,7 +106,8 @@ def main():
                 "📊 Voir Transactions",
                 "⚙️ Gérer Récurrences",
                 "💼 Portefeuille",
-                "🔍 Analyse OCR"
+                "🔍 Analyse OCR",
+                "🔧 Tickets Problématiques"
             ]
         )
 
@@ -143,6 +145,9 @@ def main():
 
         elif page == "🔍 Analyse OCR":
             interface_ocr_analysis_complete()
+
+        elif page == "🔧 Tickets Problématiques":
+            render_problematic_tickets_page()
 
     except Exception as e:
         logger.critical(f"Application V4 failed: {e}", exc_info=True)

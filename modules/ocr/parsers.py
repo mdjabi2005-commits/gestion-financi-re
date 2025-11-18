@@ -10,7 +10,7 @@ from typing import Dict, Tuple, List, Optional, Any
 from dateutil import parser
 from pdfminer.high_level import extract_text
 
-from config import SORTED_DIR
+from config import SORTED_DIR, PROBLEMATIC_DIR
 from modules.utils import safe_convert
 
 logger = logging.getLogger(__name__)
@@ -127,6 +127,94 @@ def detect_potential_patterns(ocr_text: str, known_patterns: List[str]) -> List[
                 })
 
     return potential_patterns
+
+
+def test_patterns_on_ticket(
+    ocr_text: str,
+    additional_patterns: List[str]
+) -> Dict[str, Any]:
+    """
+    Test additional patterns on a ticket to see if detection improves.
+
+    This function allows testing new patterns discovered in potential_patterns.jsonl
+    to validate whether they improve detection accuracy before adding them permanently.
+
+    Args:
+        ocr_text: Raw OCR text from the ticket
+        additional_patterns: List of additional regex patterns to test
+
+    Returns:
+        Dictionary containing:
+        - original_result: Result with standard patterns only
+        - test_result: Result with additional patterns included
+        - improvement: Whether the new patterns improved detection
+        - comparison: Detailed comparison of methods
+
+    Example:
+        >>> patterns = [r"PAYÉ", r"SOLDE"]
+        >>> result = test_patterns_on_ticket(ocr_text, patterns)
+        >>> if result['improvement']:
+        ...     print(f"New patterns improved detection: {result['comparison']}")
+    """
+    # First, get original detection with standard patterns
+    original_result = parse_ticket_metadata(ocr_text)
+
+    # Now test with additional patterns by temporarily modifying the detection
+    lines = [l.strip() for l in ocr_text.split("\n") if l.strip()]
+
+    def normalize_line(l: str) -> str:
+        return l.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1").strip()
+
+    lines = [normalize_line(l) for l in lines]
+    montant_regex = r"(\d{1,5}[.,]\d{1,2})"
+
+    # Test additional patterns
+    montants_new = []
+    patterns_new_matches = []
+    for pattern in additional_patterns:
+        montant, matched = get_montant_from_line(pattern, lines)
+        if matched and montant > 0:
+            montants_new.append(round(montant, 2))
+            patterns_new_matches.append(pattern)
+
+    # Create test result
+    test_result = {
+        "montants_from_new_patterns": montants_new,
+        "patterns_matched": patterns_new_matches,
+        "montant_original": original_result.get("montant", 0.0),
+        "montant_with_new": montants_new[0] if montants_new else original_result.get("montant", 0.0),
+        "methode_original": original_result.get("methode_detection", "UNKNOWN"),
+        "methode_improved": "A-NEW-PATTERNS" if montants_new else original_result.get("methode_detection", "UNKNOWN")
+    }
+
+    # Determine if there's an improvement
+    improvement = False
+    improvement_reason = []
+
+    # Improvement if we found amount with new patterns and original was fallback
+    if montants_new and original_result.get("methode_detection") in ["D-FALLBACK", "AUCUNE"]:
+        improvement = True
+        improvement_reason.append("New patterns found amount where fallback was used")
+
+    # Improvement if new patterns give consistent result
+    if montants_new and len(set(montants_new)) == 1:
+        improvement = True
+        improvement_reason.append("New patterns give consistent amount")
+
+    return {
+        "original_result": original_result,
+        "test_result": test_result,
+        "improvement": improvement,
+        "improvement_reason": improvement_reason,
+        "comparison": {
+            "original_montant": original_result.get("montant", 0.0),
+            "original_method": original_result.get("methode_detection", "UNKNOWN"),
+            "original_reliable": original_result.get("fiable", False),
+            "new_montant": test_result["montant_with_new"],
+            "new_patterns_found": len(montants_new),
+            "new_reliable": len(montants_new) > 0
+        }
+    }
 
 
 def parse_ticket_metadata(ocr_text: str) -> Dict[str, Any]:
@@ -315,6 +403,76 @@ def move_ticket_to_sorted(ticket_path: str, categorie: str, sous_categorie: str)
 
     shutil.move(ticket_path, dest_path)
     logger.info(f"Ticket moved to: {dest_path}")
+
+
+def move_ticket_to_problematic(
+    ticket_path: str,
+    montant_detecte: float,
+    methode_detection: str,
+    potential_patterns: List[Dict[str, Any]]
+) -> str:
+    """
+    Move a ticket to the problematic directory for manual review.
+
+    Tickets are moved here when:
+    - Amount detected by fallback method only (unreliable)
+    - No amount detected at all
+    - User needs to verify the detection
+
+    The filename is enriched with detection metadata for easier review.
+
+    Args:
+        ticket_path: Path to the ticket file
+        montant_detecte: Detected amount (may be 0 or unreliable)
+        methode_detection: Detection method used
+        potential_patterns: List of potential patterns found
+
+    Returns:
+        Path to the moved file
+
+    Example:
+        Original: "ticket_123.jpg"
+        Moved to: "tickets_problematiques/FALLBACK_0.00_ticket_123.jpg"
+    """
+    base_name = os.path.basename(ticket_path)
+    name, ext = os.path.splitext(base_name)
+
+    # Create enriched filename with detection info
+    # Format: METHOD_AMOUNT_originalname.ext
+    enriched_name = f"{methode_detection}_{montant_detecte:.2f}_{name}{ext}"
+    dest_path = os.path.join(PROBLEMATIC_DIR, enriched_name)
+
+    # Handle duplicate filenames
+    if os.path.exists(dest_path):
+        counter = 1
+        while os.path.exists(dest_path):
+            enriched_name = f"{methode_detection}_{montant_detecte:.2f}_{name}_{counter}{ext}"
+            dest_path = os.path.join(PROBLEMATIC_DIR, enriched_name)
+            counter += 1
+
+    # Move the file
+    shutil.move(ticket_path, dest_path)
+    logger.info(f"Problematic ticket moved to: {dest_path}")
+
+    # Also save a JSON metadata file alongside the ticket
+    metadata_path = os.path.splitext(dest_path)[0] + "_metadata.json"
+    metadata = {
+        "original_filename": base_name,
+        "montant_detecte": montant_detecte,
+        "methode_detection": methode_detection,
+        "potential_patterns": potential_patterns,
+        "moved_at": datetime.now().isoformat()
+    }
+
+    try:
+        import json
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        logger.debug(f"Metadata saved to: {metadata_path}")
+    except Exception as e:
+        logger.warning(f"Failed to save metadata: {e}")
+
+    return dest_path
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
