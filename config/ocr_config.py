@@ -9,12 +9,9 @@ UBER_TAX_RATE = 0.21
 UBER_NET_MULTIPLIER = 1 - UBER_TAX_RATE  # 0.79
 
 # Keywords to identify Uber transactions
+# Only "uber" keyword (case-insensitive) to be strict
 UBER_KEYWORDS = [
-    'uber',
-    'uber eats',
-    'livraison',
-    'driver',
-    'delivery'
+    'uber'
 ]
 
 # ==============================

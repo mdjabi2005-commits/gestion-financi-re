@@ -2,36 +2,73 @@
 
 This module handles automatic tax calculations and revenue categorization
 for various income sources, with special handling for Uber revenue.
+
+IMPORTANT: When Uber tax is applied (21%), do NOT include URSSAF related expenses
+as they are already accounted for in the tax deduction.
 """
 
 import logging
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 
 from modules.utils.converters import safe_convert
+from config.ocr_config import UBER_TAX_RATE, UBER_NET_MULTIPLIER
 
 logger = logging.getLogger(__name__)
+
+
+def is_uber_transaction(categorie: str, description: str = "") -> bool:
+    """
+    Check if a transaction is Uber-related (strict detection).
+
+    Only detects transactions with "uber" keyword (case-insensitive).
+    This is strict to avoid false positives with other delivery services.
+
+    Args:
+        categorie: Transaction category name
+        description: Transaction description
+
+    Returns:
+        True if transaction contains "uber" keyword
+
+    Example:
+        >>> is_uber_transaction("Uber Eats")
+        True
+        >>> is_uber_transaction("UBER")
+        True
+        >>> is_uber_transaction("Deliveroo")
+        False
+    """
+    categorie_lower = str(categorie).lower().strip()
+    description_lower = str(description).lower().strip()
+
+    # Strict detection: only "uber" keyword
+    return 'uber' in categorie_lower or 'uber' in description_lower
 
 
 def apply_uber_tax(
     categorie: str,
     montant_brut: float,
-    description: str = ""
+    description: str = "",
+    apply_tax: bool = True
 ) -> Tuple[float, str]:
     """
-    Apply automatic tax calculation for Uber revenue.
+    Apply tax calculation for Uber revenue with optional user confirmation.
 
     Uber drivers in France are subject to a 21% tax deduction on gross revenue.
-    This function detects Uber transactions and applies the tax automatically.
+
+    IMPORTANT: When applying Uber tax, do NOT add URSSAF expenses separately
+    as they are already included in the 21% tax deduction.
 
     Args:
         categorie: Transaction category name
         montant_brut: Gross amount before tax
         description: Transaction description for additional detection
+        apply_tax: If True, apply the tax deduction (default: True)
 
     Returns:
         Tuple of (montant_net, tax_message) where:
-        - montant_net: Amount after tax (79% of gross)
-        - tax_message: Message explaining the tax calculation
+        - montant_net: Amount after tax (79% of gross) or gross if not applied
+        - tax_message: Message explaining the tax calculation or empty
 
     Example:
         >>> montant_net, message = apply_uber_tax("Uber", 100.0)
@@ -40,41 +77,42 @@ def apply_uber_tax(
         >>> "21%" in message
         True
     """
-    categorie_lower = str(categorie).lower().strip()
-    description_lower = str(description).lower().strip()
+    if not is_uber_transaction(categorie, description):
+        return montant_brut, ""
 
-    uber_keywords = ['uber', 'uber eats', 'livraison', 'driver', 'delivery']
-    is_uber_revenu = (
-        any(keyword in categorie_lower for keyword in uber_keywords) or
-        any(keyword in description_lower for keyword in uber_keywords)
-    )
+    if not apply_tax or montant_brut <= 0:
+        return montant_brut, ""
 
-    if is_uber_revenu and montant_brut > 0:
-        montant_net = round(montant_brut * 0.79, 2)
-        tax_amount = round(montant_brut - montant_net, 2)
+    montant_net = round(montant_brut * UBER_NET_MULTIPLIER, 2)
+    tax_amount = round(montant_brut - montant_net, 2)
 
-        message = f"""
-        🚗 **Revenu Uber détecté** - Application automatique de la fiscalité :
-        - Montant brut : {montant_brut:.2f}€
-        - Prélèvement fiscal (21%) : -{tax_amount:.2f}€
-        - **Montant net : {montant_net:.2f}€**
-        """
+    message = f"""
+    🚗 **Revenu Uber détecté** - Application de la fiscalité ({UBER_TAX_RATE*100:.0f}%) :
+    - Montant brut : {montant_brut:.2f}€
+    - Prélèvement fiscal ({UBER_TAX_RATE*100:.0f}%) : -{tax_amount:.2f}€
+    - **Montant net : {montant_net:.2f}€**
 
-        logger.info(f"Uber tax applied: {montant_brut}€ → {montant_net}€")
-        return montant_net, message
+    ⚠️ **Important** : Ne pas ajouter les dépenses URSSAF séparément,
+    elles sont déjà incluses dans ce prélèvement de {UBER_TAX_RATE*100:.0f}%.
+    """
 
-    return montant_brut, ""
+    logger.info(f"Uber tax applied: {montant_brut}€ → {montant_net}€")
+    return montant_net, message
 
 
-def process_uber_revenue(transaction: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+def process_uber_revenue(
+    transaction: Dict[str, Any],
+    apply_tax: bool = True
+) -> Tuple[Dict[str, Any], str]:
     """
     Process a transaction to apply Uber-specific rules.
 
-    Applies automatic tax deduction and ensures proper categorization
-    as "Uber Eats" if not already categorized as Uber.
+    Applies optional tax deduction (21%) and ensures proper categorization
+    as "Uber" if not already categorized as such.
 
     Args:
         transaction: Dictionary with keys 'montant', 'categorie', 'description'
+        apply_tax: If True, apply the 21% tax deduction (default: True)
 
     Returns:
         Tuple of (modified_transaction, tax_message) where:
@@ -93,12 +131,14 @@ def process_uber_revenue(transaction: Dict[str, Any]) -> Tuple[Dict[str, Any], s
     montant_final, tax_message = apply_uber_tax(
         categorie,
         montant_initial,
-        transaction.get('description', '')
+        transaction.get('description', ''),
+        apply_tax=apply_tax
     )
 
     transaction['montant'] = montant_final
 
+    # Ensure proper categorization
     if 'uber' not in categorie.lower():
-        transaction['categorie'] = 'Uber Eats'
+        transaction['categorie'] = 'Uber'
 
     return transaction, tax_message

@@ -23,6 +23,7 @@ from modules.ui.helpers import (
 )
 from modules.ui.components import toast_success, toast_error
 from modules.utils.converters import safe_convert, safe_date_convert
+from modules.services.file_service import supprimer_fichiers_associes
 
 
 def interface_transaction_recurrente(type_transaction: str = "dépense") -> None:
@@ -372,6 +373,22 @@ def interface_gerer_recurrences() -> None:
                         conn = get_db_connection()
                         cursor = conn.cursor()
 
+                        # First, get all transactions to delete for file cleanup
+                        df_to_delete = pd.read_sql_query("""
+                            SELECT * FROM transactions
+                            WHERE (source LIKE 'récurrente%' OR source = 'récurrence_auto')
+                            AND categorie = ?
+                            AND sous_categorie = ?
+                        """, conn, params=(row['categorie'], row['sous_categorie']))
+
+                        # Delete associated files for OCR/PDF sourced transactions
+                        fichiers_supprimes = 0
+                        for _, transaction in df_to_delete.iterrows():
+                            if transaction.get("source") in ["OCR", "PDF"]:
+                                nb_supprimes = supprimer_fichiers_associes(transaction.to_dict())
+                                fichiers_supprimes += nb_supprimes
+
+                        # Delete from database
                         cursor.execute("""
                             DELETE FROM transactions
                             WHERE (source LIKE 'récurrente%' OR source = 'récurrence_auto')
@@ -382,7 +399,10 @@ def interface_gerer_recurrences() -> None:
                         conn.commit()
                         conn.close()
 
-                        st.success("🗑️ Récurrence supprimée entièrement.")
+                        message = "🗑️ Récurrence supprimée entièrement."
+                        if fichiers_supprimes > 0:
+                            message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
+                        st.success(message)
                         refresh_and_rerun()
 
     with tab2:

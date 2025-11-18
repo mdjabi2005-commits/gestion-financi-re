@@ -25,7 +25,7 @@ from modules.ui.helpers import (
 
 from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon
 from modules.utils.converters import safe_convert, safe_date_convert
-from modules.services.revenue_service import process_uber_revenue
+from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
 from modules.services.file_service import (
     deplacer_fichiers_associes,
@@ -187,11 +187,19 @@ def interface_ajouter_depenses_fusionnee() -> None:
                     "source": "manuel"
                 }
 
-                # Process Uber revenue if applicable
-                if type_tr == "revenu":
-                    transaction_data, uber_msg = process_uber_revenue(transaction_data)
+                # Process Uber revenue if applicable (with confirmation)
+                if type_tr == "revenu" and is_uber_transaction(cat, desc):
+                    apply_tax = st.checkbox(
+                        "✅ Appliquer la taxe Uber (21%) ?",
+                        value=True,
+                        key="apply_uber_tax_manual",
+                        help="Si coché, applique automatiquement le prélèvement de 21%. Ne pas ajouter les dépenses URSSAF séparément."
+                    )
+                    transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=apply_tax)
                     if uber_msg:
-                        st.success(uber_msg)
+                        st.info(uber_msg)
+                elif type_tr == "revenu":
+                    transaction_data, _ = process_uber_revenue(transaction_data, apply_tax=False)
 
                 insert_transaction_batch([transaction_data])
                 toast_success(f"✅ Transaction ajoutée : {cat} — {transaction_data['montant']:.2f} €")
