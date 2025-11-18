@@ -28,6 +28,7 @@ from .recurrences import (
 from .portfolio import interface_portefeuille
 from .scanning import process_all_tickets_in_folder
 from .ocr_page import interface_ocr_analysis_complete
+from .problematic_tickets import render_problematic_tickets_page
 
 # Export all functions
 __all__ = [
@@ -54,4 +55,7 @@ __all__ = [
 
     # OCR analysis page
     'interface_ocr_analysis_complete',
+
+    # Problematic tickets page
+    'render_problematic_tickets_page',
 ]

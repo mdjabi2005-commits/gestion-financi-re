@@ -15,8 +15,11 @@ from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.ocr.scanner import full_ocr
-from modules.ocr.parsers import parse_ticket_metadata, extract_text_from_pdf, move_ticket_to_sorted
-from modules.ocr.logging import log_ocr_scan, determine_success_level
+from modules.ocr.parsers import (
+    parse_ticket_metadata, extract_text_from_pdf,
+    move_ticket_to_sorted, move_ticket_to_problematic
+)
+from modules.ocr.logging import log_ocr_scan, determine_success_level, log_potential_patterns
 
 
 def process_all_tickets_in_folder() -> None:
@@ -91,6 +94,17 @@ def process_all_tickets_in_folder() -> None:
         key_info = data.get("infos", "")
         methode_detection = data.get("methode_detection", "UNKNOWN")
         debug_info = data.get("debug_info", {})
+        potential_patterns = data.get("patterns_potentiels", [])
+        is_reliable = data.get("fiable", True)
+
+        # Log potential new patterns for future improvements
+        if potential_patterns:
+            log_potential_patterns(
+                filename=ticket_file,
+                potential_patterns=potential_patterns,
+                montant_final=montant_final,
+                methode_detection=methode_detection
+            )
 
         # Afficher la méthode de détection
         print(f"\n[OCR-DETECTION] Ticket: {ticket_file}")
@@ -118,6 +132,20 @@ def process_all_tickets_in_folder() -> None:
 
         st.markdown(f"🧠 **Catégorie auto-détectée :** {categorie_auto} → {sous_categorie_auto}")
 
+        # Warn if amount detected by fallback method (unreliable)
+        if not is_reliable:
+            st.warning(
+                f"⚠️ **Montant peu fiable** : Détecté par méthode fallback ({methode_detection}). "
+                "Veuillez vérifier et corriger le montant manuellement."
+            )
+
+        # Show potential new patterns if found
+        if potential_patterns:
+            with st.expander(f"🔍 Patterns potentiels détectés ({len(potential_patterns)})"):
+                st.caption("Ces patterns pourraient être ajoutés au système de détection :")
+                for p in potential_patterns[:5]:  # Show max 5
+                    st.code(f"{p.get('pattern')} : {p.get('amount')} → {p.get('line')}")
+
         with st.expander("📜 Aperçu OCR (lignes clés)"):
             st.text(key_info)
 
@@ -140,7 +168,14 @@ def process_all_tickets_in_folder() -> None:
                 )
                 date_ticket = st.date_input("📅 Date du ticket", safe_date_convert(detected_date))
 
-            valider = st.form_submit_button("✅ Valider et enregistrer ce ticket")
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                valider = st.form_submit_button("✅ Valider et enregistrer ce ticket", type="primary")
+            with col_btn2:
+                marquer_problematique = st.form_submit_button(
+                    "⚠️ Marquer comme problématique",
+                    help="Déplace le ticket dans le dossier des tickets problématiques pour traitement ultérieur"
+                )
 
         if valider:
             print(f"\n[DEBUG] FORMULAIRE VALIDE pour {ticket_file}")
@@ -207,3 +242,27 @@ def process_all_tickets_in_folder() -> None:
                 toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (montant dans la liste, {methode_msg})")
             else:
                 toast_warning(f"Ticket enregistré : {montant_corrige:.2f} € (corrigé manuellement, détection {methode_msg})", 4000)
+
+        # Handle "Mark as problematic" button
+        if marquer_problematique:
+            print(f"\n[DEBUG] Marquage comme problématique pour {ticket_file}")
+            print(f"   Méthode détection: {methode_detection}")
+            print(f"   Montant détecté: {montant_final}")
+            print(f"   Fiable: {is_reliable}\n")
+
+            # Move ticket to problematic directory
+            moved_path = move_ticket_to_problematic(
+                ticket_path=ticket_path,
+                montant_detecte=montant_final,
+                methode_detection=methode_detection,
+                potential_patterns=potential_patterns
+            )
+
+            toast_warning(
+                f"📋 Ticket déplacé vers tickets problématiques : {os.path.basename(moved_path)}",
+                duration=5000
+            )
+            st.info(
+                "💡 Ce ticket sera disponible dans l'onglet de retraitement pour "
+                "être traité ultérieurement avec de meilleurs patterns."
+            )

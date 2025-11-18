@@ -22,6 +22,11 @@ from modules.ocr.diagnostics import (
     analyze_external_log,
     diagnose_ocr_patterns
 )
+from modules.ocr.export_logs import (
+    get_logs_summary,
+    prepare_logs_for_support,
+    export_logs_to_desktop
+)
 
 
 def interface_ocr_analysis_complete() -> None:
@@ -41,8 +46,12 @@ def interface_ocr_analysis_complete() -> None:
     st.markdown("Analysez vos propres scans ou diagnostiquez les logs de vos utilisateurs")
 
     # Choix du mode
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Mes propres scans", "🔬 Analyser logs externes", "📈 Comparaison", "🛠️ Diagnostic complet"
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Mes propres scans",
+        "🔬 Analyser logs externes",
+        "📈 Comparaison",
+        "🛠️ Diagnostic complet",
+        "📦 Exporter pour Support"
     ])
 
     with tab1:
@@ -60,6 +69,10 @@ def interface_ocr_analysis_complete() -> None:
     with tab4:
         # Diagnostic approfondi avec recommandations
         interface_diagnostic()
+
+    with tab5:
+        # Export des logs pour le support
+        interface_export_logs()
 
 
 def interface_own_scans() -> None:
@@ -469,3 +482,162 @@ def interface_diagnostic() -> None:
     - Pattern effectiveness
     - Improvement recommendations
     """)
+
+
+def interface_export_logs() -> None:
+    """Interface pour exporter les logs OCR pour le support."""
+    st.subheader("📦 Export des Logs OCR pour Support")
+
+    st.markdown("""
+    ### 🎯 Objectif
+
+    Cette fonctionnalité permet d'exporter tous vos logs OCR dans un fichier ZIP compressé
+    que vous pouvez envoyer au support pour améliorer l'application.
+
+    ### 📋 Contenu de l'export
+
+    Le fichier ZIP contient :
+    - 📊 **Historique des scans** : Tous les tickets/documents scannés
+    - 🔍 **Patterns potentiels** : Nouveaux patterns détectés automatiquement
+    - 📈 **Statistiques de performance** : Taux de réussite par type de document
+    - 📉 **Patterns problématiques** : Patterns qui ont besoin d'amélioration
+    - 📄 **Métadonnées des tickets problématiques** : Contexte des échecs de détection
+
+    ### 🔒 Confidentialité
+
+    - ✅ **Aucune image** de ticket n'est incluse
+    - ✅ **Pas de données personnelles** sensibles
+    - ✅ Uniquement des **métadonnées techniques** (montants, patterns, méthodes)
+    - ✅ **100% sécurisé** pour l'envoi au support
+
+    """)
+
+    # Get logs summary
+    summary = get_logs_summary()
+
+    # Display current statistics
+    st.markdown("### 📊 Statistiques actuelles")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total de scans", summary.get('total_scans', 0))
+    with col2:
+        st.metric("Patterns potentiels", summary.get('potential_patterns_count', 0))
+    with col3:
+        st.metric("Fichiers de logs", len(summary.get('log_files', [])))
+
+    # Performance by type
+    if summary.get('performance_by_type'):
+        st.markdown("### 📈 Performance par type de document")
+
+        perf_data = []
+        for doc_type, stats in summary['performance_by_type'].items():
+            perf_data.append({
+                "Type": doc_type,
+                "Total scans": stats.get('total', 0),
+                "Taux de réussite": f"{stats.get('success_rate', 0):.1f}%"
+            })
+
+        if perf_data:
+            st.dataframe(perf_data, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # Export options
+    st.markdown("### 🚀 Exporter les logs")
+
+    col_exp1, col_exp2 = st.columns(2)
+
+    with col_exp1:
+        include_problematic = st.checkbox(
+            "Inclure les métadonnées des tickets problématiques",
+            value=True,
+            help="Inclut les informations sur les tickets dont la détection a échoué (sans les images)"
+        )
+
+    with col_exp2:
+        st.caption("📍 Le fichier sera créé sur votre Bureau")
+
+    st.markdown("")
+
+    if st.button("📦 Créer l'export pour le support", type="primary", use_container_width=True):
+        try:
+            with st.spinner("🔄 Préparation de l'export en cours..."):
+                # Export to desktop
+                zip_path = export_logs_to_desktop()
+
+            st.success(f"✅ Export créé avec succès !")
+
+            st.info(f"""
+            📁 **Fichier créé :**
+            `{os.path.basename(zip_path)}`
+
+            📍 **Emplacement :**
+            `{zip_path}`
+
+            ### 📧 Prochaines étapes :
+
+            1. Localisez le fichier sur votre Bureau
+            2. Envoyez-le au support (voir instructions ci-dessous)
+            3. Le support analysera vos logs pour améliorer la détection OCR
+
+            **Le fichier sera automatiquement supprimé après 7 jours pour libérer de l'espace.**
+            """)
+
+            # Show file size
+            if os.path.exists(zip_path):
+                file_size = os.path.getsize(zip_path)
+                size_mb = file_size / (1024 * 1024)
+                st.caption(f"💾 Taille du fichier : {size_mb:.2f} MB")
+
+        except Exception as e:
+            st.error(f"❌ Erreur lors de la création de l'export : {e}")
+            st.exception(e)
+
+    st.markdown("---")
+
+    # Instructions for sending to support
+    st.markdown("""
+    ### 📧 Comment envoyer les logs au support
+
+    #### Option 1 : Email (recommandé)
+    1. Ouvrez votre client email
+    2. Créez un nouveau message à : **support@gestio.app** (à remplacer par votre email)
+    3. Sujet : `Logs OCR pour amélioration - [Votre Nom]`
+    4. Attachez le fichier ZIP créé
+    5. Optionnel : Ajoutez des commentaires sur les types de tickets qui posent problème
+
+    #### Option 2 : Cloud Storage
+    1. Uploadez le fichier sur Google Drive / Dropbox / OneDrive
+    2. Générez un lien de partage
+    3. Envoyez le lien par email au support
+
+    #### Option 3 : GitHub Issue (pour les développeurs)
+    1. Créez une issue sur le repo GitHub
+    2. Uploadez le fichier ZIP en pièce jointe
+    3. Décrivez les problèmes rencontrés
+
+    ---
+
+    ### 🙏 Merci de contribuer à l'amélioration de Gestio !
+
+    Vos logs sont précieux pour :
+    - ✨ Améliorer les taux de détection
+    - 🔍 Découvrir de nouveaux formats de tickets
+    - 🎯 Optimiser les patterns existants
+    - 🚀 Créer une meilleure expérience pour tous les utilisateurs
+    """)
+
+    # Show logs files location
+    with st.expander("🔍 Emplacement des fichiers de logs"):
+        st.code(f"""
+Dossier des logs OCR :
+{os.path.join(os.path.expanduser("~"), "gestion_financiere_data", "ocr_logs")}
+
+Fichiers inclus :
+- scan_history.jsonl : Historique complet
+- potential_patterns.jsonl : Patterns découverts
+- performance_stats.json : Statistiques globales
+- pattern_stats.json : Fiabilité des patterns
+- pattern_log.json : Occurrences
+        """, language="text")

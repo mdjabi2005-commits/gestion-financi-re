@@ -6,7 +6,10 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from config import OCR_LOGS_DIR, LOG_PATH, OCR_PERFORMANCE_LOG, PATTERN_STATS_LOG, OCR_SCAN_LOG
+from config import (
+    OCR_LOGS_DIR, LOG_PATH, OCR_PERFORMANCE_LOG, PATTERN_STATS_LOG,
+    OCR_SCAN_LOG, POTENTIAL_PATTERNS_LOG
+)
 
 logger = logging.getLogger(__name__)
 
@@ -235,3 +238,63 @@ def determine_success_level(montants_detectes: List[float], montant_choisi: floa
         return "partial"
     else:
         return "failed"
+
+
+def log_potential_patterns(
+    filename: str,
+    potential_patterns: List[dict],
+    montant_final: float,
+    methode_detection: str
+) -> None:
+    """
+    Log potential new patterns detected in OCR text for future improvements.
+
+    This helps identify patterns that are not yet in our known patterns list,
+    allowing continuous improvement of the OCR system.
+
+    Args:
+        filename: Name of the scanned file
+        potential_patterns: List of potential patterns detected
+        montant_final: The final selected amount
+        methode_detection: Detection method used
+
+    Example entry:
+        {
+            "timestamp": "2025-11-18T10:30:00",
+            "filename": "ticket_123.jpg",
+            "montant_final": 12.50,
+            "methode_detection": "D-FALLBACK",
+            "patterns": [
+                {
+                    "pattern": "PAYÉ",
+                    "line": "PAYÉ : 12,50€",
+                    "amount": "12,50",
+                    "raw_label": "Payé"
+                }
+            ]
+        }
+    """
+    try:
+        # Only log if there are potential patterns
+        if not potential_patterns:
+            return
+
+        logger.info(f"[OCR-LOG] Recording {len(potential_patterns)} potential patterns from {filename}")
+
+        # Create log entry
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "filename": filename,
+            "montant_final": float(montant_final),
+            "methode_detection": methode_detection,
+            "patterns": potential_patterns
+        }
+
+        # Append to JSONL file
+        with open(POTENTIAL_PATTERNS_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+        logger.debug(f"[OCR-LOG] Logged {len(potential_patterns)} potential patterns to {POTENTIAL_PATTERNS_LOG}")
+
+    except Exception as e:
+        logger.error(f"[OCR-LOG] Error logging potential patterns: {e}", exc_info=True)
