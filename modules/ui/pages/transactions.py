@@ -95,10 +95,10 @@ def interface_transactions_simplifiee() -> None:
 
     # === AJOUTER DES DÉPENSES (MANUEL + CSV) ===
     elif type_action == "💰 Scanner un revenu (PDF)":
-        from .revenues import process_all_revenues_in_folder
+        from .revenues import interface_process_all_revenues_in_folder
         st.subheader("💰 Scanner un revenu (PDF)")
         st.info(f"**📂 Dossier de scan :** `{REVENUS_A_TRAITER}`")
-        process_all_revenues_in_folder()
+         interface_process_all_revenues_in_folder
         
     # === TRANSACTION RÉCURRENTE (DÉPENSE OU REVENU) ===
     elif type_action == "🔁 Créer une transaction récurrente":
