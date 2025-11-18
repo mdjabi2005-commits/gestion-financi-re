@@ -353,6 +353,7 @@ revenu,2024-01-15,freelance,mission,450.00,Projet X"""
                 st.caption("Vérifiez que le fichier respecte bien le format du modèle")
 
 
+
 def interface_voir_transactions_v3() -> None:
     """
     View and edit transactions interface with filters and data editor.
