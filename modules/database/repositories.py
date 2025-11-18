@@ -204,12 +204,13 @@ class TransactionRepository:
             close_connection(conn)
 
     @staticmethod
-    def delete(transaction_id: int) -> bool:
+    def delete(transaction_id: int, delete_files: bool = True) -> bool:
         """
-        Delete transaction by ID.
+        Delete transaction by ID and optionally delete associated files.
 
         Args:
             transaction_id: Transaction ID to delete
+            delete_files: If True, delete associated files for OCR/PDF transactions
 
         Returns:
             True if successful, False otherwise
@@ -218,6 +219,17 @@ class TransactionRepository:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
+
+            # Get transaction data before deleting (for file cleanup)
+            if delete_files:
+                transaction = TransactionRepository.get_by_id(transaction_id)
+                if transaction and transaction.source in ["OCR", "PDF"]:
+                    try:
+                        from modules.services.file_service import supprimer_fichiers_associes
+                        supprimer_fichiers_associes(transaction.to_dict())
+                        logger.info(f"Deleted associated files for transaction {transaction_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete associated files: {e}")
 
             cursor.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
             conn.commit()
