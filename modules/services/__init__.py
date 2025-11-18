@@ -7,6 +7,7 @@ This package contains service modules that encapsulate business logic for:
 """
 
 from modules.services.revenue_service import (
+    is_uber_transaction,
     apply_uber_tax,
     process_uber_revenue,
 )
@@ -23,6 +24,7 @@ from modules.services.file_service import (
 
 __all__ = [
     # Revenue service
+    "is_uber_transaction",
     "apply_uber_tax",
     "process_uber_revenue",
     # Recurrence service

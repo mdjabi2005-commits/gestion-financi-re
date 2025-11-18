@@ -19,7 +19,7 @@ from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
-from modules.services.revenue_service import process_uber_revenue
+from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
 from modules.ocr.parsers import parse_uber_pdf, parse_fiche_paie
 from modules.utils.formatters import numero_to_mois
 from modules.ocr.logging import log_ocr_scan, determine_success_level
@@ -133,6 +133,21 @@ def interface_process_all_revenues_in_folder() -> None:
         st.session_state["revenus_data"] = updated_list
 
         st.markdown("---")
+
+        # Check if any Uber revenues detected
+        has_uber = any(is_uber_transaction(data["categorie"], "") for data in st.session_state["revenus_data"])
+
+        if has_uber:
+            st.warning("🚗 **Revenus Uber détectés !**")
+            apply_uber_tax = st.checkbox(
+                "✅ Appliquer la taxe Uber (21%) sur tous les revenus Uber ?",
+                value=True,
+                key="apply_uber_tax_batch",
+                help="Si coché, applique automatiquement le prélèvement de 21% sur les revenus Uber. ⚠️ Ne pas ajouter les dépenses URSSAF séparément."
+            )
+        else:
+            apply_uber_tax = False
+
         toast_warning("Vérifie bien les informations avant de confirmer l'enregistrement.")
 
         if st.button("✅ Confirmer et enregistrer tous les revenus"):
@@ -150,8 +165,8 @@ def interface_process_all_revenues_in_folder() -> None:
                     "source": data["source"]
                 }
 
-                # Traitement Uber
-                transaction_data, uber_msg = process_uber_revenue(transaction_data)
+                # Traitement Uber avec confirmation
+                transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=apply_uber_tax)
                 if uber_msg:
                     toast_success(f"{uber_msg}")
 
