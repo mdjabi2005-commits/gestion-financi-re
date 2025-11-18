@@ -408,87 +408,6 @@ def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     if 'bubble_selected_subcategories' not in st.session_state:
         st.session_state.bubble_selected_subcategories = []
 
-    # Inject bubble styles
-    bubble_css = """
-    <style>
-    .bubble-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin: 15px 0;
-        justify-content: flex-start;
-    }
-
-    .bubble {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 15px 20px;
-        border-radius: 25px;
-        border: 2px solid #ddd;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 500;
-        font-size: 0.9em;
-        user-select: none;
-        background-color: #f8f9fa;
-        min-width: 80px;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .bubble:hover {
-        transform: scale(1.08);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-
-    .bubble-selected {
-        border: 3px solid #4CAF50;
-        background: #e8f5e9;
-        font-weight: bold;
-        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-    }
-
-    .bubble-amount {
-        font-size: 0.8em;
-        opacity: 0.8;
-        margin-top: 4px;
-    }
-
-    .bubble-checkmark {
-        margin-right: 6px;
-        color: #4CAF50;
-        font-weight: bold;
-    }
-
-    .breadcrumb {
-        margin-bottom: 15px;
-        padding: 8px 0;
-        font-size: 0.95em;
-    }
-
-    .breadcrumb-item {
-        display: inline-block;
-        margin-right: 8px;
-        padding: 4px 8px;
-        background: #e8e9eb;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    .breadcrumb-item:hover {
-        background: #d4d5d7;
-    }
-
-    .breadcrumb-item.active {
-        background: #4CAF50;
-        color: white;
-        font-weight: bold;
-    }
-    </style>
-    """
-    st.markdown(bubble_css, unsafe_allow_html=True)
 
     # Section header
     st.subheader("🔍 Filtres par Bulles")
@@ -545,21 +464,14 @@ def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
             is_selected = cat_name in st.session_state.bubble_selected_categories
 
-            bubble_html = f"""
-            <div class="bubble {'bubble-selected' if is_selected else ''}"
-                 style="background-color: {'#e8f5e9' if is_selected and cat_type == 'revenu' else '#ffebee' if is_selected else bubble_color};
-                        border-color: {bubble_border};
-                        transform: scale({size_factor});">
-                <div style="font-weight: bold;">{'✓ ' if is_selected else ''}{cat_name}</div>
-                <div class="bubble-amount">{total:.0f} €</div>
-            </div>
-            """
-
             with cols[col_count % 4]:
-                col_inner1, col_inner2 = st.columns([3, 1])
+                # Create a two-button layout
+                col_bubble, col_drill = st.columns([3, 1])
 
-                with col_inner1:
-                    if st.button(bubble_html, key=f"bubble_cat_{cat_name}", use_container_width=True):
+                with col_bubble:
+                    # Simple button with label
+                    button_label = f"{'✓ ' if is_selected else ''}{cat_name}\n{total:.0f} €"
+                    if st.button(button_label, key=f"bubble_cat_{cat_name}", use_container_width=True, help=f"Cliquer pour {'désélectionner' if is_selected else 'sélectionner'} {cat_name}"):
                         # Toggle selection
                         if cat_name in st.session_state.bubble_selected_categories:
                             st.session_state.bubble_selected_categories.remove(cat_name)
@@ -567,7 +479,7 @@ def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
                             st.session_state.bubble_selected_categories.append(cat_name)
                         st.rerun()
 
-                with col_inner2:
+                with col_drill:
                     if st.button("📂", key=f"drill_cat_{cat_name}", help="Voir sous-catégories", use_container_width=True):
                         st.session_state.bubble_drill_level = 'subcategories'
                         st.session_state.bubble_current_category = cat_name
@@ -628,18 +540,10 @@ def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
             is_selected = subcat_name in st.session_state.bubble_selected_subcategories
 
-            bubble_html = f"""
-            <div class="bubble {'bubble-selected' if is_selected else ''}"
-                 style="background-color: {'#e8f5e9' if is_selected and subcat_type == 'revenu' else '#ffebee' if is_selected else bubble_color};
-                        border-color: {bubble_border};
-                        transform: scale({size_factor});">
-                <div style="font-weight: bold;">{'✓ ' if is_selected else ''}{subcat_name}</div>
-                <div class="bubble-amount">{total:.0f} €</div>
-            </div>
-            """
-
             with cols[col_count % 4]:
-                if st.button(bubble_html, key=f"bubble_subcat_{subcat_name}", use_container_width=True):
+                # Simple button with label
+                button_label = f"{'✓ ' if is_selected else ''}{subcat_name}\n{total:.0f} €"
+                if st.button(button_label, key=f"bubble_subcat_{subcat_name}", use_container_width=True, help=f"Cliquer pour {'désélectionner' if is_selected else 'sélectionner'} {subcat_name}"):
                     # Toggle selection
                     if subcat_name in st.session_state.bubble_selected_subcategories:
                         st.session_state.bubble_selected_subcategories.remove(subcat_name)
