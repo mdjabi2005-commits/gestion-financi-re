@@ -14,7 +14,7 @@ import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional
 import logger
-from config import DB_PATH, TO_SCAN_DIR
+from config import DB_PATH, TO_SCAN_DIR , REVENUS_A_TRAITER
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
     load_transactions,
@@ -22,6 +22,7 @@ from modules.ui.helpers import (
     insert_transaction_batch,
     refresh_and_rerun
 )
+
 from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import process_uber_revenue
@@ -55,9 +56,9 @@ def interface_transactions_simplifiee() -> None:
             "Que voulez-vous faire ?",
             [
                 "📸 Scanner un ticket (OCR)",
-                "💸 Ajouter des dépenses",
+                "💰 Scanner un revenu (PDF),
                 "🔁 Créer une transaction récurrente",
-                "💰 Ajouter un revenu"
+                "💸 Ajouter une Transaction"
             ],
             key="type_action_transaction"
         )
@@ -93,9 +94,12 @@ def interface_transactions_simplifiee() -> None:
         process_all_tickets_in_folder()
 
     # === AJOUTER DES DÉPENSES (MANUEL + CSV) ===
-    elif type_action == "💸 Ajouter des dépenses":
-        interface_ajouter_depenses_fusionnee()
-
+    elif type_action == "💰 Scanner un revenu (PDF)":
+        from .revenues import process_all_revenues_in_folder
+        st.subheader("💰 Scanner un revenu (PDF)")
+        st.info(f"**📂 Dossier de scan :** `{REVENUS_A_TRAITER}`")
+        process_all_revenues_in_folder()
+        
     # === TRANSACTION RÉCURRENTE (DÉPENSE OU REVENU) ===
     elif type_action == "🔁 Créer une transaction récurrente":
         st.subheader("🔁 Créer une transaction récurrente")
@@ -123,12 +127,12 @@ def interface_transactions_simplifiee() -> None:
         interface_transaction_recurrente(type_transaction=type_val)
 
     # === REVENU (NON-RÉCURRENT) ===
-    elif type_action == "💰 Ajouter un revenu":
-        st.subheader("💰 Ajouter un revenu")
+    elif type_action == "💸 Ajouter une Transaction":
+        st.subheader("💸 Ajouter une Transaction")
 
         # Import revenue function to avoid circular imports
-        from .revenues import interface_ajouter_revenu
-        interface_ajouter_revenu()
+        from .transactions import  interface_transactions_simplifiee
+        interface_transactions_simplifiee()
 
 
 def interface_ajouter_depenses_fusionnee() -> None:
