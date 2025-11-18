@@ -20,10 +20,7 @@ from .transactions import (
     interface_voir_transactions_v3,
     interface_ajouter_depenses_fusionnee
 )
-from .revenues import (
-    interface_ajouter_revenu,
-    interface_process_all_revenues_in_folder
-)
+from .revenues import interface_process_all_revenues_in_folder
 from .recurrences import (
     interface_transaction_recurrente,
     interface_gerer_recurrences
@@ -43,7 +40,6 @@ __all__ = [
     'interface_ajouter_depenses_fusionnee',
 
     # Revenue pages
-    'interface_ajouter_revenu',
     'interface_process_all_revenues_in_folder',
 
     # Recurrence pages
