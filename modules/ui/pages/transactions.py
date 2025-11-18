@@ -56,7 +56,7 @@ def interface_transactions_simplifiee() -> None:
             "Que voulez-vous faire ?",
             [
                 "📸 Scanner un ticket (OCR)",
-                "💰 Scanner un revenu (PDF),
+                "💰 Scanner un revenu (PDF)",
                 "🔁 Créer une transaction récurrente",
                 "💸 Ajouter une Transaction"
             ],
