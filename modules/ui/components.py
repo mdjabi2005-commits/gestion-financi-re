@@ -367,193 +367,404 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
 
 
 # ==============================
-# 🔵 BUBBLE FILTER COMPONENT
+# 💰 CATEGORY VISUALIZATION & FILTERING SYSTEM
 # ==============================
+# Dual-view system with proportional bubbles + chips for category management
 
 import pandas as pd
-from typing import List, Tuple
+from typing import List, Dict, Any
 
-def render_bubble_filter(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+@st.cache_data(ttl=300)
+def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Render interactive bubble filter for transactions with drill-down support.
-
-    Features:
-    - Display categories as clickable bubbles
-    - Multi-selection with session state
-    - Bubble size proportional to total amount
-    - Bubble color based on type (expense=red, revenue=green)
-    - Drill-down into subcategories
-    - Breadcrumb navigation
-    - Clear all filters button
+    Calculate statistics for each category (amount, percentage, count).
 
     Args:
-        df: DataFrame with transaction data
+        df: Transaction DataFrame
 
     Returns:
-        Tuple of (selected_categories, selected_subcategories) for filtering
-
-    Example:
-        >>> df = load_transactions()
-        >>> categories, subcategories = render_bubble_filter(df)
-        >>> filtered = df[df['categorie'].isin(categories)]
+        DataFrame with columns: [categorie, montant, pct, count, type_predominant]
     """
+    if df.empty:
+        return pd.DataFrame(columns=['categorie', 'montant', 'pct', 'count', 'type_predominant'])
 
-    # Initialize session state
-    if 'bubble_drill_level' not in st.session_state:
-        st.session_state.bubble_drill_level = 'categories'
-    if 'bubble_current_category' not in st.session_state:
-        st.session_state.bubble_current_category = None
-    if 'bubble_selected_categories' not in st.session_state:
-        st.session_state.bubble_selected_categories = []
-    if 'bubble_selected_subcategories' not in st.session_state:
-        st.session_state.bubble_selected_subcategories = []
-
-
-    # Section header
-    st.subheader("🔍 Filtres par Bulles")
-
-    # Calculate stats by category/type
     df_copy = df.copy()
     df_copy['type'] = df_copy['type'].str.lower().str.strip()
 
-    # ===== CATEGORIES VIEW =====
-    if st.session_state.bubble_drill_level == 'categories':
-        # Get unique categories with their stats
-        categories_stats = df_copy.groupby('categorie').agg({
-            'montant': 'sum',
-            'type': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'dépense'
-        }).reset_index()
-        categories_stats.columns = ['categorie', 'total_montant', 'predominant_type']
-        categories_stats = categories_stats.sort_values('total_montant', ascending=False)
+    stats = df_copy.groupby('categorie', as_index=False).agg({
+        'montant': ['sum', 'count'],
+        'type': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'dépense'
+    }).reset_index(drop=True)
 
-        # Find min/max for bubble size calculation
-        min_amount = categories_stats['total_montant'].min()
-        max_amount = categories_stats['total_montant'].max()
-        amount_range = max(max_amount - min_amount, 1)  # Avoid division by 0
+    stats.columns = ['categorie', 'montant', 'count', 'type_predominant']
+    stats['montant'] = stats['montant'].round(2)
 
-        # Create breadcrumb
-        st.markdown("**📍 Catégories principales**", unsafe_allow_html=True)
+    total = stats['montant'].sum()
+    stats['pct'] = (stats['montant'] / total * 100).round(1)
 
-        # Clear all button
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("🔄 Effacer tous", key="clear_all_bubbles"):
-                st.session_state.bubble_selected_categories = []
-                st.session_state.bubble_selected_subcategories = []
-                st.rerun()
+    return stats.sort_values('montant', ascending=False).reset_index(drop=True)
 
-        # Render category bubbles
-        col_count = 0
-        cols = st.columns(4)
 
-        for idx, row in categories_stats.iterrows():
-            cat_name = row['categorie']
-            total = row['total_montant']
-            cat_type = row['predominant_type']
+def render_view_mode_selector() -> str:
+    """
+    Render radio buttons to select between different visualization modes.
 
-            # Calculate bubble size factor (scaling between 0.8 and 1.4)
-            size_factor = 0.8 + 0.6 * ((total - min_amount) / amount_range)
+    Returns:
+        Selected mode: 'bubbles' | 'chips' | 'hybrid'
+    """
+    # Initialize session state
+    if 'category_view_mode' not in st.session_state:
+        st.session_state.category_view_mode = 'hybrid'
 
-            # Determine color based on type
-            if cat_type == 'revenu':
-                bubble_color = '#c8e6c9'
-                bubble_border = '#4CAF50'
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        if st.button("📊 Graphique", use_container_width=True,
+                     key="btn_bubbles", help="Vue avec bulles proportionnelles"):
+            st.session_state.category_view_mode = 'bubbles'
+
+    with col2:
+        if st.button("🏷️ Chips", use_container_width=True,
+                     key="btn_chips", help="Vue avec tags de filtrage"):
+            st.session_state.category_view_mode = 'chips'
+
+    with col3:
+        if st.button("🔄 Hybride", use_container_width=True,
+                     key="btn_hybrid", help="Vue combinée"):
+            st.session_state.category_view_mode = 'hybrid'
+
+    return st.session_state.category_view_mode
+
+
+def render_category_management(df: pd.DataFrame) -> List[str]:
+    """
+    Main function combining both visualization systems.
+    Returns list of selected categories for filtering.
+
+    Args:
+        df: Transaction DataFrame
+
+    Returns:
+        List of selected category names
+    """
+    # Initialize session state
+    for key in ['selected_categories', 'drill_level', 'parent_category', 'breadcrumb']:
+        if key not in st.session_state:
+            init_vals = {
+                'selected_categories': [],
+                'drill_level': 'categories',
+                'parent_category': None,
+                'breadcrumb': ['Toutes']
+            }
+            st.session_state[key] = init_vals[key]
+
+    # Add CSS styles
+    st.markdown("""
+    <style>
+    .bubble-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        padding: 30px;
+        min-height: 250px;
+        background: #f8f9fa;
+        border-radius: 12px;
+    }
+
+    .bubble {
+        border-radius: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid;
+        opacity: 0.75;
+        text-align: center;
+        padding: 10px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .bubble:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        opacity: 1;
+    }
+
+    .bubble-selected {
+        border-width: 3px;
+        opacity: 1;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .bubble-expense {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: #ef4444;
+        color: #991b1b;
+    }
+
+    .bubble-revenue {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: #10b981;
+        color: #065f46;
+    }
+
+    .chips-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+    }
+
+    .chip {
+        display: inline-block;
+        padding: 8px 16px;
+        margin: 0;
+        border-radius: 20px;
+        border: 2px solid #e0e0e0;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        border-color: #999;
+    }
+
+    .chip-selected {
+        background: #e8f5e9;
+        border-color: #4CAF50;
+        border-width: 2px;
+        color: #2e7d32;
+        font-weight: 600;
+    }
+
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 0;
+        font-size: 13px;
+        margin-bottom: 15px;
+    }
+
+    .breadcrumb-item {
+        padding: 4px 8px;
+        background: #e8e9eb;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .breadcrumb-item:hover {
+        background: #d4d5d7;
+    }
+
+    .breadcrumb-item.active {
+        background: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Display header
+    st.markdown("## 💰 Gestion des Catégories")
+
+    # Mode selector
+    mode = render_view_mode_selector()
+    st.markdown("---")
+
+    # Get category stats
+    stats = calculate_category_stats(df)
+
+    if stats.empty:
+        st.info("Aucune catégorie trouvée")
+        return []
+
+    # Render based on mode
+    if mode == 'bubbles':
+        return _render_bubble_view(stats, df)
+    elif mode == 'chips':
+        return _render_chips_view(stats, df)
+    else:  # hybrid
+        return _render_hybrid_view(stats, df)
+
+
+def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
+    """Render proportional bubble visualization."""
+    st.subheader("📊 Répartition Visuelle")
+
+    selected = st.session_state.get('selected_categories', [])
+
+    # Create bubble HTML
+    bubble_html = '<div class="bubble-container">'
+
+    for _, row in stats.iterrows():
+        cat = row['categorie']
+        amount = row['montant']
+        pct = row['pct']
+        cat_type = row['type_predominant']
+
+        # Calculate bubble size (60px to 360px)
+        ratio = amount / stats['montant'].sum() if stats['montant'].sum() > 0 else 0
+        size = int(60 + ratio * 300)
+
+        bubble_type = 'revenue' if 'revenu' in cat_type else 'expense'
+        is_selected = cat in selected
+
+        bubble_html += f"""
+        <div class="bubble bubble-{bubble_type} {'bubble-selected' if is_selected else ''}"
+             style="width: {size}px; height: {size}px; font-size: {10 + ratio * 8}px;">
+            <strong>{cat}</strong>
+            <div style="font-size: 0.85em; margin-top: 4px;">{amount:.0f}€</div>
+            <div style="font-size: 0.75em; opacity: 0.8;">{pct}%</div>
+        </div>
+        """
+
+    bubble_html += '</div>'
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    # Selection via buttons below
+    st.markdown("### Cliquer sur une catégorie :")
+    cols = st.columns(4)
+
+    for idx, (_, row) in enumerate(stats.iterrows()):
+        cat = row['categorie']
+        is_selected = cat in selected
+
+        with cols[idx % 4]:
+            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{row['montant']:.0f}€"
+            if st.button(button_text, key=f"bubble_select_{cat}", use_container_width=True):
+                if cat in selected:
+                    selected.remove(cat)
+                else:
+                    selected.append(cat)
+
+    st.session_state.selected_categories = selected
+    return selected
+
+
+def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
+    """Render chips/tags visualization with multi-selection."""
+    st.subheader("🏷️ Filtres Rapides")
+
+    selected = st.session_state.get('selected_categories', [])
+
+    # Render chips
+    st.markdown('<div class="chips-container">', unsafe_allow_html=True)
+
+    cols = st.columns(4)
+    for idx, (_, row) in enumerate(stats.iterrows()):
+        cat = row['categorie']
+        amount = row['montant']
+        is_selected = cat in selected
+
+        chip_html = f"{'✓ ' if is_selected else ''}{cat} | {amount:.0f}€"
+
+        with cols[idx % 4]:
+            if st.button(chip_html, key=f"chip_select_{cat}", use_container_width=True,
+                        help=f"{'Désélectionner' if is_selected else 'Sélectionner'} {cat}"):
+                if cat in selected:
+                    selected.remove(cat)
+                else:
+                    selected.append(cat)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Show selection counter
+    if selected:
+        trans_count = len(df[df['categorie'].isin(selected)])
+        st.info(f"📊 {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
+
+    # Action buttons
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("🔄 Effacer tout", use_container_width=True):
+            selected.clear()
+
+    with col2:
+        if len(selected) == 1 and st.button("↓ Voir sous-catégories", use_container_width=True):
+            st.session_state.drill_level = 'subcategories'
+            st.session_state.parent_category = selected[0]
+            st.rerun()
+
+    st.session_state.selected_categories = selected
+    return selected
+
+
+def _render_hybrid_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
+    """Render combined view with bubbles and chips synchronized."""
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("### 📊 Répartition")
+        selected = _render_bubble_view_minimal(stats, df)
+
+    with col2:
+        st.markdown("### 🏷️ Sélection")
+        selected = _render_chips_view_minimal(stats, df, selected)
+
+    return selected
+
+
+def _render_bubble_view_minimal(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
+    """Minimal bubble view for hybrid mode."""
+    selected = st.session_state.get('selected_categories', [])
+
+    # Create simplified bubble HTML
+    bubble_html = '<div class="bubble-container" style="min-height: 300px;">'
+
+    for _, row in stats.iterrows():
+        cat = row['categorie']
+        amount = row['montant']
+        pct = row['pct']
+        cat_type = row['type_predominant']
+
+        ratio = amount / stats['montant'].sum() if stats['montant'].sum() > 0 else 0
+        size = int(50 + ratio * 250)
+
+        bubble_type = 'revenue' if 'revenu' in cat_type else 'expense'
+        is_selected = cat in selected
+
+        bubble_html += f"""
+        <div class="bubble bubble-{bubble_type} {'bubble-selected' if is_selected else ''}"
+             style="width: {size}px; height: {size}px; font-size: {9 + ratio * 6}px;"
+             onclick="alert('{cat}')">
+            <strong>{cat}</strong>
+            <div style="font-size: 0.8em; margin-top: 3px;">{pct}%</div>
+        </div>
+        """
+
+    bubble_html += '</div>'
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    return selected
+
+
+def _render_chips_view_minimal(stats: pd.DataFrame, df: pd.DataFrame, selected: List[str]) -> List[str]:
+    """Minimal chips view for hybrid mode."""
+    for _, row in stats.iterrows():
+        cat = row['categorie']
+        is_selected = cat in selected
+
+        button_text = f"{'✓ ' if is_selected else ''}{cat} | {row['montant']:.0f}€"
+        if st.button(button_text, key=f"hybrid_chip_{cat}", use_container_width=True):
+            if cat in selected:
+                selected.remove(cat)
             else:
-                bubble_color = '#ffcdd2'
-                bubble_border = '#f44336'
+                selected.append(cat)
 
-            is_selected = cat_name in st.session_state.bubble_selected_categories
-
-            with cols[col_count % 4]:
-                # Create a two-button layout
-                col_bubble, col_drill = st.columns([3, 1])
-
-                with col_bubble:
-                    # Simple button with label
-                    button_label = f"{'✓ ' if is_selected else ''}{cat_name}\n{total:.0f} €"
-                    if st.button(button_label, key=f"bubble_cat_{cat_name}", use_container_width=True, help=f"Cliquer pour {'désélectionner' if is_selected else 'sélectionner'} {cat_name}"):
-                        # Toggle selection
-                        if cat_name in st.session_state.bubble_selected_categories:
-                            st.session_state.bubble_selected_categories.remove(cat_name)
-                        else:
-                            st.session_state.bubble_selected_categories.append(cat_name)
-                        st.rerun()
-
-                with col_drill:
-                    if st.button("📂", key=f"drill_cat_{cat_name}", help="Voir sous-catégories", use_container_width=True):
-                        st.session_state.bubble_drill_level = 'subcategories'
-                        st.session_state.bubble_current_category = cat_name
-                        st.rerun()
-
-            col_count += 1
-
-    # ===== SUBCATEGORIES VIEW =====
-    elif st.session_state.bubble_drill_level == 'subcategories':
-        current_cat = st.session_state.bubble_current_category
-
-        # Create breadcrumb with back button
-        col1, col2, col3 = st.columns([1, 4, 1])
-        with col1:
-            if st.button("⬅️ Retour", key="back_to_categories"):
-                st.session_state.bubble_drill_level = 'categories'
-                st.session_state.bubble_current_category = None
-                st.rerun()
-
-        with col2:
-            st.markdown(f"**📍 Sous-catégories de _{current_cat}_**", unsafe_allow_html=True)
-
-        # Filter by parent category
-        df_filtered = df_copy[df_copy['categorie'] == current_cat]
-
-        # Get subcategories
-        subcats_stats = df_filtered.groupby('sous_categorie').agg({
-            'montant': 'sum',
-            'type': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'dépense'
-        }).reset_index()
-        subcats_stats.columns = ['sous_categorie', 'total_montant', 'predominant_type']
-        subcats_stats = subcats_stats.sort_values('total_montant', ascending=False)
-
-        # Find min/max for bubble size
-        min_amount = subcats_stats['total_montant'].min()
-        max_amount = subcats_stats['total_montant'].max()
-        amount_range = max(max_amount - min_amount, 1)
-
-        # Render subcategory bubbles
-        col_count = 0
-        cols = st.columns(4)
-
-        for idx, row in subcats_stats.iterrows():
-            subcat_name = row['sous_categorie']
-            total = row['total_montant']
-            subcat_type = row['predominant_type']
-
-            # Size factor
-            size_factor = 0.8 + 0.6 * ((total - min_amount) / amount_range)
-
-            # Color based on type
-            if subcat_type == 'revenu':
-                bubble_color = '#c8e6c9'
-                bubble_border = '#4CAF50'
-            else:
-                bubble_color = '#ffcdd2'
-                bubble_border = '#f44336'
-
-            is_selected = subcat_name in st.session_state.bubble_selected_subcategories
-
-            with cols[col_count % 4]:
-                # Simple button with label
-                button_label = f"{'✓ ' if is_selected else ''}{subcat_name}\n{total:.0f} €"
-                if st.button(button_label, key=f"bubble_subcat_{subcat_name}", use_container_width=True, help=f"Cliquer pour {'désélectionner' if is_selected else 'sélectionner'} {subcat_name}"):
-                    # Toggle selection
-                    if subcat_name in st.session_state.bubble_selected_subcategories:
-                        st.session_state.bubble_selected_subcategories.remove(subcat_name)
-                    else:
-                        st.session_state.bubble_selected_subcategories.append(subcat_name)
-                    st.rerun()
-
-            col_count += 1
-
-    return (
-        st.session_state.bubble_selected_categories,
-        st.session_state.bubble_selected_subcategories
-    )
+    st.session_state.selected_categories = selected
+    return selected

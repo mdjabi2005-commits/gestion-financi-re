@@ -23,7 +23,11 @@ from modules.ui.helpers import (
     refresh_and_rerun
 )
 
-from modules.ui.components import toast_success, toast_error, toast_warning, afficher_documents_associes, get_badge_icon, render_bubble_filter
+from modules.ui.components import (
+    toast_success, toast_error, toast_warning,
+    afficher_documents_associes, get_badge_icon,
+    render_category_management
+)
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
@@ -445,8 +449,8 @@ def interface_voir_transactions_v3() -> None:
 
     st.markdown("---")
 
-    # === FILTRE PAR BULLES (CATÉGORIES + SOUS-CATÉGORIES) ===
-    selected_categories, selected_subcategories = render_bubble_filter(df)
+    # === FILTRE PAR CATÉGORIES (Vue hybride par défaut) ===
+    selected_categories = render_category_management(df)
 
     st.markdown("---")
 
@@ -467,14 +471,9 @@ def interface_voir_transactions_v3() -> None:
     elif type_filter == "Revenu":
         df_filtered = df_filtered[df_filtered["type"] == "revenu"]
 
-    # Filtre bulles (catégories et sous-catégories sélectionnées)
-    if selected_categories or selected_subcategories:
-        # Si des catégories sont sélectionnées, filtrer par catégories
-        if selected_categories:
-            df_filtered = df_filtered[df_filtered["categorie"].isin(selected_categories)]
-        # Si des sous-catégories sont sélectionnées (et on a drill-down actif), filtrer par sous-catégories
-        if selected_subcategories:
-            df_filtered = df_filtered[df_filtered["sous_categorie"].isin(selected_subcategories)]
+    # Filtre catégories sélectionnées
+    if selected_categories:
+        df_filtered = df_filtered[df_filtered["categorie"].isin(selected_categories)]
 
     # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
     df_filtered = df_filtered.sort_values("date", ascending=False).reset_index(drop=True)
