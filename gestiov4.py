@@ -42,7 +42,7 @@ st.markdown("""
 # ==============================
 # 📂 CONFIGURATION DES DOSSIERS
 # ==============================
-from config import  DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
+from momo import  DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR, REVENUS_A_TRAITER, REVENUS_TRAITES
 
 # Créer les dossiers de logs OCR
 OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
