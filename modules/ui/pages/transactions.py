@@ -188,7 +188,7 @@ def interface_ajouter_depenses_fusionnee() -> None:
                 }
 
                 # Process Uber revenue if applicable (with confirmation)
-                if type_tr == "revenu" and is_uber_transaction(cat, desc):
+                if  is_uber_transaction(cat, desc):
                     apply_tax = st.checkbox(
                         "✅ Appliquer la taxe Uber (21%) ?",
                         value=True,
