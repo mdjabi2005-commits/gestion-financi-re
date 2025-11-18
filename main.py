@@ -53,13 +53,7 @@ from modules.ui.pages import (
     interface_accueil,
     interface_transactions_simplifiee,
     interface_voir_transactions_v3,
-    interface_ajouter_depenses_fusionnee,
-    interface_ajouter_revenu,
-    interface_process_all_revenues_in_folder,
-    interface_transaction_recurrente,
-    interface_gerer_recurrences,
     interface_portefeuille,
-    process_all_tickets_in_folder,
     interface_ocr_analysis_complete
 )
 
@@ -146,26 +140,8 @@ def main():
         elif page == "💳 Transactions":
             interface_transactions_simplifiee()
 
-        elif page == "➕ Ajouter Dépense":
-            interface_ajouter_depenses_fusionnee()
-
         elif page == "📊 Voir Transactions":
             interface_voir_transactions_v3()
-
-        elif page == "📸 Scanner Tickets":
-            process_all_tickets_in_folder()
-
-        elif page == "💵 Ajouter Revenu":
-            interface_ajouter_revenu()
-
-        elif page == "📁 Scanner Revenus (Dossier)":
-            interface_process_all_revenues_in_folder()
-
-        elif page == "🔄 Transaction Récurrente":
-            interface_transaction_recurrente()
-
-        elif page == "⚙️ Gérer Récurrences":
-            interface_gerer_recurrences()
 
         elif page == "💼 Portefeuille":
             interface_portefeuille()
