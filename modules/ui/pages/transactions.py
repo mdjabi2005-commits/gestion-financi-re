@@ -171,6 +171,14 @@ def interface_ajouter_depenses_fusionnee() -> None:
                 montant = st.number_input("💰 Montant (€)", min_value=0.0, step=0.01, format="%.2f")
                 desc = st.text_input("📝 Description", placeholder="Ex: Carrefour")
 
+            # Uber tax checkbox (shown inside form so user can see it before submitting)
+            apply_uber_tax = st.checkbox(
+                "🚗 Appliquer la taxe Uber (21%) pour ce revenu ?",
+                value=False,
+                key="apply_uber_tax_manual",
+                help="Cochez cette case uniquement si c'est un revenu Uber. Le prélèvement de 21% sera appliqué automatiquement. ⚠️ Ne pas ajouter les dépenses URSSAF séparément dans ce cas."
+            )
+
             valider = st.form_submit_button("✅ Ajouter la transaction", type="primary")
 
         if valider:
@@ -187,19 +195,14 @@ def interface_ajouter_depenses_fusionnee() -> None:
                     "source": "manuel"
                 }
 
-                # Process Uber revenue if applicable (with confirmation)
-                if  is_uber_transaction(cat, desc):
-                    apply_tax = st.checkbox(
-                        "✅ Appliquer la taxe Uber (21%) ?",
-                        value=True,
-                        key="apply_uber_tax_manual",
-                        help="Si coché, applique automatiquement le prélèvement de 21%. Ne pas ajouter les dépenses URSSAF séparément."
-                    )
-                    transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=apply_tax)
-                    if uber_msg:
-                        st.info(uber_msg)
-                elif type_tr == "revenu":
-                    transaction_data, _ = process_uber_revenue(transaction_data, apply_tax=False)
+                # Process Uber revenue ONLY if user checked the box AND it's actually an Uber transaction
+                if type_tr == "revenu" and apply_uber_tax:
+                    if is_uber_transaction(cat, desc):
+                        transaction_data, uber_msg = process_uber_revenue(transaction_data, apply_tax=True)
+                        if uber_msg:
+                            st.info(uber_msg)
+                    else:
+                        st.warning("⚠️ La taxe Uber n'a pas été appliquée car la transaction ne contient pas le mot 'Uber'.")
 
                 insert_transaction_batch([transaction_data])
                 toast_success(f"✅ Transaction ajoutée : {cat} — {transaction_data['montant']:.2f} €")
