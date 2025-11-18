@@ -38,6 +38,13 @@ from .diagnostics import (
     diagnose_ocr_patterns
 )
 
+# Export functions
+from .export_logs import (
+    get_logs_summary,
+    prepare_logs_for_support,
+    export_logs_to_desktop
+)
+
 __all__ = [
     # Logging
     'log_pattern_occurrence',
@@ -69,5 +76,10 @@ __all__ = [
     'analyze_external_log',
     'extract_patterns_from_text',
     'calculate_pattern_reliability',
-    'diagnose_ocr_patterns'
+    'diagnose_ocr_patterns',
+
+    # Export
+    'get_logs_summary',
+    'prepare_logs_for_support',
+    'export_logs_to_desktop'
 ]
