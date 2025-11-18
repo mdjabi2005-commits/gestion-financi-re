@@ -103,7 +103,6 @@ def main():
                 "🏠 Accueil",
                 "💳 Transactions",
                 "📊 Voir Transactions",
-                "⚙️ Gérer Récurrences",
                 "💼 Portefeuille",
                 "🔍 Analyse OCR"
             ]
