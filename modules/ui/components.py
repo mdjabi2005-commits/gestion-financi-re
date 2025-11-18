@@ -458,126 +458,6 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
             }
             st.session_state[key] = init_vals[key]
 
-    # Add CSS styles
-    st.markdown("""
-    <style>
-    .bubble-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-items: center;
-        gap: 20px;
-        padding: 30px;
-        min-height: 250px;
-        background: #f8f9fa;
-        border-radius: 12px;
-    }
-
-    .bubble {
-        border-radius: 20px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        border: 2px solid;
-        opacity: 0.75;
-        text-align: center;
-        padding: 10px;
-        font-weight: 500;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .bubble:hover {
-        transform: scale(1.05);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-        opacity: 1;
-    }
-
-    .bubble-selected {
-        border-width: 3px;
-        opacity: 1;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .bubble-expense {
-        background: rgba(239, 68, 68, 0.15);
-        border-color: #ef4444;
-        color: #991b1b;
-    }
-
-    .bubble-revenue {
-        background: rgba(16, 185, 129, 0.15);
-        border-color: #10b981;
-        color: #065f46;
-    }
-
-    .chips-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 20px;
-        background: #f8f9fa;
-        border-radius: 12px;
-    }
-
-    .chip {
-        display: inline-block;
-        padding: 8px 16px;
-        margin: 0;
-        border-radius: 20px;
-        border: 2px solid #e0e0e0;
-        background: white;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 13px;
-        font-weight: 500;
-        white-space: nowrap;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    .chip:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        border-color: #999;
-    }
-
-    .chip-selected {
-        background: #e8f5e9;
-        border-color: #4CAF50;
-        border-width: 2px;
-        color: #2e7d32;
-        font-weight: 600;
-    }
-
-    .breadcrumb {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 0;
-        font-size: 13px;
-        margin-bottom: 15px;
-    }
-
-    .breadcrumb-item {
-        padding: 4px 8px;
-        background: #e8e9eb;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    .breadcrumb-item:hover {
-        background: #d4d5d7;
-    }
-
-    .breadcrumb-item.active {
-        background: #4CAF50;
-        color: white;
-        font-weight: bold;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
     # Display header
     st.markdown("## 💰 Gestion des Catégories")
@@ -608,45 +488,25 @@ def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
 
     selected = st.session_state.get('selected_categories', [])
 
-    # Create bubble HTML
-    bubble_html = '<div class="bubble-container">'
+    # Show bubble info text
+    st.info("💡 Cliquez sur les boutons ci-dessous pour sélectionner les catégories. La taille indique le montant total.")
 
-    for _, row in stats.iterrows():
-        cat = row['categorie']
-        amount = row['montant']
-        pct = row['pct']
-        cat_type = row['type_predominant']
-
-        # Calculate bubble size (60px to 360px)
-        ratio = amount / stats['montant'].sum() if stats['montant'].sum() > 0 else 0
-        size = int(60 + ratio * 300)
-
-        bubble_type = 'revenue' if 'revenu' in cat_type else 'expense'
-        is_selected = cat in selected
-
-        bubble_html += f"""
-        <div class="bubble bubble-{bubble_type} {'bubble-selected' if is_selected else ''}"
-             style="width: {size}px; height: {size}px; font-size: {10 + ratio * 8}px;">
-            <strong>{cat}</strong>
-            <div style="font-size: 0.85em; margin-top: 4px;">{amount:.0f}€</div>
-            <div style="font-size: 0.75em; opacity: 0.8;">{pct}%</div>
-        </div>
-        """
-
-    bubble_html += '</div>'
-    st.markdown(bubble_html, unsafe_allow_html=True)
-
-    # Selection via buttons below
-    st.markdown("### Cliquer sur une catégorie :")
+    # Selection via buttons (4 columns layout)
     cols = st.columns(4)
 
     for idx, (_, row) in enumerate(stats.iterrows()):
         cat = row['categorie']
+        amount = row['montant']
+        pct = row['pct']
         is_selected = cat in selected
 
         with cols[idx % 4]:
-            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{row['montant']:.0f}€"
-            if st.button(button_text, key=f"bubble_select_{cat}", use_container_width=True):
+            # Create button with info
+            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{amount:.0f}€ ({pct}%)"
+
+            # Use a container to style it like a bubble
+            if st.button(button_text, key=f"bubble_select_{cat}", use_container_width=True,
+                        help=f"Total: {amount:.2f}€ - {pct}% du total"):
                 if cat in selected:
                     selected.remove(cat)
                 else:
@@ -723,32 +583,22 @@ def _render_bubble_view_minimal(stats: pd.DataFrame, df: pd.DataFrame) -> List[s
     """Minimal bubble view for hybrid mode."""
     selected = st.session_state.get('selected_categories', [])
 
-    # Create simplified bubble HTML
-    bubble_html = '<div class="bubble-container" style="min-height: 300px;">'
-
-    for _, row in stats.iterrows():
+    # Display as compact buttons
+    cols = st.columns(3)
+    for idx, (_, row) in enumerate(stats.iterrows()):
         cat = row['categorie']
         amount = row['montant']
         pct = row['pct']
-        cat_type = row['type_predominant']
-
-        ratio = amount / stats['montant'].sum() if stats['montant'].sum() > 0 else 0
-        size = int(50 + ratio * 250)
-
-        bubble_type = 'revenue' if 'revenu' in cat_type else 'expense'
         is_selected = cat in selected
 
-        bubble_html += f"""
-        <div class="bubble bubble-{bubble_type} {'bubble-selected' if is_selected else ''}"
-             style="width: {size}px; height: {size}px; font-size: {9 + ratio * 6}px;"
-             onclick="alert('{cat}')">
-            <strong>{cat}</strong>
-            <div style="font-size: 0.8em; margin-top: 3px;">{pct}%</div>
-        </div>
-        """
-
-    bubble_html += '</div>'
-    st.markdown(bubble_html, unsafe_allow_html=True)
+        with cols[idx % 3]:
+            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{pct}%"
+            if st.button(button_text, key=f"hybrid_bubble_{cat}", use_container_width=True,
+                        help=f"{amount:.0f}€"):
+                if cat in selected:
+                    selected.remove(cat)
+                else:
+                    selected.append(cat)
 
     return selected
 
