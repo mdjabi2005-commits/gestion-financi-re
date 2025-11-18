@@ -98,7 +98,7 @@ def interface_transactions_simplifiee() -> None:
         from .revenues import interface_process_all_revenues_in_folder
         st.subheader("💰 Scanner un revenu (PDF)")
         st.info(f"**📂 Dossier de scan :** `{REVENUS_A_TRAITER}`")
-         interface_process_all_revenues_in_folder()
+        interface_process_all_revenues_in_folder()
         
     # === TRANSACTION RÉCURRENTE (DÉPENSE OU REVENU) ===
     elif type_action == "🔁 Créer une transaction récurrente":
