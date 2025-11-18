@@ -58,7 +58,7 @@ def interface_transactions_simplifiee() -> None:
                 "📸 Scanner un ticket (OCR)",
                 "💰 Scanner un revenu (PDF)",
                 "🔁 Créer une transaction récurrente",
-                "💸 Ajouter une Transaction"
+                "💸 Ajouter une Dépense ou un Revenu"
             ],
             key="type_action_transaction"
         )
@@ -127,7 +127,7 @@ def interface_transactions_simplifiee() -> None:
         interface_transaction_recurrente(type_transaction=type_val)
 
     # === REVENU (NON-RÉCURRENT) ===
-    elif type_action == "💸 Ajouter une Transaction":
+    elif type_action == "💸 Ajouter une Dépense ou un Revenu":
         
         # Import revenue function to avoid circular imports
         interface_ajouter_depenses_fusionnee() 
@@ -146,7 +146,7 @@ def interface_ajouter_depenses_fusionnee() -> None:
     Returns:
         None
     """
-    st.subheader("💸 Ajouter des dépenses")
+    st.subheader("💸 Ajouter une Dépense ou un Revenu")
 
     # Tabs pour séparer clairement les deux méthodes
     tab1, tab2 = st.tabs(["✍️ Ajout manuel", "📄 Import CSV"])
