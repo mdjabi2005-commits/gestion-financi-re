@@ -101,7 +101,7 @@ def main():
             "Navigation",
             [
                 "🏠 Accueil",
-                "💳 Transactions,
+                "💳 Transactions",
                 "📊 Voir Transactions",
                 "⚙️ Gérer Récurrences",
                 "💼 Portefeuille",
