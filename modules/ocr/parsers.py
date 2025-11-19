@@ -254,6 +254,7 @@ def parse_ticket_metadata(ocr_text: str) -> Dict[str, Any]:
     total_patterns = [
         r"TOTAL\s*TTC",
         r"TOTAL\s*(A\s*PAYER)?",
+        r"MONTANT"
         r"MONTANT\s*(R[EÉ][EÉ][LI]|R[EÉ][LI][LI]|TTC)?",  # REEL, RÉEL, RELL, RFEI, etc.
         r"NET\s*A\s*PAYER",
         r"À\s*PAYER",
