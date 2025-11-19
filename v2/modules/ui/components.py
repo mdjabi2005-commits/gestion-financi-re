@@ -465,6 +465,211 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
 
 
 # ==============================
+# 📊 BUBBLE VISUALIZATION
+# ==============================
+
+def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> None:
+    """
+    Render pure visual bubble chart with proportional sizes (non-interactive).
+    The bubbles show the visual proportions, interaction happens via buttons below.
+
+    Args:
+        stats: Category statistics DataFrame with columns [categorie, montant, pct]
+        selected: List of currently selected categories
+    """
+    if stats.empty:
+        return
+
+    # Calculate bubble sizes
+    max_amount = stats['montant'].max()
+    min_size = 80   # Minimum bubble diameter in pixels
+    max_size = 220  # Maximum bubble diameter in pixels
+
+    # Create CSS styles - DESIGN ÉPURÉ ET MODERNE
+    css_styles = """
+    <style>
+    .bubble-viz-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 35px;
+        padding: 60px 30px;
+        background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+        border-radius: 20px;
+        margin: 20px 0;
+        min-height: 380px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .viz-bubble {
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border: 3px solid #cbd5e0;
+        background: #ffffff;
+        color: #1e293b;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        cursor: default;
+    }
+
+    .viz-bubble:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        border-color: #94a3b8;
+    }
+
+    .viz-bubble-selected {
+        border: 4px solid #10b981;
+        background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+        animation: gentle-pulse 2.5s ease-in-out infinite;
+    }
+
+    .viz-bubble.burst {
+        animation: burst-explode 0.6s ease-out forwards;
+    }
+
+    @keyframes burst-explode {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+            filter: brightness(1);
+        }
+        50% {
+            transform: scale(1.3);
+            opacity: 0.8;
+            filter: brightness(1.3);
+        }
+        100% {
+            transform: scale(0.3) rotate(360deg);
+            opacity: 0;
+            filter: brightness(0.5);
+        }
+    }
+
+    @keyframes gentle-pulse {
+        0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+        }
+        50% {
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+        }
+    }
+
+    .bubble-checkmark {
+        position: absolute;
+        top: -12px;
+        right: -12px;
+        background: #10b981;
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 900;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        animation: check-pop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+
+    @keyframes check-pop {
+        0% {
+            transform: scale(0) rotate(-45deg);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+        }
+    }
+
+    .bubble-category-name {
+        font-size: 0.85em;
+        font-weight: 700;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #475569;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    .bubble-amount {
+        font-size: 1.5em;
+        font-weight: 900;
+        color: #0f172a;
+        margin: 4px 0;
+    }
+
+    .bubble-percentage {
+        font-size: 0.7em;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    .viz-bubble-selected .bubble-category-name {
+        color: #047857;
+    }
+
+    .viz-bubble-selected .bubble-amount {
+        color: #059669;
+    }
+
+    .viz-bubble-selected .bubble-percentage {
+        color: #10b981;
+    }
+    </style>
+    """
+
+    # Display CSS
+    st.markdown(css_styles, unsafe_allow_html=True)
+
+    # Generate bubble HTML
+    bubble_html = '<div class="bubble-viz-container">'
+
+    for _, row in stats.iterrows():
+        cat = row['categorie']
+        amount = row['montant']
+        pct = row['pct']
+        is_selected = cat in selected
+
+        # Calculate proportional size
+        size = min_size + (amount / max_amount) * (max_size - min_size)
+        font_base = size / 9  # Adaptive font sizing
+
+        # Apply selection styling
+        selected_class = 'viz-bubble-selected' if is_selected else ''
+        checkmark_html = '<div class="bubble-checkmark">✓</div>' if is_selected else ''
+
+        # Build HTML carefully without f-string issues
+        bubble_html += '<div class="viz-bubble ' + selected_class + '" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + ': ' + str(amount) + '€">'
+        bubble_html += checkmark_html
+        bubble_html += '<div class="bubble-category-name" style="font-size: ' + str(font_base) + 'px;">' + cat + '</div>'
+        bubble_html += '<div class="bubble-amount" style="font-size: ' + str(font_base * 1.6) + 'px;">' + str(int(amount)) + '€</div>'
+        bubble_html += '<div class="bubble-percentage" style="font-size: ' + str(font_base * 0.9) + 'px;">' + str(pct) + '%</div>'
+        bubble_html += '</div>'
+
+    bubble_html += '</div>'
+
+    # Display HTML
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    # Help text
+    st.caption("💡 **Visualisation proportionnelle** : Plus la bulle est grande, plus vous dépensez dans cette catégorie. Utilisez les boutons ci-dessous pour sélectionner.")
+
+
+# ==============================
 # 🫧 HIERARCHICAL BUBBLE SYSTEM
 # ==============================
 
