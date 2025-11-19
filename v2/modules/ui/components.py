@@ -481,7 +481,7 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
     min_size = 80   # Minimum bubble diameter in pixels
     max_size = 220  # Maximum bubble diameter in pixels
 
-    # Create CSS styles (using raw string to avoid f-string issues)
+    # Create CSS styles - DESIGN ÉPURÉ ET MODERNE
     css_styles = """
     <style>
     .bubble-viz-container {
@@ -489,13 +489,14 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 30px;
-        padding: 50px 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 25px;
+        gap: 35px;
+        padding: 60px 30px;
+        background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+        border-radius: 20px;
         margin: 20px 0;
-        min-height: 400px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        min-height: 380px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
     .viz-bubble {
@@ -504,26 +505,27 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        border: 5px solid rgba(255,255,255,0.3);
-        background: rgba(255,255,255,0.95);
-        color: #1a202c;
-        font-weight: 700;
-        box-shadow: 0 15px 35px rgba(0,0,0,0.3);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 3px solid #cbd5e0;
+        background: #ffffff;
+        color: #1e293b;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         cursor: default;
     }
 
     .viz-bubble:hover {
-        transform: translateY(-10px) scale(1.08);
-        box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-        border-color: rgba(255,255,255,0.8);
+        transform: translateY(-8px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        border-color: #94a3b8;
     }
 
     .viz-bubble-selected {
-        border: 7px solid #10b981;
-        background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%);
-        animation: pulse-bubble 2s infinite;
+        border: 4px solid #10b981;
+        background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+        animation: gentle-pulse 2.5s ease-in-out infinite;
     }
 
     .viz-bubble.burst {
@@ -548,75 +550,80 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         }
     }
 
-    .burst-particle {
-        position: absolute;
-        pointer-events: none;
-    }
-
-    .burst-particle div {
-        position: absolute;
-        border-radius: 50%;
-        animation: particle-fly 0.8s ease-out forwards;
-    }
-
-    @keyframes particle-fly {
-        0% {
-            opacity: 1;
-            transform: translate(0, 0) scale(1);
+    @keyframes gentle-pulse {
+        0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
         }
-        100% {
-            opacity: 0;
-            transform: translate(var(--tx), var(--ty)) scale(0);
+        50% {
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
         }
-    }
-
-    @keyframes pulse-bubble {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), 0 20px 50px rgba(0,0,0,0.4); }
-        50% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0), 0 25px 60px rgba(0,0,0,0.5); }
     }
 
     .bubble-checkmark {
         position: absolute;
-        top: -15px;
-        right: -15px;
+        top: -12px;
+        right: -12px;
         background: #10b981;
         color: white;
         border-radius: 50%;
-        width: 45px;
-        height: 45px;
+        width: 40px;
+        height: 40px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 24px;
-        font-weight: bold;
-        box-shadow: 0 8px 16px rgba(16, 185, 129, 0.5);
-        animation: bounce-in 0.5s;
+        font-size: 20px;
+        font-weight: 900;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        animation: check-pop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     }
 
-    @keyframes bounce-in {
-        0% { transform: scale(0); }
-        50% { transform: scale(1.2); }
-        100% { transform: scale(1); }
+    @keyframes check-pop {
+        0% {
+            transform: scale(0) rotate(-45deg);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+        }
     }
 
     .bubble-category-name {
-        font-size: 0.9em;
-        margin-bottom: 8px;
+        font-size: 0.85em;
+        font-weight: 700;
+        margin-bottom: 6px;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
+        color: #475569;
         text-align: center;
+        line-height: 1.2;
     }
 
     .bubble-amount {
-        font-size: 1.4em;
+        font-size: 1.5em;
         font-weight: 900;
-        margin: 5px 0;
+        color: #0f172a;
+        margin: 4px 0;
     }
 
     .bubble-percentage {
-        font-size: 0.75em;
-        opacity: 0.7;
+        font-size: 0.7em;
+        color: #64748b;
         font-weight: 600;
+    }
+
+    .viz-bubble-selected .bubble-category-name {
+        color: #047857;
+    }
+
+    .viz-bubble-selected .bubble-amount {
+        color: #059669;
+    }
+
+    .viz-bubble-selected .bubble-percentage {
+        color: #10b981;
     }
     </style>
     """
