@@ -5,7 +5,7 @@ This module contains toast notifications, badges, and transaction display compon
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image
@@ -464,124 +464,65 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
     return _render_hybrid_view(stats, df)
 
 
-def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> None:
+# ==============================
+# 🫧 HIERARCHICAL BUBBLE SYSTEM
+# ==============================
+
+def render_hierarchical_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
     """
-    Render pure visual bubble chart with proportional sizes (non-interactive).
-    The bubbles show the visual proportions, interaction happens via buttons below.
+    Render hierarchical bubble system with drill-down navigation.
 
     Args:
-        stats: Category statistics DataFrame with columns [categorie, montant, pct]
-        selected: List of currently selected categories
+        df: DataFrame with transaction data
+
+    Returns:
+        tuple: (drill_level, selected_items)
     """
-    if stats.empty:
-        return
+    # Initialize session state
+    if 'bubble_drill_level' not in st.session_state:
+        st.session_state.bubble_drill_level = 'total'
+    if 'bubble_selected_category' not in st.session_state:
+        st.session_state.bubble_selected_category = None
 
-    # Calculate bubble sizes
-    max_amount = stats['montant'].max()
-    min_size = 80   # Minimum bubble diameter in pixels
-    max_size = 220  # Maximum bubble diameter in pixels
+    level = st.session_state.bubble_drill_level
 
-    # Create CSS styles - DESIGN ÉPURÉ ET MODERNE
-    css_styles = """
+    # CSS commun pour toutes les bulles
+    css_hierarchical = """
     <style>
-    .bubble-viz-container {
+    .hierarchical-bubble-container {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 35px;
-        padding: 60px 30px;
-        background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
-        border-radius: 20px;
+        gap: 40px;
+        padding: 80px 40px;
+        background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
+        border-radius: 25px;
         margin: 20px 0;
-        min-height: 380px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        min-height: 500px;
+        position: relative;
     }
 
-    .viz-bubble {
+    .h-bubble {
         border-radius: 50%;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        border: 3px solid #cbd5e0;
+        border: 4px solid #cbd5e0;
         background: #ffffff;
         color: #1e293b;
-        font-weight: 600;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 700;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         position: relative;
-        cursor: default;
+        cursor: pointer;
+        animation: bubble-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    .viz-bubble:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-        border-color: #94a3b8;
-    }
-
-    .viz-bubble-selected {
-        border: 4px solid #10b981;
-        background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
-        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
-        animation: gentle-pulse 2.5s ease-in-out infinite;
-    }
-
-    .viz-bubble.burst {
-        animation: burst-explode 0.6s ease-out forwards;
-    }
-
-    @keyframes burst-explode {
+    @keyframes bubble-appear {
         0% {
-            transform: scale(1);
-            opacity: 1;
-            filter: brightness(1);
-        }
-        50% {
-            transform: scale(1.3);
-            opacity: 0.8;
-            filter: brightness(1.3);
-        }
-        100% {
-            transform: scale(0.3) rotate(360deg);
-            opacity: 0;
-            filter: brightness(0.5);
-        }
-    }
-
-    @keyframes gentle-pulse {
-        0%, 100% {
-            transform: scale(1);
-            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
-        }
-        50% {
-            transform: scale(1.02);
-            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-        }
-    }
-
-    .bubble-checkmark {
-        position: absolute;
-        top: -12px;
-        right: -12px;
-        background: #10b981;
-        color: white;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        font-weight: 900;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        animation: check-pop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    }
-
-    @keyframes check-pop {
-        0% {
-            transform: scale(0) rotate(-45deg);
+            transform: scale(0) rotate(-180deg);
             opacity: 0;
         }
         100% {
@@ -590,135 +531,221 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         }
     }
 
-    .bubble-category-name {
-        font-size: 0.85em;
-        font-weight: 700;
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: #475569;
-        text-align: center;
-        line-height: 1.2;
+    .h-bubble:hover {
+        transform: translateY(-15px) scale(1.1);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+        border-color: #3b82f6;
     }
 
-    .bubble-amount {
-        font-size: 1.5em;
-        font-weight: 900;
-        color: #0f172a;
-        margin: 4px 0;
+    .h-bubble-clickable::after {
+        content: '👆';
+        position: absolute;
+        bottom: -45px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 24px;
+        opacity: 0;
+        transition: opacity 0.3s;
     }
 
-    .bubble-percentage {
-        font-size: 0.7em;
-        color: #64748b;
+    .h-bubble-clickable:hover::after {
+        opacity: 1;
+        animation: bounce 1s infinite;
+    }
+
+    @keyframes bounce {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+        50% { transform: translateX(-50%) translateY(-10px); }
+    }
+
+    .breadcrumb-nav {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 12px 20px;
+        border-radius: 12px;
         font-weight: 600;
+        color: #475569;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        font-size: 14px;
     }
 
-    .viz-bubble-selected .bubble-category-name {
-        color: #047857;
+    .back-button-visual {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: #ef4444;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        transition: all 0.3s;
+        font-size: 14px;
     }
 
-    .viz-bubble-selected .bubble-amount {
-        color: #059669;
-    }
-
-    .viz-bubble-selected .bubble-percentage {
-        color: #10b981;
+    .back-button-visual:hover {
+        background: #dc2626;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
     }
     </style>
     """
 
-    # Display CSS
-    st.markdown(css_styles, unsafe_allow_html=True)
+    st.markdown(css_hierarchical, unsafe_allow_html=True)
 
-    # Generate bubble HTML
-    bubble_html = '<div class="bubble-viz-container">'
+    # Render selon le niveau
+    if level == 'total':
+        return _render_total_bubble(df)
+    elif level == 'categories':
+        return _render_category_bubbles(df)
+    elif level == 'subcategories':
+        return _render_subcategory_bubbles(df, st.session_state.bubble_selected_category)
+
+    return ('total', [])
+
+
+def _render_total_bubble(df: pd.DataFrame) -> Tuple[str, List[str]]:
+    """Render the single big bubble showing total."""
+    df_expenses = df[df['type'] == 'dépense']
+    total_amount = df_expenses['montant'].sum()
+    nb_categories = df_expenses['categorie'].nunique()
+    nb_transactions = len(df_expenses)
+
+    bubble_html = '<div class="hierarchical-bubble-container">'
+    bubble_html += '<div class="breadcrumb-nav">🏠 Vue d\'ensemble</div>'
+
+    # Une seule grosse bulle
+    size = 300
+    bubble_html += '<div class="h-bubble h-bubble-clickable" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;">'
+    bubble_html += '<div style="font-size: 18px; margin-bottom: 15px; color: #64748b;">💰 TOUTES VOS DÉPENSES</div>'
+    bubble_html += '<div style="font-size: 48px; font-weight: 900; color: #0f172a; margin: 10px 0;">' + str(int(total_amount)) + '€</div>'
+    bubble_html += '<div style="font-size: 14px; color: #94a3b8; margin-top: 10px;">' + str(nb_categories) + ' catégories</div>'
+    bubble_html += '<div style="font-size: 14px; color: #94a3b8;">' + str(nb_transactions) + ' transactions</div>'
+    bubble_html += '<div style="font-size: 13px; color: #3b82f6; margin-top: 20px; font-weight: 600;">👆 Cliquez pour explorer</div>'
+    bubble_html += '</div>'
+    bubble_html += '</div>'
+
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    # Bouton invisible pour navigation
+    if st.button("🔍 Explorer les catégories", key="explore_categories", use_container_width=True, type="primary"):
+        st.session_state.bubble_drill_level = 'categories'
+        st.rerun()
+
+    return ('total', [])
+
+
+def _render_category_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
+    """Render bubbles for each category."""
+    # Calculate stats
+    df_expenses = df[df['type'] == 'dépense']
+    stats = df_expenses.groupby('categorie').agg({
+        'montant': 'sum'
+    }).reset_index()
+    stats = stats.sort_values('montant', ascending=False)
+
+    max_amount = stats['montant'].max()
+    min_size = 100
+    max_size = 250
+
+    bubble_html = '<div class="hierarchical-bubble-container">'
+    bubble_html += '<div class="breadcrumb-nav">🏠 Vue d\'ensemble → 📂 Catégories</div>'
 
     for _, row in stats.iterrows():
         cat = row['categorie']
         amount = row['montant']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        # Calculate proportional size
         size = min_size + (amount / max_amount) * (max_size - min_size)
-        font_base = size / 9  # Adaptive font sizing
 
-        # Apply selection styling
-        selected_class = 'viz-bubble-selected' if is_selected else ''
-        checkmark_html = '<div class="bubble-checkmark">✓</div>' if is_selected else ''
-
-        # Build HTML carefully without f-string issues
-        bubble_html += '<div class="viz-bubble ' + selected_class + '" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + ': ' + str(amount) + '€">'
-        bubble_html += checkmark_html
-        bubble_html += '<div class="bubble-category-name" style="font-size: ' + str(font_base) + 'px;">' + cat + '</div>'
-        bubble_html += '<div class="bubble-amount" style="font-size: ' + str(font_base * 1.6) + 'px;">' + str(int(amount)) + '€</div>'
-        bubble_html += '<div class="bubble-percentage" style="font-size: ' + str(font_base * 0.9) + 'px;">' + str(pct) + '%</div>'
+        bubble_html += '<div class="h-bubble h-bubble-clickable" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + '">'
+        bubble_html += '<div style="font-size: ' + str(size/12) + 'px; font-weight: 700; text-transform: uppercase;">' + cat + '</div>'
+        bubble_html += '<div style="font-size: ' + str(size/7) + 'px; font-weight: 900; margin: 8px 0;">' + str(int(amount)) + '€</div>'
+        bubble_html += '<div style="font-size: ' + str(size/15) + 'px; color: #64748b;">Cliquez pour détails</div>'
         bubble_html += '</div>'
 
     bubble_html += '</div>'
-
-    # Display HTML
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Help text
-    st.caption("💡 **Visualisation proportionnelle** : Plus la bulle est grande, plus vous dépensez dans cette catégorie. Utilisez les boutons ci-dessous pour sélectionner.")
+    # Bouton retour
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("← Retour au total", key="back_to_total", use_container_width=True):
+            st.session_state.bubble_drill_level = 'total'
+            st.rerun()
+
+    # Boutons pour chaque catégorie
+    st.markdown("### 🖱️ Sélectionnez une catégorie")
+    cols = st.columns(4)
+    for idx, (_, row) in enumerate(stats.iterrows()):
+        with cols[idx % 4]:
+            if st.button(f"📂 {row['categorie']}", key=f"cat_{row['categorie']}", use_container_width=True):
+                st.session_state.bubble_selected_category = row['categorie']
+                st.session_state.bubble_drill_level = 'subcategories'
+                st.rerun()
+
+    return ('categories', [])
+
+
+def _render_subcategory_bubbles(df: pd.DataFrame, parent_category: str) -> Tuple[str, List[str]]:
+    """Render bubbles for subcategories of selected category."""
+    df_expenses = df[df['type'] == 'dépense']
+    df_cat = df_expenses[df_expenses['categorie'] == parent_category]
+
+    stats = df_cat.groupby('sous_categorie').agg({
+        'montant': 'sum'
+    }).reset_index()
+    stats = stats.sort_values('montant', ascending=False)
+
+    max_amount = stats['montant'].max()
+    min_size = 80
+    max_size = 200
+
+    bubble_html = '<div class="hierarchical-bubble-container">'
+    bubble_html += '<div class="breadcrumb-nav">🏠 → 📂 ' + parent_category + '</div>'
+
+    for _, row in stats.iterrows():
+        subcat = row['sous_categorie']
+        amount = row['montant']
+        size = min_size + (amount / max_amount) * (max_size - min_size)
+
+        bubble_html += '<div class="h-bubble" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + subcat + '">'
+        bubble_html += '<div style="font-size: ' + str(size/10) + 'px; font-weight: 700;">' + subcat + '</div>'
+        bubble_html += '<div style="font-size: ' + str(size/6) + 'px; font-weight: 900; margin: 6px 0;">' + str(int(amount)) + '€</div>'
+        bubble_html += '</div>'
+
+    bubble_html += '</div>'
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    # Boutons
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("← Retour aux catégories", key="back_to_categories", use_container_width=True):
+            st.session_state.bubble_drill_level = 'categories'
+            st.rerun()
+
+    # Retourner la catégorie sélectionnée pour filtrer les transactions
+    return ('subcategories', [parent_category])
 
 
 def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
-    """Render proportional bubble visualization with visual bubbles and interactive buttons."""
-    # Initialize session state
+    """Render hierarchical bubble visualization with drill-down navigation."""
     if 'selected_categories' not in st.session_state:
         st.session_state.selected_categories = []
 
-    st.subheader("📊 Répartition Visuelle")
+    st.subheader("📊 Navigation Hiérarchique")
 
-    selected = st.session_state.selected_categories
+    # Render hierarchical bubbles
+    level, selected = render_hierarchical_bubbles(df)
 
-    # ========== AFFICHER LES BULLES HTML VISUELLES ==========
-    if not stats.empty:
-        render_bubble_visualization(stats, selected)
-    # ========================================================
-
-    # Separator
-    st.markdown("---")
-
-    # Show current selection status
-    if selected:
-        st.info(f"🎯 **Filtres actifs** : {', '.join(selected)}")
+    # Update selected categories based on drill level
+    if level == 'subcategories':
+        st.session_state.selected_categories = selected
     else:
-        st.info("📊 **Toutes les catégories affichées**")
+        st.session_state.selected_categories = []
 
-    # Interactive section
-    st.markdown("### 🖱️ Sélection Interactive")
-    st.caption("Cliquez sur les boutons ci-dessous pour filtrer vos transactions")
-
-    # Selection via buttons (4 columns layout)
-    cols = st.columns(4)
-
-    for idx, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        with cols[idx % 4]:
-            # Create button with improved visual feedback
-            button_label = f"{'✅ ' if is_selected else '⬜ '}{cat}\n{amount:.0f}€"
-
-            # Use different button types for visual feedback
-            if st.button(button_label, key=f"bubble_select_{cat}", use_container_width=True,
-                        help=f"Cliquez pour {'désélectionner' if is_selected else 'sélectionner'} {cat} ({pct:.1f}% de vos dépenses totales)",
-                        type="primary" if is_selected else "secondary"):
-                if cat in selected:
-                    selected.remove(cat)
-                else:
-                    selected.append(cat)
-
-                st.session_state.selected_categories = selected
-                st.rerun()  # ← CRITICAL: Force immediate refresh
-
-    return selected
+    return st.session_state.selected_categories
 
 
 def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
