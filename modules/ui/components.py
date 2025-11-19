@@ -462,6 +462,13 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
     # Display header
     st.markdown("## 💰 Gestion des Catégories")
 
+    # Show current filter status
+    selected = st.session_state.get('selected_categories', [])
+    if selected:
+        st.info(f"🎯 Filtres actifs : {', '.join(selected)}")
+    else:
+        st.info("📊 Toutes les catégories affichées")
+
     # Mode selector
     mode = render_view_mode_selector()
     st.markdown("---")
@@ -484,12 +491,22 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
 
 def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
     """Render proportional bubble visualization."""
+    # Always initialize session state
+    if 'selected_categories' not in st.session_state:
+        st.session_state.selected_categories = []
+
     st.subheader("📊 Répartition Visuelle")
 
-    selected = st.session_state.get('selected_categories', [])
+    selected = st.session_state.selected_categories
+
+    # Show current selection status
+    if selected:
+        st.info(f"🎯 Filtres actifs : {', '.join(selected)}")
+    else:
+        st.info("📊 Toutes les catégories affichées")
 
     # Show bubble info text
-    st.info("💡 Cliquez sur les boutons ci-dessous pour sélectionner les catégories. La taille indique le montant total.")
+    st.markdown("💡 Cliquez sur les boutons ci-dessous pour sélectionner les catégories. La taille indique le montant total.")
 
     # Selection via buttons (4 columns layout)
     cols = st.columns(4)
@@ -501,26 +518,39 @@ def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
         is_selected = cat in selected
 
         with cols[idx % 4]:
-            # Create button with info
-            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{amount:.0f}€ ({pct}%)"
+            # Create button with improved visual feedback
+            button_label = f"{'✅ ' if is_selected else '⬜ '}{cat}\n{amount:.0f}€ ({pct:.1f}%)"
 
-            # Use a container to style it like a bubble
-            if st.button(button_text, key=f"bubble_select_{cat}", use_container_width=True,
-                        help=f"Total: {amount:.2f}€ - {pct}% du total"):
+            # Use different button types for visual feedback
+            if st.button(button_label, key=f"bubble_select_{cat}", use_container_width=True,
+                        help=f"Total: {amount:.2f}€ - {pct}% du total",
+                        type="primary" if is_selected else "secondary"):
                 if cat in selected:
                     selected.remove(cat)
                 else:
                     selected.append(cat)
 
-    st.session_state.selected_categories = selected
+                st.session_state.selected_categories = selected
+                st.rerun()  # ← CRITICAL: Force immediate refresh
+
     return selected
 
 
 def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
     """Render chips/tags visualization with multi-selection."""
+    # Always initialize session state
+    if 'selected_categories' not in st.session_state:
+        st.session_state.selected_categories = []
+
     st.subheader("🏷️ Filtres Rapides")
 
-    selected = st.session_state.get('selected_categories', [])
+    selected = st.session_state.selected_categories
+
+    # Show current selection status
+    if selected:
+        st.info(f"🎯 Filtres actifs : {', '.join(selected)}")
+    else:
+        st.info("📊 Toutes les catégories affichées")
 
     # Render chips
     st.markdown('<div class="chips-container">', unsafe_allow_html=True)
@@ -529,30 +559,38 @@ def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
     for idx, (_, row) in enumerate(stats.iterrows()):
         cat = row['categorie']
         amount = row['montant']
+        pct = row['pct']
         is_selected = cat in selected
 
-        chip_html = f"{'✓ ' if is_selected else ''}{cat} | {amount:.0f}€"
+        chip_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {amount:.0f}€ ({pct:.1f}%)"
 
         with cols[idx % 4]:
-            if st.button(chip_html, key=f"chip_select_{cat}", use_container_width=True,
-                        help=f"{'Désélectionner' if is_selected else 'Sélectionner'} {cat}"):
+            if st.button(chip_label, key=f"chip_select_{cat}", use_container_width=True,
+                        help=f"{'Désélectionner' if is_selected else 'Sélectionner'} {cat}",
+                        type="primary" if is_selected else "secondary"):
                 if cat in selected:
                     selected.remove(cat)
                 else:
                     selected.append(cat)
 
+                st.session_state.selected_categories = selected
+                st.rerun()  # ← CRITICAL: Force immediate refresh
+
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Show selection counter
+    # Show selection counter and transaction count
     if selected:
         trans_count = len(df[df['categorie'].isin(selected)])
-        st.info(f"📊 {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
+        st.success(f"✅ {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
+    else:
+        st.info("⬜ Aucune sélection (toutes les transactions affichées)")
 
     # Action buttons
     col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("🔄 Effacer tout", use_container_width=True):
-            selected.clear()
+        if st.button("🔄 Effacer tout", use_container_width=True, key="clear_all_filters"):
+            st.session_state.selected_categories = []
+            st.rerun()  # ← CRITICAL: Force immediate refresh
 
     with col2:
         if len(selected) == 1 and st.button("↓ Voir sous-catégories", use_container_width=True):
@@ -560,7 +598,6 @@ def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
             st.session_state.parent_category = selected[0]
             st.rerun()
 
-    st.session_state.selected_categories = selected
     return selected
 
 
@@ -581,7 +618,11 @@ def _render_hybrid_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
 
 def _render_bubble_view_minimal(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
     """Minimal bubble view for hybrid mode."""
-    selected = st.session_state.get('selected_categories', [])
+    # Always initialize session state
+    if 'selected_categories' not in st.session_state:
+        st.session_state.selected_categories = []
+
+    selected = st.session_state.selected_categories
 
     # Display as compact buttons
     cols = st.columns(3)
@@ -592,13 +633,17 @@ def _render_bubble_view_minimal(stats: pd.DataFrame, df: pd.DataFrame) -> List[s
         is_selected = cat in selected
 
         with cols[idx % 3]:
-            button_text = f"{'✓ ' if is_selected else ''}{cat}\n{pct}%"
-            if st.button(button_text, key=f"hybrid_bubble_{cat}", use_container_width=True,
-                        help=f"{amount:.0f}€"):
+            button_label = f"{'✅ ' if is_selected else '⬜ '}{cat}\n{pct:.1f}%"
+            if st.button(button_label, key=f"hybrid_bubble_{cat}", use_container_width=True,
+                        help=f"{amount:.0f}€",
+                        type="primary" if is_selected else "secondary"):
                 if cat in selected:
                     selected.remove(cat)
                 else:
                     selected.append(cat)
+
+                st.session_state.selected_categories = selected
+                st.rerun()  # ← CRITICAL: Force immediate refresh
 
     return selected
 
@@ -607,14 +652,18 @@ def _render_chips_view_minimal(stats: pd.DataFrame, df: pd.DataFrame, selected: 
     """Minimal chips view for hybrid mode."""
     for _, row in stats.iterrows():
         cat = row['categorie']
+        pct = row['pct']
         is_selected = cat in selected
 
-        button_text = f"{'✓ ' if is_selected else ''}{cat} | {row['montant']:.0f}€"
-        if st.button(button_text, key=f"hybrid_chip_{cat}", use_container_width=True):
+        button_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {row['montant']:.0f}€ ({pct:.1f}%)"
+        if st.button(button_label, key=f"hybrid_chip_{cat}", use_container_width=True,
+                    type="primary" if is_selected else "secondary"):
             if cat in selected:
                 selected.remove(cat)
             else:
                 selected.append(cat)
 
-    st.session_state.selected_categories = selected
+            st.session_state.selected_categories = selected
+            st.rerun()  # ← CRITICAL: Force immediate refresh
+
     return selected
