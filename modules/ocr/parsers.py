@@ -93,7 +93,7 @@ def detect_potential_patterns(ocr_text: str, known_patterns: List[str]) -> List[
         - context: Surrounding text
     """
     lines = [l.strip() for l in ocr_text.split("\n") if l.strip()]
-    montant_regex = r"(\d{1,5}[.,]\d{1,2})\s*(?:€|eur|euros?)?"
+    montant_regex = r"(\d{1,5}[.,]\d{1,2})\s*(?:€|eur|EUR|euros?)?"
     potential_patterns = []
 
     for line in lines:
