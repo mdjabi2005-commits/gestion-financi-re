@@ -506,10 +506,9 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
     min_size = 80   # Minimum bubble diameter in pixels
     max_size = 220  # Maximum bubble diameter in pixels
 
-    # Inject CSS for bubbles
-    st.markdown("""
+    # Create CSS styles (using raw string to avoid f-string issues)
+    css_styles = """
     <style>
-    /* Container for all bubbles */
     .bubble-viz-container {
         display: flex;
         flex-wrap: wrap;
@@ -524,7 +523,6 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
 
-    /* Individual bubble */
     .viz-bubble {
         border-radius: 50%;
         display: flex;
@@ -541,33 +539,23 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         cursor: default;
     }
 
-    /* Hover effect */
     .viz-bubble:hover {
         transform: translateY(-10px) scale(1.08);
         box-shadow: 0 20px 50px rgba(0,0,0,0.4);
         border-color: rgba(255,255,255,0.8);
     }
 
-    /* Selected bubble style */
     .viz-bubble-selected {
         border: 7px solid #10b981;
         background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%);
         animation: pulse-bubble 2s infinite;
     }
 
-    /* Pulsing animation for selected bubbles */
     @keyframes pulse-bubble {
-        0%, 100% {
-            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7),
-                       0 20px 50px rgba(0,0,0,0.4);
-        }
-        50% {
-            box-shadow: 0 0 0 20px rgba(16, 185, 129, 0),
-                       0 25px 60px rgba(0,0,0,0.5);
-        }
+        0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), 0 20px 50px rgba(0,0,0,0.4); }
+        50% { box-shadow: 0 0 0 20px rgba(16, 185, 129, 0), 0 25px 60px rgba(0,0,0,0.5); }
     }
 
-    /* Checkmark indicator for selected bubbles */
     .bubble-checkmark {
         position: absolute;
         top: -15px;
@@ -592,7 +580,6 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         100% { transform: scale(1); }
     }
 
-    /* Bubble text styles */
     .bubble-category-name {
         font-size: 0.9em;
         margin-bottom: 8px;
@@ -613,7 +600,10 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         font-weight: 600;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """
+
+    # Display CSS
+    st.markdown(css_styles, unsafe_allow_html=True)
 
     # Generate bubble HTML
     bubble_html = '<div class="bubble-viz-container">'
@@ -632,18 +622,17 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         selected_class = 'viz-bubble-selected' if is_selected else ''
         checkmark_html = '<div class="bubble-checkmark">✓</div>' if is_selected else ''
 
-        bubble_html += f"""
-        <div class="viz-bubble {selected_class}"
-             style="width: {size}px; height: {size}px;"
-             title="{cat}: {amount:.2f}€ ({pct}%)">
-            {checkmark_html}
-            <div class="bubble-category-name" style="font-size: {font_base}px;">{cat}</div>
-            <div class="bubble-amount" style="font-size: {font_base * 1.6}px;">{amount:.0f}€</div>
-            <div class="bubble-percentage" style="font-size: {font_base * 0.9}px;">{pct:.1f}%</div>
-        </div>
-        """
+        # Build HTML carefully without f-string issues
+        bubble_html += '<div class="viz-bubble ' + selected_class + '" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + ': ' + str(amount) + '€">'
+        bubble_html += checkmark_html
+        bubble_html += '<div class="bubble-category-name" style="font-size: ' + str(font_base) + 'px;">' + cat + '</div>'
+        bubble_html += '<div class="bubble-amount" style="font-size: ' + str(font_base * 1.6) + 'px;">' + str(int(amount)) + '€</div>'
+        bubble_html += '<div class="bubble-percentage" style="font-size: ' + str(font_base * 0.9) + 'px;">' + str(pct) + '%</div>'
+        bubble_html += '</div>'
 
     bubble_html += '</div>'
+
+    # Display HTML
     st.markdown(bubble_html, unsafe_allow_html=True)
 
     # Help text
