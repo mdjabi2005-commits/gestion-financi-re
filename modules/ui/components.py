@@ -407,33 +407,17 @@ def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
 
 def render_view_mode_selector() -> str:
     """
-    Render radio buttons to select between different visualization modes.
+    Return the default mode (hybrid only - no selector needed).
 
     Returns:
-        Selected mode: 'bubbles' | 'chips' | 'hybrid'
+        Selected mode: 'hybrid'
     """
     # Initialize session state
     if 'category_view_mode' not in st.session_state:
         st.session_state.category_view_mode = 'hybrid'
 
-    col1, col2, col3 = st.columns([1, 1, 1])
-
-    with col1:
-        if st.button("📊 Graphique", use_container_width=True,
-                     key="btn_bubbles", help="Vue avec bulles proportionnelles"):
-            st.session_state.category_view_mode = 'bubbles'
-
-    with col2:
-        if st.button("🏷️ Chips", use_container_width=True,
-                     key="btn_chips", help="Vue avec tags de filtrage"):
-            st.session_state.category_view_mode = 'chips'
-
-    with col3:
-        if st.button("🔄 Hybride", use_container_width=True,
-                     key="btn_hybrid", help="Vue combinée"):
-            st.session_state.category_view_mode = 'hybrid'
-
-    return st.session_state.category_view_mode
+    # Hybrid mode is the only mode now - no selector needed
+    return 'hybrid'
 
 
 def render_category_management(df: pd.DataFrame) -> List[str]:
@@ -460,18 +444,14 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
 
 
     # Display header
-    st.markdown("## 💰 Gestion des Catégories")
+    st.markdown("## 💰 Catégories")
 
     # Show current filter status
     selected = st.session_state.get('selected_categories', [])
     if selected:
-        st.info(f"🎯 Filtres actifs : {', '.join(selected)}")
+        st.success(f"🎯 **Filtres actifs** : {', '.join(selected)}")
     else:
-        st.info("📊 Toutes les catégories affichées")
-
-    # Mode selector
-    mode = render_view_mode_selector()
-    st.markdown("---")
+        st.info("📊 **Toutes les catégories affichées**")
 
     # Get category stats
     stats = calculate_category_stats(df)
@@ -480,13 +460,8 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
         st.info("Aucune catégorie trouvée")
         return []
 
-    # Render based on mode
-    if mode == 'bubbles':
-        return _render_bubble_view(stats, df)
-    elif mode == 'chips':
-        return _render_chips_view(stats, df)
-    else:  # hybrid
-        return _render_hybrid_view(stats, df)
+    # Display hybrid view directly (only mode available)
+    return _render_hybrid_view(stats, df)
 
 
 def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> None:
@@ -549,6 +524,50 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
         border: 7px solid #10b981;
         background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%);
         animation: pulse-bubble 2s infinite;
+    }
+
+    .viz-bubble.burst {
+        animation: burst-explode 0.6s ease-out forwards;
+    }
+
+    @keyframes burst-explode {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+            filter: brightness(1);
+        }
+        50% {
+            transform: scale(1.3);
+            opacity: 0.8;
+            filter: brightness(1.3);
+        }
+        100% {
+            transform: scale(0.3) rotate(360deg);
+            opacity: 0;
+            filter: brightness(0.5);
+        }
+    }
+
+    .burst-particle {
+        position: absolute;
+        pointer-events: none;
+    }
+
+    .burst-particle div {
+        position: absolute;
+        border-radius: 50%;
+        animation: particle-fly 0.8s ease-out forwards;
+    }
+
+    @keyframes particle-fly {
+        0% {
+            opacity: 1;
+            transform: translate(0, 0) scale(1);
+        }
+        100% {
+            opacity: 0;
+            transform: translate(var(--tx), var(--ty)) scale(0);
+        }
     }
 
     @keyframes pulse-bubble {
