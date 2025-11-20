@@ -25,7 +25,7 @@ from .recurrences import (
     interface_transaction_recurrente,
     interface_gerer_recurrences
 )
-from .portfeuille import interface_portefeuille
+from .portefeuille import interface_portefeuille
 from .scanning import process_all_tickets_in_folder
 from .ocr_page import interface_ocr_analysis_complete
 from .problematic_tickets import render_problematic_tickets_page
