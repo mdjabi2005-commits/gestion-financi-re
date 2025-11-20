@@ -25,7 +25,7 @@ st.set_page_config(
 # ==============================
 # IMPORTS - Configuration
 # ==============================
-from analyse import (
+from config import (
     DATA_DIR, DB_PATH, TO_SCAN_DIR, SORTED_DIR,
     REVENUS_A_TRAITER, REVENUS_TRAITES
 )
