@@ -1,10 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git commit:*)",
-      "Bash(ls:*)",
-      "Bash(timeout 10 streamlit run:*)",
-      "Bash(timeout 15 streamlit run:*)"
+      "Bash(python3:*)",
+      "Bash(python -m py_compile:*)"
     ],
     "deny": [],
     "ask": []
