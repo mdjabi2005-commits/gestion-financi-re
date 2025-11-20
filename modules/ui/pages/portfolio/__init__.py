@@ -19,7 +19,7 @@ from .helpers import (
     calculate_months_in_period,
     analyze_exceptional_expenses
 )
-from .interface import interface_portefeuille
+
 
 __all__ = [
     'render_budgets_tab',
@@ -30,5 +30,4 @@ __all__ = [
     'get_period_start_date',
     'calculate_months_in_period',
     'analyze_exceptional_expenses',
-    'interface_portefeuille'
 ]
