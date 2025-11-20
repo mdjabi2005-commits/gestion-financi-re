@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python3:*)",
-      "Bash(python -m py_compile:*)"
+      "Bash(python -m py_compile:*)",
+      "Bash(pkill:*)",
+      "Bash(for f in modules/ui/pages/portfolio/{helpers,objectives,overview,forecasts}.py)",
+      "Bash(do python -m py_compile:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

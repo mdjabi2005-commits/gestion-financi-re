@@ -11,7 +11,7 @@ This module implements Tab 1 of the portfolio interface:
 import streamlit as st
 import pandas as pd
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 from modules.ui.helpers import load_transactions, refresh_and_rerun
 from modules.ui.components import toast_success, toast_warning, toast_error
 from .helpers import (
@@ -172,7 +172,6 @@ def render_budgets_tab(conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> None
             if not df_transactions.empty:
                 start_date = pd.to_datetime(df_transactions["date"]).min().date()
             else:
-                from datetime import date
                 start_date = date.today().replace(day=1)
         else:
             start_date = period_start_date
