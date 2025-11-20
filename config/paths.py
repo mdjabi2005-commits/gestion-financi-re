@@ -3,7 +3,7 @@
 import os
 
 # Base directory
-DATA_DIR = os.path.expanduser("~/gestion_financiere_data")
+DATA_DIR = os.path.expanduser("~/analyse")
 
 # Database
 DB_PATH = os.path.join(DATA_DIR, "transactions.db")
