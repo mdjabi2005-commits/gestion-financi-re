@@ -1,15 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3:*)",
-      "Bash(python -m py_compile:*)",
-      "Bash(pkill:*)",
-      "Bash(for f in modules/ui/pages/portfolio/{helpers,objectives,overview,forecasts}.py)",
-      "Bash(do python -m py_compile:*)",
-      "Bash(done)",
-      "Bash(python:*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nCorrection complète du système de bulles - Version 2.0\n\nCorrections apportées:\n1. Variables d''état unifiées (une seule source de vérité)\n2. Multi-sélection synchronisée (bulles + chips)\n3. Animations CSS fluides (zoom, pulse, bounce)\n4. Structure claire et maintenable (7 fonctions spécialisées)\n5. Indicateurs visuels complets (badges, checkmarks, breadcrumb)\n6. Navigation réparée (breadcrumb cliquable, reset fiable)\n\nChangements:\n- modules/ui/components.py: Refactorisé complètement\n  - Ajout: _init_session_state(), _sync_state(), _reset_*()\n  - Ajout: _show_filter_status(), _show_breadcrumb_navigation()\n  - Refactor: render_category_management() - Architecture claire\n  - Refactor: _render_category_bubbles(), _render_subcategory_bubbles()\n  - Suppression: 7 fonctions dupliquées/obsolètes\n  - Ajout: Animations CSS (zoom-in/out, gentle-pulse, bounce)\n\nDocumentation:\n- README_BULLES.md: Vue d''ensemble et quick start\n- BUBBLE_INTEGRATION_GUIDE.md: Guide complet d''intégration\n- BUBBLE_EXAMPLES.md: 5 exemples pratiques\n- BUBBLE_SYSTEM_CORRECTIONS.md: Détails techniques\n- CORRECTIONS_SUMMARY.md: Résumé et validation\n- CODE_CHANGES.txt: Listing des changements\n- DOCUMENTATION_INDEX.md: Index de navigation\n\nValidation:\n✅ Multi-sélection fonctionne (bulles + chips synchronized)\n✅ Animations fluides (transitions sans saccades)\n✅ Navigation breadcrumb fonctionnelle\n✅ Reset complet en 1 clic\n✅ Indicateurs visuels des filtres actifs\n✅ Variables d''état unifiées (pas de duplication)\n✅ Style original conservé\n✅ Pas de JS custom (CSS pur)\n✅ Python 3.8+ compatible\n✅ Performance < 1 secondes\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
