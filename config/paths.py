@@ -6,7 +6,7 @@ import os
 DATA_DIR = os.path.expanduser("~/analyse")
 
 # Database
-DB_PATH = os.path.join(DATA_DIR, "transactions.db")
+DB_PATH = os.path.join(DATA_DIR, "finances.db")
 
 # Scan directories
 TO_SCAN_DIR = os.path.join(DATA_DIR, "tickets_a_scanner")
