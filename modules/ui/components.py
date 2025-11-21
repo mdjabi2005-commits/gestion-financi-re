@@ -369,7 +369,7 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
 # ==============================
 # 💰 CATEGORY VISUALIZATION & FILTERING SYSTEM
 # ==============================
-# Dual-view system with proportional bubbles + chips for category management
+# Unified system with proportional bubbles + chips for category management
 
 import pandas as pd
 from typing import List, Dict, Any
@@ -405,25 +405,67 @@ def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
     return stats.sort_values('montant', ascending=False).reset_index(drop=True)
 
 
-def render_view_mode_selector() -> str:
-    """
-    Return the default mode (hybrid only - no selector needed).
+# ==============================
+# 🔄 UNIFIED STATE MANAGEMENT
+# ==============================
 
-    Returns:
-        Selected mode: 'hybrid'
-    """
-    # Initialize session state
-    if 'category_view_mode' not in st.session_state:
-        st.session_state.category_view_mode = 'hybrid'
+def _init_session_state() -> None:
+    """Initialize all session state variables for category management."""
+    init_values = {
+        'viz_mode': 'categories',  # 'total' | 'categories' | 'subcategories'
+        'selected_categories': [],  # List of selected category names
+        'current_parent': None,      # Parent category for subcategories
+        'multiselect_enabled': True,  # Toggle for multi-selection vs drill-down
+        'breadcrumb': ['Toutes'],    # Breadcrumb navigation path
+    }
 
-    # Hybrid mode is the only mode now - no selector needed
-    return 'hybrid'
+    for key, default_value in init_values.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+
+def _sync_state() -> None:
+    """Synchronize all state variables ensuring consistency."""
+    _init_session_state()
+
+    # Ensure selected_categories is always a list
+    if not isinstance(st.session_state.selected_categories, list):
+        st.session_state.selected_categories = []
+
+    # Clean up breadcrumb
+    if not isinstance(st.session_state.breadcrumb, list):
+        st.session_state.breadcrumb = ['Toutes']
+
+    # Ensure viz_mode is valid
+    valid_modes = ['total', 'categories', 'subcategories']
+    if st.session_state.viz_mode not in valid_modes:
+        st.session_state.viz_mode = 'categories'
+
+
+def _reset_navigation() -> None:
+    """Reset navigation to initial state."""
+    st.session_state.viz_mode = 'categories'
+    st.session_state.selected_categories = []
+    st.session_state.current_parent = None
+    st.session_state.breadcrumb = ['Toutes']
+
+
+def _reset_filters() -> None:
+    """Clear all selected categories."""
+    st.session_state.selected_categories = []
 
 
 def render_category_management(df: pd.DataFrame) -> List[str]:
     """
-    Main function combining both visualization systems.
-    Returns list of selected categories for filtering.
+    Main unified function combining hierarchical bubbles + multi-selection chips.
+
+    Structure:
+    1. Header with filter status
+    2. Breadcrumb navigation
+    3. Hierarchical bubble section (drill-down)
+    4. Visual bubble overview (non-interactive)
+    5. Interactive chips section (multi-selection)
+    6. Action buttons
 
     Args:
         df: Transaction DataFrame
@@ -431,37 +473,165 @@ def render_category_management(df: pd.DataFrame) -> List[str]:
     Returns:
         List of selected category names
     """
-    # Initialize session state
-    for key in ['selected_categories', 'drill_level', 'parent_category', 'breadcrumb']:
-        if key not in st.session_state:
-            init_vals = {
-                'selected_categories': [],
-                'drill_level': 'categories',
-                'parent_category': None,
-                'breadcrumb': ['Toutes']
-            }
-            st.session_state[key] = init_vals[key]
+    # Ensure all session state is initialized and synchronized
+    _sync_state()
 
+    # ========== 1. HEADER ==========
+    st.markdown("## 💰 Catégories et Filtres")
 
-    # Display header
-    st.markdown("## 💰 Catégories")
+    # ========== 2. FILTER STATUS INDICATOR ==========
+    _show_filter_status(df)
 
-    # Show current filter status
-    selected = st.session_state.get('selected_categories', [])
-    if selected:
-        st.success(f"🎯 **Filtres actifs** : {', '.join(selected)}")
-    else:
-        st.info("📊 **Toutes les catégories affichées**")
+    # ========== 3. BREADCRUMB NAVIGATION ==========
+    _show_breadcrumb_navigation(df)
 
-    # Get category stats
+    # Get category statistics
     stats = calculate_category_stats(df)
-
     if stats.empty:
         st.info("Aucune catégorie trouvée")
         return []
 
-    # Display hybrid view directly (only mode available)
-    return _render_hybrid_view(stats, df)
+    # ========== 4. HIERARCHICAL SECTION: INTERACTIVE BUBBLES WITH DRILL-DOWN ==========
+    st.markdown("### 🫧 Navigation Hiérarchique")
+    with st.container():
+        _render_hierarchical_section(stats, df)
+
+    st.markdown("---")
+
+    # ========== 5. VISUAL SECTION: NON-INTERACTIVE BUBBLE OVERVIEW ==========
+    st.markdown("### 📊 Vue d'ensemble")
+    with st.container():
+        render_bubble_visualization(stats, st.session_state.selected_categories)
+
+    st.markdown("---")
+
+    # ========== 6. FILTERING SECTION: INTERACTIVE CHIPS WITH MULTI-SELECTION ==========
+    st.markdown("### 🏷️ Filtrage Rapide")
+    with st.container():
+        _render_chips_section(stats, df)
+
+    st.markdown("---")
+
+    # ========== 7. ACTION BUTTONS ==========
+    _render_action_buttons(df)
+
+    return st.session_state.selected_categories
+
+
+def _show_filter_status(df: pd.DataFrame) -> None:
+    """Display current filter status with metrics."""
+    selected = st.session_state.selected_categories
+
+    if selected:
+        selected_count = len(selected)
+        trans_count = len(df[df['categorie'].isin(selected)])
+        selected_amount = df[df['categorie'].isin(selected)]['montant'].sum()
+        total_amount = df['montant'].sum()
+        pct = (selected_amount / total_amount * 100) if total_amount > 0 else 0
+
+        st.success(
+            f"🎯 **{selected_count} filtre(s) actif(s)** • "
+            f"{trans_count} transactions • "
+            f"{selected_amount:.2f}€ ({pct:.1f}% du total)"
+        )
+    else:
+        total_amount = df['montant'].sum()
+        st.info(f"📊 **Toutes les catégories affichées** • {total_amount:.2f}€")
+
+
+def _show_breadcrumb_navigation(df: pd.DataFrame) -> None:
+    """Display breadcrumb navigation with clickable items."""
+    breadcrumb = st.session_state.breadcrumb
+    mode = st.session_state.viz_mode
+
+    # Build breadcrumb display
+    breadcrumb_parts = []
+    breadcrumb_parts.append("🏠 Toutes")
+
+    if mode == 'subcategories' and st.session_state.current_parent:
+        breadcrumb_parts.append(f"📂 {st.session_state.current_parent}")
+
+    breadcrumb_text = " > ".join(breadcrumb_parts)
+
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.caption(breadcrumb_text)
+    with col2:
+        if mode != 'categories' and st.button("↩️ Retour", key="breadcrumb_reset", use_container_width=True):
+            _reset_navigation()
+            st.rerun()
+
+
+def _render_hierarchical_section(stats: pd.DataFrame, df: pd.DataFrame) -> None:
+    """Render hierarchical bubble navigation with drill-down capability."""
+    mode = st.session_state.viz_mode
+
+    if mode == 'categories':
+        _render_category_bubbles(stats, df)
+    elif mode == 'subcategories':
+        _render_subcategory_bubbles(stats, df)
+
+
+def _render_chips_section(stats: pd.DataFrame, df: pd.DataFrame) -> None:
+    """Render interactive chips for multi-selection filtering."""
+    selected = st.session_state.selected_categories
+
+    # Show status
+    if selected:
+        trans_count = len(df[df['categorie'].isin(selected)])
+        st.info(f"✅ {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
+    else:
+        st.info("⬜ Aucune sélection (toutes les transactions affichées)")
+
+    # Render chips
+    cols = st.columns(4)
+    for idx, (_, row) in enumerate(stats.iterrows()):
+        cat = row['categorie']
+        amount = row['montant']
+        pct = row['pct']
+        is_selected = cat in selected
+
+        with cols[idx % 4]:
+            chip_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {amount:.0f}€"
+
+            if st.button(
+                chip_label,
+                key=f"chip_{cat}",
+                use_container_width=True,
+                type="primary" if is_selected else "secondary",
+                help=f"{pct:.1f}% • {row['count']} transactions"
+            ):
+                if cat in selected:
+                    selected.remove(cat)
+                else:
+                    selected.append(cat)
+
+                st.session_state.selected_categories = selected
+                st.rerun()
+
+
+def _render_action_buttons(df: pd.DataFrame) -> None:
+    """Render action buttons for filter management."""
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("🔄 Effacer tous les filtres", use_container_width=True, key="clear_all_btn"):
+            _reset_filters()
+            st.rerun()
+
+    with col2:
+        if len(st.session_state.selected_categories) == 1:
+            if st.button("↓ Voir sous-catégories", use_container_width=True, key="drill_subcats"):
+                st.session_state.current_parent = st.session_state.selected_categories[0]
+                st.session_state.viz_mode = 'subcategories'
+                st.rerun()
+        else:
+            st.caption("Sélectionnez 1 catégorie pour drill-down")
+
+    with col3:
+        if st.button("↩️ Réinitialiser navigation", use_container_width=True, key="reset_nav_btn"):
+            _reset_navigation()
+            st.rerun()
 
 
 # ==============================
@@ -673,25 +843,16 @@ def render_bubble_visualization(stats: pd.DataFrame, selected: List[str]) -> Non
 # 🫧 HIERARCHICAL BUBBLE SYSTEM
 # ==============================
 
-def render_hierarchical_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
+def _render_category_bubbles(stats: pd.DataFrame, df: pd.DataFrame) -> None:
     """
-    Render hierarchical bubble system with drill-down navigation.
+    Render interactive bubbles for category selection with drill-down navigation.
+    Uses unified state management.
 
     Args:
-        df: DataFrame with transaction data
-
-    Returns:
-        tuple: (drill_level, selected_items)
+        stats: Category statistics DataFrame
+        df: Transaction DataFrame
     """
-    # Initialize session state
-    if 'bubble_drill_level' not in st.session_state:
-        st.session_state.bubble_drill_level = 'total'
-    if 'bubble_selected_category' not in st.session_state:
-        st.session_state.bubble_selected_category = None
-
-    level = st.session_state.bubble_drill_level
-
-    # CSS commun pour toutes les bulles
+    # CSS for hierarchical bubbles with animations
     css_hierarchical = """
     <style>
     .hierarchical-bubble-container {
@@ -700,11 +861,11 @@ def render_hierarchical_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
         justify-content: center;
         align-items: center;
         gap: 40px;
-        padding: 80px 40px;
+        padding: 60px 40px;
         background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
         border-radius: 25px;
         margin: 20px 0;
-        min-height: 500px;
+        min-height: 400px;
         position: relative;
     }
 
@@ -763,378 +924,166 @@ def render_hierarchical_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
         50% { transform: translateX(-50%) translateY(-10px); }
     }
 
-    .breadcrumb-nav {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        background: rgba(255, 255, 255, 0.95);
-        padding: 12px 20px;
-        border-radius: 12px;
-        font-weight: 600;
-        color: #475569;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        font-size: 14px;
+    .h-bubble.transition-in {
+        animation: zoom-in 0.5s ease-out;
     }
 
-    .back-button-visual {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        background: #ef4444;
-        color: white;
-        padding: 12px 24px;
-        border-radius: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        transition: all 0.3s;
-        font-size: 14px;
+    .h-bubble.transition-out {
+        animation: zoom-out 0.5s ease-in forwards;
     }
 
-    .back-button-visual:hover {
-        background: #dc2626;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+    @keyframes zoom-in {
+        0% {
+            transform: scale(0) translateY(20px);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes zoom-out {
+        0% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(0) translateY(-20px);
+            opacity: 0;
+        }
     }
     </style>
     """
 
     st.markdown(css_hierarchical, unsafe_allow_html=True)
 
-    # Render selon le niveau
-    if level == 'total':
-        return _render_total_bubble(df)
-    elif level == 'categories':
-        return _render_category_bubbles(df)
-    elif level == 'subcategories':
-        return _render_subcategory_bubbles(df, st.session_state.bubble_selected_category)
-
-    return ('total', [])
-
-
-def _render_total_bubble(df: pd.DataFrame) -> Tuple[str, List[str]]:
-    """Render the single big bubble showing total."""
-    df_expenses = df[df['type'] == 'dépense']
-    total_amount = df_expenses['montant'].sum()
-    nb_categories = df_expenses['categorie'].nunique()
-    nb_transactions = len(df_expenses)
-
-    bubble_html = '<div class="hierarchical-bubble-container">'
-    bubble_html += '<div class="breadcrumb-nav">🏠 Vue d\'ensemble</div>'
-
-    # Une seule grosse bulle
-    size = 300
-    bubble_html += '<div class="h-bubble h-bubble-clickable" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;">'
-    bubble_html += '<div style="font-size: 18px; margin-bottom: 15px; color: #64748b;">💰 TOUTES VOS DÉPENSES</div>'
-    bubble_html += '<div style="font-size: 48px; font-weight: 900; color: #0f172a; margin: 10px 0;">' + str(int(total_amount)) + '€</div>'
-    bubble_html += '<div style="font-size: 14px; color: #94a3b8; margin-top: 10px;">' + str(nb_categories) + ' catégories</div>'
-    bubble_html += '<div style="font-size: 14px; color: #94a3b8;">' + str(nb_transactions) + ' transactions</div>'
-    bubble_html += '<div style="font-size: 13px; color: #3b82f6; margin-top: 20px; font-weight: 600;">👆 Cliquez pour explorer</div>'
-    bubble_html += '</div>'
-    bubble_html += '</div>'
-
-    st.markdown(bubble_html, unsafe_allow_html=True)
-
-    # Bouton invisible pour navigation
-    if st.button("🔍 Explorer les catégories", key="explore_categories", use_container_width=True, type="primary"):
-        st.session_state.bubble_drill_level = 'categories'
-        st.rerun()
-
-    return ('total', [])
-
-
-def _render_category_bubbles(df: pd.DataFrame) -> Tuple[str, List[str]]:
-    """Render bubbles for each category."""
-    # Calculate stats
-    df_expenses = df[df['type'] == 'dépense']
-    stats = df_expenses.groupby('categorie').agg({
-        'montant': 'sum'
-    }).reset_index()
-    stats = stats.sort_values('montant', ascending=False)
+    if stats.empty:
+        st.info("Aucune catégorie trouvée")
+        return
 
     max_amount = stats['montant'].max()
     min_size = 100
     max_size = 250
 
     bubble_html = '<div class="hierarchical-bubble-container">'
-    bubble_html += '<div class="breadcrumb-nav">🏠 Vue d\'ensemble → 📂 Catégories</div>'
 
     for _, row in stats.iterrows():
         cat = row['categorie']
         amount = row['montant']
         size = min_size + (amount / max_amount) * (max_size - min_size)
 
-        bubble_html += '<div class="h-bubble h-bubble-clickable" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + '">'
+        bubble_html += '<div class="h-bubble h-bubble-clickable transition-in" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + cat + '">'
         bubble_html += '<div style="font-size: ' + str(size/12) + 'px; font-weight: 700; text-transform: uppercase;">' + cat + '</div>'
         bubble_html += '<div style="font-size: ' + str(size/7) + 'px; font-weight: 900; margin: 8px 0;">' + str(int(amount)) + '€</div>'
-        bubble_html += '<div style="font-size: ' + str(size/15) + 'px; color: #64748b;">Cliquez pour détails</div>'
+        bubble_html += '<div style="font-size: ' + str(size/15) + 'px; color: #64748b;">→ Détails</div>'
         bubble_html += '</div>'
 
     bubble_html += '</div>'
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Bouton retour
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("← Retour au total", key="back_to_total", use_container_width=True):
-            st.session_state.bubble_drill_level = 'total'
-            st.rerun()
+    st.caption("💡 Cliquez sur une bulle pour voir les sous-catégories")
 
-    # Boutons pour chaque catégorie
-    st.markdown("### 🖱️ Sélectionnez une catégorie")
+    # Interactive buttons for drill-down
+    st.markdown("### 🖱️ Sélectionnez une catégorie pour détails")
     cols = st.columns(4)
     for idx, (_, row) in enumerate(stats.iterrows()):
+        cat = row['categorie']
         with cols[idx % 4]:
-            if st.button(f"📂 {row['categorie']}", key=f"cat_{row['categorie']}", use_container_width=True):
-                st.session_state.bubble_selected_category = row['categorie']
-                st.session_state.bubble_drill_level = 'subcategories'
+            if st.button(f"📂 {cat}", key=f"drill_{cat}", use_container_width=True):
+                st.session_state.current_parent = cat
+                st.session_state.viz_mode = 'subcategories'
                 st.rerun()
 
-    return ('categories', [])
 
+def _render_subcategory_bubbles(stats: pd.DataFrame, df: pd.DataFrame) -> None:
+    """
+    Render subcategory bubbles for selected parent category.
 
-def _render_subcategory_bubbles(df: pd.DataFrame, parent_category: str) -> Tuple[str, List[str]]:
-    """Render bubbles for subcategories of selected category."""
-    df_expenses = df[df['type'] == 'dépense']
-    df_cat = df_expenses[df_expenses['categorie'] == parent_category]
+    Args:
+        stats: Category statistics DataFrame
+        df: Transaction DataFrame
+    """
+    parent = st.session_state.current_parent
+    if not parent:
+        st.error("Aucune catégorie parente sélectionnée")
+        return
 
-    stats = df_cat.groupby('sous_categorie').agg({
+    # Filter for subcategories
+    df_expenses = df[(df['type'] == 'dépense') & (df['categorie'] == parent)]
+    if df_expenses.empty:
+        st.info(f"Aucune sous-catégorie pour {parent}")
+        return
+
+    sub_stats = df_expenses.groupby('sous_categorie').agg({
         'montant': 'sum'
-    }).reset_index()
-    stats = stats.sort_values('montant', ascending=False)
+    }).reset_index().sort_values('montant', ascending=False)
 
-    max_amount = stats['montant'].max()
+    if sub_stats.empty:
+        st.info("Aucune sous-catégorie trouvée")
+        return
+
+    # CSS for subcategory bubbles
+    css_sub = """
+    <style>
+    .subcategory-bubble-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 30px;
+        padding: 50px 30px;
+        background: linear-gradient(135deg, #f1f5f9 0%, #e0f2fe 100%);
+        border-radius: 20px;
+        margin: 20px 0;
+        min-height: 350px;
+    }
+
+    .sub-bubble {
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border: 3px solid #7dd3fc;
+        background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+        color: #0c4a6e;
+        font-weight: 600;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        animation: bubble-appear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .sub-bubble:hover {
+        transform: translateY(-10px) scale(1.08);
+        box-shadow: 0 15px 35px rgba(3, 102, 214, 0.25);
+        border-color: #0369a1;
+        background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+    }
+    </style>
+    """
+
+    st.markdown(css_sub, unsafe_allow_html=True)
+
+    max_amount = sub_stats['montant'].max()
     min_size = 80
     max_size = 200
 
-    bubble_html = '<div class="hierarchical-bubble-container">'
-    bubble_html += '<div class="breadcrumb-nav">🏠 → 📂 ' + parent_category + '</div>'
+    bubble_html = '<div class="subcategory-bubble-container">'
 
-    for _, row in stats.iterrows():
+    for _, row in sub_stats.iterrows():
         subcat = row['sous_categorie']
         amount = row['montant']
         size = min_size + (amount / max_amount) * (max_size - min_size)
 
-        bubble_html += '<div class="h-bubble" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + subcat + '">'
-        bubble_html += '<div style="font-size: ' + str(size/10) + 'px; font-weight: 700;">' + subcat + '</div>'
-        bubble_html += '<div style="font-size: ' + str(size/6) + 'px; font-weight: 900; margin: 6px 0;">' + str(int(amount)) + '€</div>'
+        bubble_html += '<div class="sub-bubble transition-in" style="width: ' + str(size) + 'px; height: ' + str(size) + 'px;" title="' + subcat + '">'
+        bubble_html += '<div style="font-size: ' + str(size/10) + 'px; font-weight: 700; text-align: center;">' + subcat + '</div>'
+        bubble_html += '<div style="font-size: ' + str(size/6) + 'px; font-weight: 900; margin: 6px 0; color: #0f172a;">' + str(int(amount)) + '€</div>'
         bubble_html += '</div>'
 
     bubble_html += '</div>'
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Boutons
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("← Retour aux catégories", key="back_to_categories", use_container_width=True):
-            st.session_state.bubble_drill_level = 'categories'
-            st.rerun()
-
-    # Retourner la catégorie sélectionnée pour filtrer les transactions
-    return ('subcategories', [parent_category])
+    st.caption(f"💡 Sous-catégories de **{parent}**")
 
 
-def _render_bubble_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
-    """Render hierarchical bubble visualization with drill-down navigation."""
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
-
-    st.subheader("📊 Navigation Hiérarchique")
-
-    # Render hierarchical bubbles
-    level, selected = render_hierarchical_bubbles(df)
-
-    # Update selected categories based on drill level
-    if level == 'subcategories':
-        st.session_state.selected_categories = selected
-    else:
-        st.session_state.selected_categories = []
-
-    return st.session_state.selected_categories
-
-
-def _render_chips_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
-    """Render chips/tags visualization with multi-selection."""
-    # Always initialize session state
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
-
-    st.subheader("🏷️ Filtres Rapides")
-
-    selected = st.session_state.selected_categories
-
-    # Show current selection status
-    if selected:
-        st.info(f"🎯 Filtres actifs : {', '.join(selected)}")
-    else:
-        st.info("📊 Toutes les catégories affichées")
-
-    # Render chips
-    st.markdown('<div class="chips-container">', unsafe_allow_html=True)
-
-    cols = st.columns(4)
-    for idx, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        chip_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {amount:.0f}€ ({pct:.1f}%)"
-
-        with cols[idx % 4]:
-            if st.button(chip_label, key=f"chip_select_{cat}", use_container_width=True,
-                        help=f"{'Désélectionner' if is_selected else 'Sélectionner'} {cat}",
-                        type="primary" if is_selected else "secondary"):
-                if cat in selected:
-                    selected.remove(cat)
-                else:
-                    selected.append(cat)
-
-                st.session_state.selected_categories = selected
-                st.rerun()  # ← CRITICAL: Force immediate refresh
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Show selection counter and transaction count
-    if selected:
-        trans_count = len(df[df['categorie'].isin(selected)])
-        st.success(f"✅ {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
-    else:
-        st.info("⬜ Aucune sélection (toutes les transactions affichées)")
-
-    # Action buttons
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("🔄 Effacer tout", use_container_width=True, key="clear_all_filters"):
-            st.session_state.selected_categories = []
-            st.rerun()  # ← CRITICAL: Force immediate refresh
-
-    with col2:
-        if len(selected) == 1 and st.button("↓ Voir sous-catégories", use_container_width=True):
-            st.session_state.drill_level = 'subcategories'
-            st.session_state.parent_category = selected[0]
-            st.rerun()
-
-    return selected
-
-
-def _render_hybrid_view(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
-    """Render combined view with visual bubbles AND interactive chips synchronized."""
-
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
-
-    selected = st.session_state.selected_categories
-
-    # ========== SECTION 1 : BULLES VISUELLES COMPLÈTES ==========
-    st.markdown("### 📊 Vue d'ensemble")
-
-    if not stats.empty:
-        render_bubble_visualization(stats, selected)
-
-    st.markdown("---")
-
-    # ========== SECTION 2 : FILTRES INTERACTIFS ==========
-    st.markdown("### 🏷️ Filtres Rapides")
-
-    # Show selection status
-    if selected:
-        trans_count = len(df[df['categorie'].isin(selected)])
-        st.success(f"✅ {len(selected)} catégorie(s) sélectionnée(s) → {trans_count} transactions")
-    else:
-        st.info("⬜ Aucune sélection (toutes les transactions affichées)")
-
-    # Interactive chips
-    cols = st.columns(4)
-    for idx, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        with cols[idx % 4]:
-            chip_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {amount:.0f}€"
-
-            if st.button(
-                chip_label,
-                key=f"hybrid_chip_{cat}",
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-                help=f"{pct:.1f}% de vos dépenses"
-            ):
-                if cat in selected:
-                    selected.remove(cat)
-                else:
-                    selected.append(cat)
-
-                st.session_state.selected_categories = selected
-                st.rerun()
-
-    # Action buttons
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("🔄 Effacer tout", use_container_width=True, key="hybrid_clear_all"):
-            st.session_state.selected_categories = []
-            st.rerun()
-
-    with col2:
-        if len(selected) == 1:
-            if st.button("↓ Voir sous-catégories", use_container_width=True, key="hybrid_drill"):
-                st.session_state.drill_level = 'subcategories'
-                st.session_state.parent_category = selected[0]
-                st.rerun()
-
-    return selected
-
-
-def _render_bubble_view_minimal(stats: pd.DataFrame, df: pd.DataFrame) -> List[str]:
-    """Minimal bubble view for hybrid mode."""
-    # Always initialize session state
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
-
-    selected = st.session_state.selected_categories
-
-    # Display as compact buttons
-    cols = st.columns(3)
-    for idx, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        with cols[idx % 3]:
-            button_label = f"{'✅ ' if is_selected else '⬜ '}{cat}\n{pct:.1f}%"
-            if st.button(button_label, key=f"hybrid_bubble_{cat}", use_container_width=True,
-                        help=f"{amount:.0f}€",
-                        type="primary" if is_selected else "secondary"):
-                if cat in selected:
-                    selected.remove(cat)
-                else:
-                    selected.append(cat)
-
-                st.session_state.selected_categories = selected
-                st.rerun()  # ← CRITICAL: Force immediate refresh
-
-    return selected
-
-
-def _render_chips_view_minimal(stats: pd.DataFrame, df: pd.DataFrame, selected: List[str]) -> List[str]:
-    """Minimal chips view for hybrid mode."""
-    for _, row in stats.iterrows():
-        cat = row['categorie']
-        pct = row['pct']
-        is_selected = cat in selected
-
-        button_label = f"{'✅ ' if is_selected else '⬜ '}{cat} | {row['montant']:.0f}€ ({pct:.1f}%)"
-        if st.button(button_label, key=f"hybrid_chip_{cat}", use_container_width=True,
-                    type="primary" if is_selected else "secondary"):
-            if cat in selected:
-                selected.remove(cat)
-            else:
-                selected.append(cat)
-
-            st.session_state.selected_categories = selected
-            st.rerun()  # ← CRITICAL: Force immediate refresh
-
-    return selected
