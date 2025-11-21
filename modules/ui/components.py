@@ -607,10 +607,11 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
 
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Hidden button for state change
+    # Invisible button (using JavaScript injection) for state change
+    # The button is still rendered but invisible - user clicks the bubble via HTML onclick
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        if st.button("", key="go_to_categories", label_visibility="hidden", use_container_width=False):
+        if st.button("→", key="go_to_categories", use_container_width=False):
             st.session_state.bubble_level = 'categories'
             st.rerun()
 
