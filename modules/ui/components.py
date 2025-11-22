@@ -409,468 +409,206 @@ def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==============================
-# 🫧 SIMPLIFIED STATE MANAGEMENT
 # ==============================
-# 🫧 BUBBLE NAVIGATION COMPONENT
+# 🫧 BUBBLE NAVIGATION COMPONENT - Compact & Fluide
 # ==============================
 
 def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Navigation élégante par bulles avec design moderne.
+    Navigation compacte par bulles rondes avec transitions fluides.
 
-    Implémente une navigation en 3 niveaux avec esthétique premium:
-    - Niveau 1: Choix Revenus/Dépenses (bulles colorées)
-    - Niveau 2: Sélection de catégories (grille moderne)
-    - Niveau 3: Affichage des transactions (détail enrichi)
-
-    Args:
-        df: DataFrame contenant les transactions
-
-    Returns:
-        DataFrame filtré selon la sélection de l'utilisateur
+    3 niveaux de navigation avec design optimisé:
+    - Niveau 1: Type Selection (2 bulles: Revenus/Dépenses)
+    - Niveau 2: Category Selection (Grille compacte de bulles)
+    - Niveau 3: Detail View (Transactions filtrées)
     """
-    # Initialiser l'état de navigation
+    # État de navigation
     if 'nav_level' not in st.session_state:
         st.session_state.nav_level = 'type_selection'
     if 'selected_type' not in st.session_state:
         st.session_state.selected_type = None
-    if 'selected_category' not in st.session_state:
-        st.session_state.selected_category = None
     if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []  # Multi-sélection
+        st.session_state.selected_categories = []
 
-    # CSS moderne et élégant
+    # CSS pour bulles rondes compactes
     st.markdown("""
     <style>
-    /* Conteneur principal */
-    .nav-container {
-        margin: 30px 0;
+    /* Container centré */
+    .bubble-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 30px 20px;
     }
 
-    /* Titre avec accent */
-    .nav-title {
-        font-size: 28px;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 30px;
-        text-align: center;
-    }
-
-    /* Bouton type (Revenus/Dépenses) */
-    .type-bubble {
-        padding: 40px 20px;
-        border-radius: 20px;
-        text-align: center;
-        font-weight: 600;
-        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        border: 2px solid transparent;
-        cursor: pointer;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .type-bubble::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.1);
-        transition: left 0.3s ease;
-        z-index: 0;
-    }
-
-    .type-bubble:hover::before {
-        left: 100%;
-    }
-
-    .type-bubble > * {
-        position: relative;
-        z-index: 1;
-    }
-
-    /* Revenus */
-    .revenus-bubble {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        box-shadow: 0 10px 40px rgba(16, 185, 129, 0.3);
-    }
-
-    .revenus-bubble:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 60px rgba(16, 185, 129, 0.4);
-        border-color: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Dépenses */
-    .depenses-bubble {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3);
-    }
-
-    .depenses-bubble:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 60px rgba(245, 158, 11, 0.4);
-        border-color: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Montant dans la bulle */
-    .bubble-amount {
-        font-size: 32px;
-        font-weight: 700;
-        margin: 10px 0;
-        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .bubble-subtitle {
-        font-size: 14px;
-        opacity: 0.95;
-        margin: 5px 0;
-    }
-
-    /* Grille de catégories */
-    .categories-grid {
+    /* Grille de bulles */
+    .bubble-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin: 30px 0;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 20px;
+        padding: 40px 0;
+        animation: fadeIn 0.4s ease-out;
     }
 
-    /* Bouton catégorie */
-    .category-card {
-        padding: 25px;
-        border-radius: 16px;
-        text-align: center;
-        cursor: pointer;
-        border: 2px solid transparent;
-        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        position: relative;
-        overflow: hidden;
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    .category-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-        transition: left 0.5s;
-    }
-
-    .category-card:hover::before {
-        left: 100%;
-    }
-
-    .category-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-        border-color: #667eea;
-    }
-
-    .category-card > * {
-        position: relative;
-        z-index: 1;
-    }
-
-    .category-icon {
-        font-size: 32px;
-        margin-bottom: 8px;
-    }
-
-    .category-name {
-        font-weight: 600;
-        font-size: 16px;
-        color: #1f2937;
-        margin: 8px 0;
-    }
-
-    .category-amount {
-        font-size: 20px;
-        font-weight: 700;
-        color: #667eea;
-        margin: 5px 0;
-    }
-
-    .category-count {
-        font-size: 12px;
-        color: #6b7280;
-        opacity: 0.8;
-    }
-
-    /* Bouton retour */
-    .back-button {
-        padding: 10px 20px;
-        border-radius: 10px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-block;
-        margin-bottom: 20px;
-    }
-
-    .back-button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-    }
-
-    /* Breadcrumb navigation */
-    .breadcrumb-nav {
-        font-size: 14px;
-        color: #6b7280;
-        margin-bottom: 20px;
-        font-weight: 500;
-    }
-
-    .breadcrumb-nav span {
-        color: #667eea;
-        font-weight: 600;
-    }
-
-    /* Section titre avec icône */
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 25px;
-        padding-bottom: 15px;
-        border-bottom: 3px solid #f0f0f0;
-    }
-
-    .section-header h2 {
-        margin: 0;
-        font-size: 24px;
-        font-weight: 700;
-        color: #1f2937;
-    }
-
-    /* Métrique élégante */
-    .metric-enhanced {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 4px solid #667eea;
-        transition: all 0.3s ease;
-    }
-
-    .metric-enhanced:hover {
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-        transform: translateY(-2px);
-    }
-
-    .metric-label {
-        font-size: 12px;
-        color: #6b7280;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-    }
-
-    .metric-value {
-        font-size: 28px;
-        font-weight: 700;
-        color: #667eea;
-        margin: 0;
-    }
-
-    /* Divider élégant */
-    .elegant-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
-        margin: 30px 0;
-        border: none;
-    }
-
-    /* Multi-sélection - Checkbox visuelle */
-    .category-card.selected {
-        border-color: #667eea;
-        background: linear-gradient(135deg, #f0f4ff 0%, #e9ecef 100%);
-        box-shadow: 0 0 0 2px #667eea;
-    }
-
-    .category-card.selected::after {
-        content: '✓';
-        position: absolute;
-        top: 8px;
-        right: 12px;
-        background: #667eea;
-        color: white;
-        width: 28px;
-        height: 28px;
+    /* Vraie bulle ronde */
+    .bubble {
+        aspect-ratio: 1;
         border-radius: 50%;
         display: flex;
-        align-items: center;
+        flex-direction: column;
         justify-content: center;
-        font-weight: bold;
-        font-size: 16px;
-    }
-
-    /* Sélection info bar */
-    .selection-bar {
-        background: linear-gradient(135deg, #f0f4ff 0%, #e9ecef 100%);
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 4px solid #667eea;
-        margin: 20px 0;
-        display: flex;
-        justify-content: space-between;
         align-items: center;
-    }
-
-    .selection-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .selection-chip {
-        background: #667eea;
         color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 500;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .selection-chip button {
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-        font-size: 16px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-    }
-
-    .selection-chip button:hover {
-        opacity: 0.8;
-    }
-
-    /* Filter action buttons */
-    .filter-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 20px;
-    }
-
-    .filter-actions button {
-        flex: 1;
-        padding: 12px 24px;
-        border-radius: 10px;
-        border: none;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        padding: 20px;
     }
 
-    .apply-button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .bubble:hover {
+        transform: scale(1.12) translateY(-8px);
+        box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Revenus bulle */
+    .bubble-revenus {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    /* Dépenses bulle */
+    .bubble-depenses {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    /* Catégorie bulles avec couleurs variées */
+    .bubble-cat-1 { background: linear-gradient(135deg, #f59e0b, #f97316); }
+    .bubble-cat-2 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+    .bubble-cat-3 { background: linear-gradient(135deg, #ec4899, #db2777); }
+    .bubble-cat-4 { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+    .bubble-cat-5 { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .bubble-cat-6 { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .bubble-cat-7 { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+    .bubble-cat-8 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+
+    /* Texte dans la bulle */
+    .bubble-emoji {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+
+    .bubble-name {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .bubble-amount {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }
+
+    .bubble-count {
+        font-size: 12px;
+        opacity: 0.9;
+    }
+
+    /* Titre principal */
+    .bubble-title {
+        text-align: center;
         color: white;
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 30px;
     }
 
-    .apply-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    /* Breadcrumb */
+    .breadcrumb {
+        text-align: center;
+        color: #94a3b8;
+        margin-bottom: 25px;
+        font-size: 14px;
     }
 
-    .clear-button {
-        background: #f5f7fa;
-        color: #667eea;
-        border: 2px solid #667eea;
-    }
-
-    .clear-button:hover {
-        background: #f0f0f0;
+    .breadcrumb strong {
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # NIVEAU 1: Sélection Revenus/Dépenses
+    # NIVEAU 1: Type Selection
     if st.session_state.nav_level == 'type_selection':
-        st.markdown('<div class="nav-title">💰 Explorez votre Univers Financier</div>', unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2, gap="large")
+        st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
+        st.markdown('<div class="bubble-title">💰 Explorez votre Univers Financier</div>', unsafe_allow_html=True)
 
         revenus_total = df[df['type'] == 'revenu']['montant'].sum()
         revenus_count = len(df[df['type'] == 'revenu'])
         depenses_total = df[df['type'] == 'dépense']['montant'].sum()
         depenses_count = len(df[df['type'] == 'dépense'])
 
+        col1, col2 = st.columns(2, gap="large")
+
         with col1:
-            # Bulle revenus
             st.markdown(f"""
-            <div class="type-bubble revenus-bubble">
-                <div style="font-size: 48px; margin-bottom: 10px;">💼</div>
-                <div style="font-size: 18px; font-weight: 700; margin-bottom: 5px;">REVENUS</div>
+            <div class="bubble bubble-revenus">
+                <div class="bubble-emoji">💼</div>
+                <div class="bubble-name">REVENUS</div>
                 <div class="bubble-amount">{revenus_total:,.0f}€</div>
-                <div class="bubble-subtitle">{revenus_count} transactions</div>
+                <div class="bubble-count">{revenus_count} tx</div>
             </div>
             """, unsafe_allow_html=True)
-
-            if st.button("Voir les revenus", key="btn_revenus", use_container_width=True):
+            if st.button("Sélectionner", key="btn_rev", use_container_width=True):
                 st.session_state.selected_type = 'revenu'
                 st.session_state.nav_level = 'category_selection'
                 st.rerun()
 
         with col2:
-            # Bulle dépenses
             st.markdown(f"""
-            <div class="type-bubble depenses-bubble">
-                <div style="font-size: 48px; margin-bottom: 10px;">🛒</div>
-                <div style="font-size: 18px; font-weight: 700; margin-bottom: 5px;">DÉPENSES</div>
+            <div class="bubble bubble-depenses">
+                <div class="bubble-emoji">🛒</div>
+                <div class="bubble-name">DÉPENSES</div>
                 <div class="bubble-amount">{depenses_total:,.0f}€</div>
-                <div class="bubble-subtitle">{depenses_count} transactions</div>
+                <div class="bubble-count">{depenses_count} tx</div>
             </div>
             """, unsafe_allow_html=True)
-
-            if st.button("Voir les dépenses", key="btn_depenses", use_container_width=True):
+            if st.button("Sélectionner", key="btn_dep", use_container_width=True):
                 st.session_state.selected_type = 'dépense'
                 st.session_state.nav_level = 'category_selection'
                 st.rerun()
 
+        st.markdown('</div>', unsafe_allow_html=True)
         return df
 
-    # NIVEAU 2: Sélection de catégories (avec multi-sélection)
+    # NIVEAU 2: Category Selection
     elif st.session_state.nav_level == 'category_selection':
         if st.session_state.selected_type:
-            # Bouton retour
-            if st.button("← Retour", key="btn_back_to_type", help="Retour à la sélection du type"):
-                st.session_state.nav_level = 'type_selection'
-                st.session_state.selected_type = None
-                st.session_state.selected_category = None
-                st.session_state.selected_categories = []
-                st.rerun()
+            st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
 
-            # Filtrer par type
-            df_filtered = df[df['type'] == st.session_state.selected_type]
+            # Bouton retour
+            col1, col2, col3 = st.columns([1, 10, 1])
+            with col1:
+                if st.button("← Retour", key="back_type"):
+                    st.session_state.nav_level = 'type_selection'
+                    st.session_state.selected_type = None
+                    st.session_state.selected_categories = []
+                    st.rerun()
 
             # Breadcrumb
             type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
-            st.markdown(f'<div class="breadcrumb-nav">Sélection → <span>{type_label}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="breadcrumb">Univers → <strong>{type_label}</strong></div>', unsafe_allow_html=True)
 
-            # Titre section
+            # Titre
             emoji = "💼" if st.session_state.selected_type == 'revenu' else "🛒"
-            st.markdown(f'<div class="section-header"><h2>{emoji} Catégories</h2></div>', unsafe_allow_html=True)
-
-            # Info sur multi-sélection
-            st.info("💡 Conseil: Cliquez sur les catégories pour les sélectionner, puis cliquez sur 'Appliquer le filtre'")
+            st.markdown(f'<div class="bubble-title" style="font-size: 24px;">{emoji} Catégories</div>', unsafe_allow_html=True)
 
             # Statistiques par catégorie
+            df_filtered = df[df['type'] == st.session_state.selected_type]
             cat_stats = df_filtered.groupby('categorie').agg({
                 'montant': 'sum',
                 'sous_categorie': 'count'
@@ -878,145 +616,83 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
             cat_stats.columns = ['categorie', 'montant', 'count']
             cat_stats = cat_stats.sort_values('montant', ascending=False)
 
-            # Afficher les catégories en grille
-            st.markdown('<div class="categories-grid">', unsafe_allow_html=True)
+            # Grille de bulles
+            st.markdown('<div class="bubble-grid">', unsafe_allow_html=True)
 
-            for idx, row in cat_stats.iterrows():
+            for idx, (_, row) in enumerate(cat_stats.iterrows()):
                 col = st.columns(3)[idx % 3]
                 with col:
-                    # Catégorie card
-                    category_name = row['categorie']
-                    category_emoji = _get_category_emoji(category_name)
-                    is_selected = category_name in st.session_state.selected_categories
-
-                    # CSS class dynamique pour sélection
-                    selected_class = "selected" if is_selected else ""
+                    cat_name = row['categorie']
+                    color_class = f"bubble-cat-{(idx % 8) + 1}"
+                    emoji = _get_category_emoji(cat_name)
 
                     st.markdown(f"""
-                    <div class="category-card {selected_class}" style="position: relative;">
-                        <div class="category-icon">{category_emoji}</div>
-                        <div class="category-name">{category_name}</div>
-                        <div class="category-amount">{row['montant']:,.0f}€</div>
-                        <div class="category-count">{int(row['count'])} items</div>
+                    <div class="bubble {color_class}">
+                        <div class="bubble-emoji">{emoji}</div>
+                        <div class="bubble-name">{cat_name}</div>
+                        <div class="bubble-amount">{row['montant']:,.0f}€</div>
+                        <div class="bubble-count">{int(row['count'])} items</div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                    if st.button(f"{'Désélectionner' if is_selected else 'Sélectionner'}", key=f"btn_cat_{category_name}", use_container_width=True):
-                        if is_selected:
-                            st.session_state.selected_categories.remove(category_name)
-                        else:
-                            st.session_state.selected_categories.append(category_name)
-                        st.rerun()
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Afficher la barre de sélection si au moins une catégorie est sélectionnée
-            if st.session_state.selected_categories:
-                st.markdown('<div class="selection-bar">', unsafe_allow_html=True)
-                st.markdown(f'<strong>Catégories sélectionnées ({len(st.session_state.selected_categories)})</strong>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Afficher les chips
-                chip_html = '<div class="selection-list">'
-                for cat in st.session_state.selected_categories:
-                    chip_html += f'<div class="selection-chip">{cat}</div>'
-                chip_html += '</div>'
-                st.markdown(chip_html, unsafe_allow_html=True)
-
-                # Boutons d'action
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✅ Appliquer le filtre", key="btn_apply_filter", use_container_width=True):
+                    if st.button("Voir", key=f"cat_{cat_name}", use_container_width=True):
+                        st.session_state.selected_categories = [cat_name]
                         st.session_state.nav_level = 'detail'
                         st.rerun()
 
-                with col2:
-                    if st.button("🔄 Réinitialiser", key="btn_clear_filter", use_container_width=True):
-                        st.session_state.selected_categories = []
-                        st.rerun()
-
+            st.markdown('</div></div>', unsafe_allow_html=True)
             return df_filtered
 
-    # NIVEAU 3: Détail des transactions (multi-sélection)
+    # NIVEAU 3: Detail View
     elif st.session_state.nav_level == 'detail':
         if st.session_state.selected_categories:
+            st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
+
             # Bouton retour
-            if st.button("← Retour", key="btn_back_to_cat", help="Retour aux catégories"):
+            if st.button("← Retour aux catégories", key="back_cat"):
                 st.session_state.nav_level = 'category_selection'
                 st.session_state.selected_categories = []
                 st.rerun()
 
-            # Filtrer par type et catégories sélectionnées
+            # Breadcrumb
+            type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
+            cat_str = " + ".join(st.session_state.selected_categories)
+            st.markdown(f'<div class="breadcrumb">Univers → <strong>{type_label}</strong> → <strong>{cat_str}</strong></div>', unsafe_allow_html=True)
+
+            # Titre
+            cat_emoji = _get_category_emoji(st.session_state.selected_categories[0])
+            st.markdown(f'<div class="bubble-title" style="font-size: 24px;">{cat_emoji} {st.session_state.selected_categories[0]}</div>', unsafe_allow_html=True)
+
+            # Filtrer les données
             df_filtered = df[
                 (df['type'] == st.session_state.selected_type) &
                 (df['categorie'].isin(st.session_state.selected_categories))
             ]
 
-            # Breadcrumb
-            type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
-            categories_str = " + ".join(st.session_state.selected_categories)
-            st.markdown(f'<div class="breadcrumb-nav">Sélection → <span>{type_label}</span> → <span>{categories_str}</span></div>', unsafe_allow_html=True)
-
-            # Titre section avec nombre de catégories
-            if len(st.session_state.selected_categories) == 1:
-                title = st.session_state.selected_categories[0]
-                emoji = _get_category_emoji(title)
-                st.markdown(f'<div class="section-header"><h2>{emoji} {title}</h2></div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="section-header"><h2>📊 {len(st.session_state.selected_categories)} catégories sélectionnées</h2></div>', unsafe_allow_html=True)
-
-            # Statistiques avec style amélioré
+            # Métriques
             col1, col2, col3 = st.columns(3)
-
             with col1:
-                st.markdown(f"""
-                <div class="metric-enhanced">
-                    <div class="metric-label">💰 Total</div>
-                    <div class="metric-value">{df_filtered['montant'].sum():,.0f}€</div>
-                </div>
-                """, unsafe_allow_html=True)
-
+                st.metric("💰 Total", f"{df_filtered['montant'].sum():,.0f}€")
             with col2:
-                st.markdown(f"""
-                <div class="metric-enhanced">
-                    <div class="metric-label">📊 Transactions</div>
-                    <div class="metric-value">{len(df_filtered)}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
+                st.metric("📊 Transactions", len(df_filtered))
             with col3:
-                st.markdown(f"""
-                <div class="metric-enhanced">
-                    <div class="metric-label">🏷️ Catégories</div>
-                    <div class="metric-value">{len(st.session_state.selected_categories)}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("🏷️ Catégories", len(st.session_state.selected_categories))
 
-            # Afficher les catégories sélectionnées en chips
-            if len(st.session_state.selected_categories) > 1:
-                st.markdown("**Catégories filtrées:**")
-                chip_html = '<div class="selection-list">'
-                for cat in st.session_state.selected_categories:
-                    emoji = _get_category_emoji(cat)
-                    chip_html += f'<div class="selection-chip">{emoji} {cat}</div>'
-                chip_html += '</div>'
-                st.markdown(chip_html, unsafe_allow_html=True)
+            st.divider()
 
-            # Divider
-            st.markdown('<div class="elegant-divider"></div>', unsafe_allow_html=True)
-
-            # Afficher les transactions
+            # Transactions
             st.subheader("📋 Détail des transactions")
             if len(df_filtered) > 0:
                 for idx, transaction in df_filtered.iterrows():
                     afficher_carte_transaction(transaction, idx)
             else:
-                st.warning("Aucune transaction trouvée pour cette sélection.")
+                st.warning("Aucune transaction trouvée")
 
+            st.markdown('</div>', unsafe_allow_html=True)
             return df_filtered
 
-    # Par défaut retourner tout
     return df
+
 
 
 def _get_category_emoji(category: str) -> str:
