@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git commit:*)",
-      "Bash(timeout 10 streamlit:*)"
+      "Bash(timeout 10 streamlit:*)",
+      "Bash(\"C:\\Users\\djabi\\gestion-financière\\modules\\ui\\components_clean.py\")"
     ],
     "deny": [],
     "ask": []

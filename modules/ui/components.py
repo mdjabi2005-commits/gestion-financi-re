@@ -8,9 +8,11 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 import streamlit as st
 import streamlit.components.v1 as components
+import pandas as pd
 from PIL import Image
 
 from modules.services.file_service import trouver_fichiers_associes
+from modules.ui.bubble_component import bubble_navigation
 
 logger = logging.getLogger(__name__)
 
@@ -410,279 +412,82 @@ def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
 # ==============================
 # 🫧 SIMPLIFIED STATE MANAGEMENT
 # ==============================
-
-def _init_bubble_state() -> None:
-    """Initialize simplified bubble navigation state."""
-    if 'bubble_level' not in st.session_state:
-        st.session_state.bubble_level = 'main'  # 'main' | 'categories' | 'subcategories'
-    if 'selected_category' not in st.session_state:
-        st.session_state.selected_category = None
-    if 'animation_state' not in st.session_state:
-        st.session_state.animation_state = None
-
-
-def _reset_to_main() -> None:
-    """Reset to main bubble view."""
-    st.session_state.bubble_level = 'main'
-    st.session_state.selected_category = None
-    st.session_state.animation_state = None
-
+# 🫧 BUBBLE NAVIGATION COMPONENT
+# ==============================
 
 def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Simplified bubble navigation system with 3 levels and explosion animation.
+    Navigation par bulles animées avec composant Streamlit custom (D3.js).
 
-    Navigation:
-    - Level 1: Main bubble (total expenses)
-    - Level 2: Category bubbles (arranged in spiral/circle)
-    - Level 3: Subcategories + Filtered transactions
+    Utilise un composant personnalisé pour une navigation fluide et
+    visuellement riche à travers les transactions par catégorie.
+
+    Niveaux de navigation:
+    - 'main': Bulle principale (total des dépenses)
+    - 'categories': Bulles des catégories en arrangement circulaire
+    - 'subcategories': Détail des transactions filtrées
 
     Args:
-        df: Transaction DataFrame
+        df: DataFrame contenant les transactions
 
     Returns:
-        Filtered DataFrame based on navigation level
+        DataFrame filtré selon la navigation actuelle
     """
-    # Initialize state
-    _init_bubble_state()
+    # Initialiser l'état de navigation
+    if 'bubble_nav_state' not in st.session_state:
+        st.session_state.bubble_nav_state = {
+            'level': 'main',
+            'selected_category': None
+        }
 
-    # Get current level
-    level = st.session_state.bubble_level
-
-    # Render appropriate view
-    if level == 'main':
-        return _render_main_bubble(df)
-    elif level == 'categories':
-        return _render_category_bubbles(df)
-    elif level == 'subcategories':
-        return _render_subcategory_bubbles(df)
-
-    return df
-
-
-# ==============================
-# 🫧 BUBBLE SYSTEM - SIMPLIFIED
-# ==============================
-
-# Color mapping for categories
-CATEGORY_COLORS = {
-    'Alimentation': '#10b981',    # Green
-    'Transport': '#3b82f6',       # Blue
-    'Loisirs': '#f59e0b',         # Orange
-    'Logement': '#8b5cf6',        # Purple
-    'Santé': '#ef4444',           # Red
-    'Shopping': '#ec4899',        # Pink
-    'Autres': '#6b7280'           # Gray
-}
-
-def _show_bubble_css():
-    """Display CSS for bubble animations once"""
-    st.markdown("""
-    <style>
-    @keyframes bubble-pulse {
-        0%, 100% { box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4); }
-        50% { box-shadow: 0 25px 70px rgba(59, 130, 246, 0.6); }
-    }
-
-    @keyframes bubble-explode {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.4); opacity: 0.6; filter: blur(2px); }
-        100% { transform: scale(0); opacity: 0; }
-    }
-
-    @keyframes bubble-appear {
-        0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
-    }
-
-    .bubble-main { animation: bubble-pulse 2s ease-in-out infinite; }
-    .bubble-exploding { animation: bubble-explode 0.8s cubic-bezier(0.6, 0, 0.8, 1) forwards !important; }
-    .bubble-category { animation: bubble-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-    .bubble-category:hover { transform: translate(-50%, -50%) scale(1.1) !important; }
-
-    /* Hide Streamlit buttons */
-    [data-testid="stHorizontalBlock"] { display: none !important; }
-    .stButton button { display: none !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-
-def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
-    """Render main bubble with explosion animation"""
-    _show_bubble_css()
-
+    state = st.session_state.bubble_nav_state
     df_expenses = df[df['type'] == 'dépense']
-    total = df_expenses['montant'].sum()
-    n_categories = df_expenses['categorie'].nunique()
-    n_transactions = len(df_expenses)
 
-    # Get category stats
-    stats = df_expenses.groupby('categorie').agg({
+    # Préparer les statistiques par catégorie
+    cat_stats = df_expenses.groupby('categorie').agg({
         'montant': 'sum',
         'sous_categorie': 'count'
     }).reset_index()
-    stats.columns = ['categorie', 'montant', 'count']
-    stats = stats.sort_values('montant', ascending=False).reset_index(drop=True)
+    cat_stats.columns = ['name', 'amount', 'count']
+    cat_stats = cat_stats.sort_values('amount', ascending=False).reset_index(drop=True)
 
-    max_amount = stats['montant'].max() if not stats.empty else 1
+    # Préparer les données pour le composant
+    component_data = {
+        'level': state['level'],
+        'total': float(df_expenses['montant'].sum()),
+        'categoriesCount': len(cat_stats),
+        'transactionsCount': len(df_expenses),
+        'categories': cat_stats.to_dict('records'),
+        'selected_category': state['selected_category'],
+    }
 
-    # Build category bubbles HTML with circular arrangement
-    bubbles_html = ""
-    n_bubbles = len(stats)
-    radius = 150 + (n_bubbles * 15)  # Pixel radius, not percentage
-    center = 250  # Center position in pixels
+    # Enrichir les données pour le niveau subcategories
+    if state['level'] == 'subcategories' and state['selected_category']:
+        df_filtered = df_expenses[df_expenses['categorie'] == state['selected_category']]
+        component_data['total'] = float(df_filtered['montant'].sum())
+        component_data['transactionsCount'] = len(df_filtered)
+        component_data['subcategoriesCount'] = df_filtered['sous_categorie'].nunique()
 
-    for i, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        count = int(row['count'])
+    # Afficher le composant custom
+    result = bubble_navigation(component_data, key="bubble_nav_main")
 
-        # Circular arrangement
-        angle = (2 * math.pi * i) / n_bubbles - (math.pi / 2)
-        x = center + radius * math.cos(angle)
-        y = center + radius * math.sin(angle)
-
-        # Size proportional to amount
-        size = 70 + (amount / max_amount * 60)
-        color = CATEGORY_COLORS.get(cat, '#6b7280')
-
-        bubbles_html += f'''
-        <div class="bubble-category" data-cat="{cat}"
-             style="position: absolute; left: {x}px; top: {y}px;
-                     transform: translate(-50%, -50%);
-                     width: {size}px; height: {size}px;
-                     background: linear-gradient(135deg, {color} 0%, {color}dd 100%);
-                     animation-delay: {i*0.08}s;">
-            <div style="font-size: {size/6}px;">{cat}</div>
-            <div style="font-size: {size/4}px; font-weight: 900;">{amount:.0f}€</div>
-            <div style="font-size: {size/8}px; opacity: 0.8;">{count}</div>
-        </div>
-        '''
-
-    html = f'''
-    <div style="
-        background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1e 100%);
-        border-radius: 30px;
-        position: relative;
-        width: 100%;
-        height: 600px;
-        padding: 20px;
-    ">
-        <div class="bubble-main" id="mainBubble"
-             style="
-                position: absolute;
-                left: 50%; top: 50%;
-                transform: translate(-50%, -50%);
-                width: 300px;
-                height: 300px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                cursor: pointer;
-                box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
-                color: white;
-                font-weight: 700;
-                text-align: center;
-                z-index: 10;
-            ">
-            <div style="font-size: 18px; margin-bottom: 15px;">💰 TOTAL DÉPENSES</div>
-            <div style="font-size: 56px; font-weight: 900; margin: 10px 0;">{total:,.0f}€</div>
-            <div style="font-size: 14px; opacity: 0.85; margin-top: 15px;">
-                {n_categories} catégories<br>{n_transactions} transactions
-            </div>
-            <div style="font-size: 12px; margin-top: 20px; animation: bounce 2s infinite;">👆 Cliquez</div>
-        </div>
-        {bubbles_html}
-    </div>
-
-    <script>
-    (function() {{
-        var main = document.getElementById('mainBubble');
-        var cats = document.querySelectorAll('.bubble-category');
-        var clicked = false;
-
-        main.addEventListener('click', function() {{
-            if (clicked) return;
-            clicked = true;
-            main.classList.add('bubble-exploding');
-            cats.forEach(function(c) {{ c.classList.add('bubble-category'); }});
-        }});
-
-        cats.forEach(function(c) {{
-            c.addEventListener('click', function(e) {{
-                e.stopPropagation();
-                var cat = c.getAttribute('data-cat');
-                // Find and click hidden button
-                var btn = document.querySelector('[data-streamlit-key="cat_' + cat + '"]');
-                if (btn) btn.click();
-            }});
-        }});
-    }})();
-    </script>
-    '''
-
-    st.markdown(html, unsafe_allow_html=True)
-
-    # Hidden buttons - COMPLETELY INVISIBLE
-    for _, row in stats.iterrows():
-        cat = row['categorie']
-        if st.button(cat, key=f"cat_{cat}"):
-            st.session_state.selected_category = cat
-            st.session_state.bubble_level = 'subcategories'
+    # Gérer les interactions retournées par le composant
+    if result:
+        if result['action'] == 'navigate':
+            state['level'] = result['level']
             st.rerun()
+        elif result['action'] == 'select':
+            state['selected_category'] = result.get('category')
+            state['level'] = 'subcategories'
+            st.rerun()
+        elif result['action'] == 'back':
+            state['level'] = result['level']
+            if result['level'] == 'main':
+                state['selected_category'] = None
+            st.rerun()
+
+    # Retourner le DataFrame approprié selon le niveau
+    if state['level'] == 'subcategories' and state['selected_category']:
+        return df_expenses[df_expenses['categorie'] == state['selected_category']]
 
     return df_expenses
-
-
-def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
-    """Deprecated - navigation goes directly to subcategories"""
-    return df[df['type'] == 'dépense']
-
-
-def _render_subcategory_bubbles(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Render filtered data for selected category with subcategories visualization.
-    Returns filtered DataFrame for display.
-    """
-    selected_cat = st.session_state.selected_category
-
-    if not selected_cat:
-        st.error("Aucune catégorie sélectionnée")
-        return df
-
-    df_expenses = df[df['type'] == 'dépense']
-    df_filtered = df_expenses[df_expenses['categorie'] == selected_cat]
-
-    if df_filtered.empty:
-        st.warning(f"Aucune transaction pour {selected_cat}")
-        return df_filtered
-
-    # Breadcrumb
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(f"### 🏠 {selected_cat}")
-    with col2:
-        if st.button("↩️ Retour", use_container_width=True):
-            st.session_state.bubble_level = 'categories'
-            st.session_state.selected_category = None
-            st.rerun()
-
-    # Show summary
-    st.markdown("---")
-    total = df_filtered['montant'].sum()
-    n_subs = df_filtered['sous_categorie'].nunique()
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total", f"{total:.2f}€")
-    with col2:
-        st.metric("Sous-catégories", n_subs)
-    with col3:
-        st.metric("Transactions", len(df_filtered))
-
-    st.markdown("---")
-
-    # Return filtered dataframe for display in parent
-    return df_filtered
