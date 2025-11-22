@@ -524,32 +524,12 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         box-shadow: 0 30px 80px rgba(59, 130, 246, 0.6);
     }
 
-    .main-bubble:active {
-        animation: bubble-explode 0.8s cubic-bezier(0.6, 0, 0.8, 1) forwards;
-    }
-
     @keyframes main-bubble-pulse {
         0%, 100% {
             box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
         }
         50% {
             box-shadow: 0 25px 70px rgba(59, 130, 246, 0.6);
-        }
-    }
-
-    @keyframes bubble-explode {
-        0% {
-            transform: scale(1);
-            opacity: 1;
-        }
-        50% {
-            transform: scale(1.4);
-            opacity: 0.6;
-            filter: blur(2px);
-        }
-        100% {
-            transform: scale(0);
-            opacity: 0;
         }
     }
 
@@ -593,7 +573,7 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     # HTML for main bubble
     bubble_html = f'''
     <div class="bubble-universe">
-        <div class="main-bubble" id="mainBubble">
+        <div class="main-bubble">
             <div class="bubble-title">💰 Total Dépenses</div>
             <div class="bubble-amount">{total:,.0f}€</div>
             <div class="bubble-info">
@@ -607,11 +587,10 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
 
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Invisible button (using JavaScript injection) for state change
-    # The button is still rendered but invisible - user clicks the bubble via HTML onclick
+    # Button for state change - centered below the bubble
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        if st.button("→", key="go_to_categories", use_container_width=False):
+        if st.button("Explorer les catégories", key="go_to_categories", use_container_width=True):
             st.session_state.bubble_level = 'categories'
             st.rerun()
 
@@ -643,15 +622,14 @@ def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
         border-radius: 30px;
         min-height: 600px;
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
     }
 
     .bubble-container {
         position: relative;
         width: 100%;
-        height: 100%;
-        min-height: 600px;
+        height: 600px;
     }
 
     .category-bubble {
@@ -668,6 +646,8 @@ def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
         box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        border: none;
+        padding: 0;
     }
 
     .category-bubble:hover {
@@ -706,99 +686,52 @@ def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
         opacity: 0.8;
         margin-top: 5px;
     }
-
-    .breadcrumb-simple {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        background: rgba(255, 255, 255, 0.1);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 20px;
-        font-size: 14px;
-        backdrop-filter: blur(10px);
-    }
-
-    .back-button {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        background: rgba(239, 68, 68, 0.8);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 20px;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.3s;
-        backdrop-filter: blur(10px);
-    }
-
-    .back-button:hover {
-        background: rgba(239, 68, 68, 1);
-        transform: translateY(-2px);
-    }
     </style>
     """
 
     st.markdown(css, unsafe_allow_html=True)
 
+    # Header with breadcrumb and back button
+    col_bread, col_space, col_back = st.columns([2, 5, 1])
+
+    with col_bread:
+        st.markdown("### 🏠 Catégories")
+
+    with col_back:
+        if st.button("← Retour", key="back_to_main"):
+            _reset_to_main()
+            st.rerun()
+
+    st.markdown("---")
+
     # Calculate spiral positions (golden ratio)
     golden_angle = 137.5  # Golden angle in degrees
     max_amount = stats['montant'].max()
 
-    # HTML for bubbles
-    bubble_html = '<div class="bubble-universe"><div class="bubble-container">'
-    bubble_html += '<div class="breadcrumb-simple">🏠 Catégories</div>'
+    # Create columns for bubble buttons
+    cols = st.columns([1] * min(3, len(stats)))  # 3 bubbles per row
 
+    col_idx = 0
     for i, (_, row) in enumerate(stats.iterrows()):
         cat = row['categorie']
         amount = row['montant']
         count = int(row['count'])
 
-        # Spiral positioning
-        angle = i * golden_angle * (math.pi / 180)
-        radius = 100 + (i * 30)  # Expanding spiral
-        x = 50 + (radius / 150) * 40 * math.cos(angle)
-        y = 50 + (radius / 150) * 40 * math.sin(angle)
+        # Get the column for this bubble
+        col = cols[col_idx % len(cols)]
 
-        # Size proportional to amount
-        size = 80 + (amount / max_amount * 100)
-
-        # Color from mapping
-        color = CATEGORY_COLORS.get(cat, '#6b7280')
-
-        # Build bubble
-        bubble_html += f'''
-        <div class="category-bubble"
-             id="cat-{cat.replace(' ', '-')}"
-             style="left:{x}%; top:{y}%; width:{size}px; height:{size}px;
-                     background: linear-gradient(135deg, {color} 0%, {color}dd 100%);
-                     animation-delay: {i*0.1}s;"
-             onclick="selectCategory('{cat}')">
-            <div class="bubble-name">{cat}</div>
-            <div class="bubble-amount">{amount:.0f}€</div>
-            <div class="bubble-count">{count} items</div>
-        </div>
-        '''
-
-    bubble_html += '</div></div>'
-    st.markdown(bubble_html, unsafe_allow_html=True)
-
-    # Hidden buttons for navigation
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        if st.button("Retour", key="back_to_main", use_container_width=False):
-            _reset_to_main()
-            st.rerun()
-
-    with col3:
-        # Category selection happens via click simulation
-        for _, row in stats.iterrows():
-            cat = row['categorie']
-            if st.button(f"📂 {cat}", key=f"select_{cat}", use_container_width=False):
+        with col:
+            # Create button with category info
+            if st.button(
+                f"💰 {cat}\n{amount:.0f}€\n({count} items)",
+                key=f"select_{cat}",
+                use_container_width=True
+            ):
                 st.session_state.selected_category = cat
                 st.session_state.bubble_level = 'subcategories'
                 st.rerun()
+
+        col_idx += 1
 
     return df_expenses
 
