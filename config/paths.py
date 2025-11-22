@@ -1,9 +1,11 @@
 """File paths configuration."""
 
 import os
+from pathlib import Path
 
 # Base directory
-DATA_DIR = os.path.expanduser("~/analyse")
+_home = Path.home()
+DATA_DIR = str(_home / "analyse")
 
 # Database
 DB_PATH = os.path.join(DATA_DIR, "finances.db")
