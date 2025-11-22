@@ -475,17 +475,48 @@ CATEGORY_COLORS = {
     'Autres': '#6b7280'           # Gray
 }
 
+def _show_bubble_css():
+    """Display CSS for bubble animations once"""
+    st.markdown("""
+    <style>
+    @keyframes bubble-pulse {
+        0%, 100% { box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4); }
+        50% { box-shadow: 0 25px 70px rgba(59, 130, 246, 0.6); }
+    }
+
+    @keyframes bubble-explode {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.4); opacity: 0.6; filter: blur(2px); }
+        100% { transform: scale(0); opacity: 0; }
+    }
+
+    @keyframes bubble-appear {
+        0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
+    }
+
+    .bubble-main { animation: bubble-pulse 2s ease-in-out infinite; }
+    .bubble-exploding { animation: bubble-explode 0.8s cubic-bezier(0.6, 0, 0.8, 1) forwards !important; }
+    .bubble-category { animation: bubble-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    .bubble-category:hover { transform: translate(-50%, -50%) scale(1.1) !important; }
+
+    /* Hide Streamlit buttons */
+    [data-testid="stHorizontalBlock"] { display: none !important; }
+    .stButton button { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+
 def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Render the main bubble showing total expenses.
-    Click on it to explode into category bubbles.
-    """
+    """Render main bubble with explosion animation"""
+    _show_bubble_css()
+
     df_expenses = df[df['type'] == 'dépense']
     total = df_expenses['montant'].sum()
     n_categories = df_expenses['categorie'].nunique()
     n_transactions = len(df_expenses)
 
-    # Get category stats for spiral
+    # Get category stats
     stats = df_expenses.groupby('categorie').agg({
         'montant': 'sum',
         'sous_categorie': 'count'
@@ -493,299 +524,121 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     stats.columns = ['categorie', 'montant', 'count']
     stats = stats.sort_values('montant', ascending=False).reset_index(drop=True)
 
-    # Calculate spiral positions (golden ratio)
-    golden_angle = 137.5
     max_amount = stats['montant'].max() if not stats.empty else 1
 
-    # Build category bubbles HTML
-    category_bubbles_html = ""
+    # Build category bubbles HTML with circular arrangement
+    bubbles_html = ""
+    n_bubbles = len(stats)
+    radius = 150 + (n_bubbles * 15)  # Pixel radius, not percentage
+    center = 250  # Center position in pixels
+
     for i, (_, row) in enumerate(stats.iterrows()):
         cat = row['categorie']
         amount = row['montant']
         count = int(row['count'])
 
-        # Spiral positioning (centered, radiating outward)
-        angle = i * golden_angle * (math.pi / 180)
-        radius = 120 + (i * 40)  # Expanding spiral
-        x = 50 + (radius / 250) * 40 * math.cos(angle)
-        y = 50 + (radius / 280) * 40 * math.sin(angle)
+        # Circular arrangement
+        angle = (2 * math.pi * i) / n_bubbles - (math.pi / 2)
+        x = center + radius * math.cos(angle)
+        y = center + radius * math.sin(angle)
 
         # Size proportional to amount
-        size = 60 + (amount / max_amount * 80)
-
-        # Color from mapping
+        size = 70 + (amount / max_amount * 60)
         color = CATEGORY_COLORS.get(cat, '#6b7280')
 
-        # Build bubble (using data attributes to trigger state change)
-        category_bubbles_html += f'''
-        <div class="category-bubble"
-             data-category="{cat}"
-             style="left:{x}%; top:{y}%; width:{size}px; height:{size}px;
-                     background: linear-gradient(135deg, {color} 0%, {color}dd 100%);">
-            <div class="bubble-name">{cat}</div>
-            <div class="bubble-cat-amount">{amount:.0f}€</div>
-            <div class="bubble-count">{count} items</div>
+        bubbles_html += f'''
+        <div class="bubble-category" data-cat="{cat}"
+             style="position: absolute; left: {x}px; top: {y}px;
+                     transform: translate(-50%, -50%);
+                     width: {size}px; height: {size}px;
+                     background: linear-gradient(135deg, {color} 0%, {color}dd 100%);
+                     animation-delay: {i*0.08}s;">
+            <div style="font-size: {size/6}px;">{cat}</div>
+            <div style="font-size: {size/4}px; font-weight: 900;">{amount:.0f}€</div>
+            <div style="font-size: {size/8}px; opacity: 0.8;">{count}</div>
         </div>
         '''
 
-    # Complete HTML with CSS and JS all in one
-    full_html = f'''
-    <style>
-    .bubble-universe {{
-        background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
-        border-radius: 20px;
-        padding: 60px 40px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 20px;
-        justify-items: center;
-        align-items: center;
-        box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
-    }}
-
-    #bubbleContainer {{
+    html = f'''
+    <div style="
+        background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1e 100%);
+        border-radius: 30px;
         position: relative;
         width: 100%;
-        min-height: 500px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }}
-
-    .main-bubble {{
-        width: 300px;
-        height: 300px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
-        color: white;
-        font-weight: 700;
-        text-align: center;
-        animation: main-bubble-pulse 2s ease-in-out infinite;
-        z-index: 10;
-        user-select: none;
-        transition: all 0.3s ease;
-    }}
-
-    .main-bubble:hover {{
-        transform: scale(1.05);
-        box-shadow: 0 30px 80px rgba(59, 130, 246, 0.6);
-    }}
-
-    .main-bubble.exploding {{
-        animation: bubble-explode 0.8s cubic-bezier(0.6, 0, 0.8, 1) forwards;
-        pointer-events: none;
-    }}
-
-    @keyframes main-bubble-pulse {{
-        0%, 100% {{
-            box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
-        }}
-        50% {{
-            box-shadow: 0 25px 70px rgba(59, 130, 246, 0.6);
-        }}
-    }}
-
-    @keyframes bubble-explode {{
-        0% {{
-            transform: scale(1);
-            opacity: 1;
-        }}
-        50% {{
-            transform: scale(1.4);
-            opacity: 0.6;
-            filter: blur(2px);
-        }}
-        100% {{
-            transform: scale(0);
-            opacity: 0;
-        }}
-    }}
-
-    .category-bubble {{
-        border-radius: 50%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        color: white;
-        font-weight: 700;
-        text-align: center;
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        padding: 0;
-        user-select: none;
-        border: none;
-        opacity: 0;
-        transform: scale(0) rotate(-180deg);
-    }}
-
-    .category-bubble:hover {{
-        transform: scale(1.1) rotate(0);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-        filter: brightness(1.1);
-    }}
-
-    .category-bubble.appearing {{
-        animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }}
-
-    @keyframes category-appear {{
-        0% {{
-            transform: scale(0) rotate(-180deg);
-            opacity: 0;
-        }}
-        100% {{
-            transform: scale(1) rotate(0);
-            opacity: 1;
-        }}
-    }}
-
-    .bubble-title {{
-        font-size: 18px;
-        margin-bottom: 15px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        opacity: 0.9;
-    }}
-
-    .bubble-amount {{
-        font-size: 56px;
-        font-weight: 900;
-        margin: 10px 0;
-    }}
-
-    .bubble-info {{
-        font-size: 14px;
-        opacity: 0.85;
-        margin-top: 15px;
-        line-height: 1.6;
-    }}
-
-    .bubble-hint {{
-        font-size: 12px;
-        margin-top: 20px;
-        opacity: 0.7;
-        animation: bounce 2s infinite;
-    }}
-
-    .bubble-name {{
-        font-size: 0.75em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 3px;
-    }}
-
-    .bubble-cat-amount {{
-        font-size: 1.1em;
-        font-weight: 900;
-        margin: 2px 0;
-    }}
-
-    .bubble-count {{
-        font-size: 0.7em;
-        opacity: 0.8;
-        margin-top: 2px;
-    }}
-
-    @keyframes bounce {{
-        0%, 100% {{ transform: translateY(0); }}
-        50% {{ transform: translateY(-10px); }}
-    }}
-    </style>
-
-    <div id="bubbleContainer">
-        <div class="main-bubble" id="mainBubble">
-            <div class="bubble-title">💰 Total Dépenses</div>
-            <div class="bubble-amount">{total:,.0f}€</div>
-            <div class="bubble-info">
-                {n_categories} catégories<br>
-                {n_transactions} transactions
+        height: 600px;
+        padding: 20px;
+    ">
+        <div class="bubble-main" id="mainBubble"
+             style="
+                position: absolute;
+                left: 50%; top: 50%;
+                transform: translate(-50%, -50%);
+                width: 300px;
+                height: 300px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
+                color: white;
+                font-weight: 700;
+                text-align: center;
+                z-index: 10;
+            ">
+            <div style="font-size: 18px; margin-bottom: 15px;">💰 TOTAL DÉPENSES</div>
+            <div style="font-size: 56px; font-weight: 900; margin: 10px 0;">{total:,.0f}€</div>
+            <div style="font-size: 14px; opacity: 0.85; margin-top: 15px;">
+                {n_categories} catégories<br>{n_transactions} transactions
             </div>
-            <div class="bubble-hint">👆 Cliquez pour explorer</div>
+            <div style="font-size: 12px; margin-top: 20px; animation: bounce 2s infinite;">👆 Cliquez</div>
         </div>
-        {category_bubbles_html}
+        {bubbles_html}
     </div>
 
     <script>
     (function() {{
-        var mainBubble = document.getElementById('mainBubble');
-        var categoryBubbles = document.querySelectorAll('.category-bubble');
+        var main = document.getElementById('mainBubble');
+        var cats = document.querySelectorAll('.bubble-category');
+        var clicked = false;
 
-        mainBubble.addEventListener('click', function(e) {{
-            e.stopPropagation();
-            mainBubble.classList.add('exploding');
-            categoryBubbles.forEach(function(bubble, index) {{
-                setTimeout(function() {{
-                    bubble.classList.add('appearing');
-                }}, 100 + (index * 50));
-            }});
+        main.addEventListener('click', function() {{
+            if (clicked) return;
+            clicked = true;
+            main.classList.add('bubble-exploding');
+            cats.forEach(function(c) {{ c.classList.add('bubble-category'); }});
         }});
 
-        categoryBubbles.forEach(function(bubble) {{
-            bubble.addEventListener('click', function(e) {{
+        cats.forEach(function(c) {{
+            c.addEventListener('click', function(e) {{
                 e.stopPropagation();
-                var category = bubble.getAttribute('data-category');
-                // Trigger hidden button click
-                var button = document.querySelector('[data-category-button="' + category + '"]');
-                if (button) button.click();
+                var cat = c.getAttribute('data-cat');
+                // Find and click hidden button
+                var btn = document.querySelector('[data-streamlit-key="cat_' + cat + '"]');
+                if (btn) btn.click();
             }});
         }});
     }})();
     </script>
     '''
 
-    st.markdown(full_html, unsafe_allow_html=True)
+    st.markdown(html, unsafe_allow_html=True)
 
-    # Handle category selection via query params or state
-    # Store selected category when button is clicked
-    if 'selected_cat_temp' in st.query_params:
-        cat = st.query_params['selected_cat_temp']
-        st.session_state.selected_category = cat
-        st.session_state.bubble_level = 'subcategories'
-        st.rerun()
-
-    # Hidden buttons below - users click on the HTML bubbles, which trigger these buttons
-    # We need this to work with Streamlit's event system
-    st.markdown("""
-    <style>
-    /* Hide all buttons in this section */
-    .bubble-buttons {
-        display: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Hidden buttons for click handling
-    with st.container():
-        st.markdown('<style>.hidden-buttons { display: none !important; }</style><div class="hidden-buttons">', unsafe_allow_html=True)
-        cols = st.columns(max(1, len(stats)))
-        for i, (_, row) in enumerate(stats.iterrows()):
-            cat = row['categorie']
-            if i < len(cols):
-                with cols[i]:
-                    # These buttons are invisible but handle the click events
-                    if st.button(cat, key=f"cat_btn_{cat}", use_container_width=False):
-                        st.session_state.selected_category = cat
-                        st.session_state.bubble_level = 'subcategories'
-                        st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Hidden buttons - COMPLETELY INVISIBLE
+    for _, row in stats.iterrows():
+        cat = row['categorie']
+        if st.button(cat, key=f"cat_{cat}"):
+            st.session_state.selected_category = cat
+            st.session_state.bubble_level = 'subcategories'
+            st.rerun()
 
     return df_expenses
 
 
 def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    This function is deprecated - now we go directly from main bubble to subcategories.
-    Kept for backward compatibility.
-    """
+    """Deprecated - navigation goes directly to subcategories"""
     return df[df['type'] == 'dépense']
 
 
