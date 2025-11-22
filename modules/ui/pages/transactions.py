@@ -449,13 +449,12 @@ def interface_voir_transactions_v3() -> None:
 
     st.markdown("---")
 
-    # === FILTRE PAR CATÉGORIES (Vue hybride par défaut) ===
-    selected_categories = render_category_management(df)
+    # === FILTRE PAR CATÉGORIES (Navigation par bulles V3) ===
+    df_filtered = render_category_management(df)
 
     st.markdown("---")
 
-    # === APPLIQUER LES FILTRES ===
-    df_filtered = df.copy()
+    # === APPLIQUER LES FILTRES ADDITIONNELS ===
     df_filtered["date"] = pd.to_datetime(df_filtered["date"])
 
     # Filtre période
@@ -470,10 +469,6 @@ def interface_voir_transactions_v3() -> None:
         df_filtered = df_filtered[df_filtered["type"] == "dépense"]
     elif type_filter == "Revenu":
         df_filtered = df_filtered[df_filtered["type"] == "revenu"]
-
-    # Filtre catégories sélectionnées
-    if selected_categories:
-        df_filtered = df_filtered[df_filtered["categorie"].isin(selected_categories)]
 
     # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
     df_filtered = df_filtered.sort_values("date", ascending=False).reset_index(drop=True)

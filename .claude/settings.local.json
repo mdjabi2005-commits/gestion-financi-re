@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(timeout 10 streamlit:*)"
     ],
     "deny": [],
     "ask": []
