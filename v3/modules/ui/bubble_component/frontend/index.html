@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Navigation Component</title>
+    <link rel="stylesheet" href="bubble.css">
+</head>
+<body>
+    <div id="bubble-container"></div>
+
+    <!-- D3.js Library -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Bubble Component Scripts -->
+    <script src="bubble.js"></script>
+
+    <script>
+        /**
+         * Initialisation de la communication avec Streamlit
+         */
+
+        // Fonction appelée par Streamlit pour envoyer les données
+        function sendDataToComponent(data) {
+            if (window.renderBubbles) {
+                renderBubbles(data);
+            }
+        }
+
+        // Signaler à Streamlit que le composant est prêt
+        window.addEventListener('DOMContentLoaded', function() {
+            window.parent.postMessage({
+                type: "streamlit:componentReady"
+            }, "*");
+        });
+
+        // Écouter les messages de Streamlit
+        window.addEventListener("message", function(event) {
+            // Sécurité: vérifier que le message vient de Streamlit
+            if (event.source !== window.parent) return;
+
+            if (event.data.type === "streamlit:render") {
+                const args = event.data.args;
+                if (args && args.length > 0 && args[0]) {
+                    renderBubbles(args[0]);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git commit:*)",
       "Bash(timeout 10 streamlit:*)",
-      "Bash(\"C:\\Users\\djabi\\gestion-financière\\modules\\ui\\components_clean.py\")"
+      "Bash(\"C:\\Users\\djabi\\gestion-financière\\modules\\ui\\components_clean.py\")",
+      "Bash(findstr:*)",
+      "Bash(nul)",
+      "Bash(dir /s /b *v3* 2)"
     ],
     "deny": [],
     "ask": []

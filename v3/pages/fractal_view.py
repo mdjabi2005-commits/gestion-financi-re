@@ -10,6 +10,11 @@ import streamlit as st
 from datetime import datetime, timedelta
 import logging
 import pandas as pd
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from modules.services.fractal_service import (
     build_fractal_hierarchy,
