@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Navigation - Sierpinski Triangle</title>
+    <script src="https://cdn.jsdelivr.net/npm/streamlit-component-lib@1.4.0/streamlit.js"></script>
+    <link rel="stylesheet" href="fractal.css">
+</head>
+<body>
+    <div id="app" class="fractal-container">
+        <!-- Canvas for rendering -->
+        <canvas id="fractalCanvas"></canvas>
+
+        <!-- Info Panel (top-right) -->
+        <div class="info-panel">
+            <div class="info-title">🔺 Univers Fractal</div>
+            <div class="info-content">
+                <div class="info-item">
+                    <span class="info-label">Niveau</span>
+                    <span class="info-value" id="levelDisplay">1</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Montant Total</span>
+                    <span class="info-value" id="totalDisplay">0€</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Catégories</span>
+                    <span class="info-value" id="categoriesDisplay">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Zoom</span>
+                    <span class="info-value" id="zoomDisplay">1.0x</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Breadcrumb Navigation (top-left) -->
+        <div class="breadcrumb-container">
+            <div class="breadcrumb">
+                <span id="breadcrumbText">TR</span>
+            </div>
+        </div>
+
+        <!-- Zoom Indicator (bottom-left) -->
+        <div class="zoom-indicator">
+            <div class="zoom-bar">
+                <div class="zoom-progress" id="zoomProgress"></div>
+            </div>
+            <div class="zoom-label">Profondeur</div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="controls">
+            <button id="backBtn" class="control-btn back-btn" title="Retour au niveau précédent">
+                ← Retour
+            </button>
+            <button id="resetBtn" class="control-btn reset-btn" title="Retour à la vue d'ensemble">
+                🏠 Vue d'ensemble
+            </button>
+        </div>
+
+        <!-- Tooltip -->
+        <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+        <!-- Loading indicator -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Chargement des données...</p>
+        </div>
+    </div>
+
+    <script src="fractal.js"></script>
+</body>
+</html>
