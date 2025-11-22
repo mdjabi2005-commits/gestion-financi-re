@@ -436,6 +436,8 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
         st.session_state.selected_type = None
     if 'selected_category' not in st.session_state:
         st.session_state.selected_category = None
+    if 'selected_categories' not in st.session_state:
+        st.session_state.selected_categories = []  # Multi-sélection
 
     # CSS moderne et élégant
     st.markdown("""
@@ -689,6 +691,112 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
         margin: 30px 0;
         border: none;
     }
+
+    /* Multi-sélection - Checkbox visuelle */
+    .category-card.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e9ecef 100%);
+        box-shadow: 0 0 0 2px #667eea;
+    }
+
+    .category-card.selected::after {
+        content: '✓';
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        background: #667eea;
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 16px;
+    }
+
+    /* Sélection info bar */
+    .selection-bar {
+        background: linear-gradient(135deg, #f0f4ff 0%, #e9ecef 100%);
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 4px solid #667eea;
+        margin: 20px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selection-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .selection-chip {
+        background: #667eea;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .selection-chip button {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .selection-chip button:hover {
+        opacity: 0.8;
+    }
+
+    /* Filter action buttons */
+    .filter-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .filter-actions button {
+        flex: 1;
+        padding: 12px 24px;
+        border-radius: 10px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .apply-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .apply-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    }
+
+    .clear-button {
+        background: #f5f7fa;
+        color: #667eea;
+        border: 2px solid #667eea;
+    }
+
+    .clear-button:hover {
+        background: #f0f0f0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -737,7 +845,7 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
 
         return df
 
-    # NIVEAU 2: Sélection de catégories
+    # NIVEAU 2: Sélection de catégories (avec multi-sélection)
     elif st.session_state.nav_level == 'category_selection':
         if st.session_state.selected_type:
             # Bouton retour
@@ -745,6 +853,7 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
                 st.session_state.nav_level = 'type_selection'
                 st.session_state.selected_type = None
                 st.session_state.selected_category = None
+                st.session_state.selected_categories = []
                 st.rerun()
 
             # Filtrer par type
@@ -757,6 +866,9 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
             # Titre section
             emoji = "💼" if st.session_state.selected_type == 'revenu' else "🛒"
             st.markdown(f'<div class="section-header"><h2>{emoji} Catégories</h2></div>', unsafe_allow_html=True)
+
+            # Info sur multi-sélection
+            st.info("💡 Conseil: Cliquez sur les catégories pour les sélectionner, puis cliquez sur 'Appliquer le filtre'")
 
             # Statistiques par catégorie
             cat_stats = df_filtered.groupby('categorie').agg({
@@ -775,9 +887,13 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
                     # Catégorie card
                     category_name = row['categorie']
                     category_emoji = _get_category_emoji(category_name)
+                    is_selected = category_name in st.session_state.selected_categories
+
+                    # CSS class dynamique pour sélection
+                    selected_class = "selected" if is_selected else ""
 
                     st.markdown(f"""
-                    <div class="category-card">
+                    <div class="category-card {selected_class}" style="position: relative;">
                         <div class="category-icon">{category_emoji}</div>
                         <div class="category-name">{category_name}</div>
                         <div class="category-amount">{row['montant']:,.0f}€</div>
@@ -785,36 +901,69 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
                     </div>
                     """, unsafe_allow_html=True)
 
-                    if st.button(f"Voir", key=f"btn_cat_{category_name}", use_container_width=True):
-                        st.session_state.selected_category = category_name
-                        st.session_state.nav_level = 'detail'
+                    if st.button(f"{'Désélectionner' if is_selected else 'Sélectionner'}", key=f"btn_cat_{category_name}", use_container_width=True):
+                        if is_selected:
+                            st.session_state.selected_categories.remove(category_name)
+                        else:
+                            st.session_state.selected_categories.append(category_name)
                         st.rerun()
 
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # Afficher la barre de sélection si au moins une catégorie est sélectionnée
+            if st.session_state.selected_categories:
+                st.markdown('<div class="selection-bar">', unsafe_allow_html=True)
+                st.markdown(f'<strong>Catégories sélectionnées ({len(st.session_state.selected_categories)})</strong>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Afficher les chips
+                chip_html = '<div class="selection-list">'
+                for cat in st.session_state.selected_categories:
+                    chip_html += f'<div class="selection-chip">{cat}</div>'
+                chip_html += '</div>'
+                st.markdown(chip_html, unsafe_allow_html=True)
+
+                # Boutons d'action
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Appliquer le filtre", key="btn_apply_filter", use_container_width=True):
+                        st.session_state.nav_level = 'detail'
+                        st.rerun()
+
+                with col2:
+                    if st.button("🔄 Réinitialiser", key="btn_clear_filter", use_container_width=True):
+                        st.session_state.selected_categories = []
+                        st.rerun()
+
             return df_filtered
 
-    # NIVEAU 3: Détail des transactions
+    # NIVEAU 3: Détail des transactions (multi-sélection)
     elif st.session_state.nav_level == 'detail':
-        if st.session_state.selected_category:
+        if st.session_state.selected_categories:
             # Bouton retour
             if st.button("← Retour", key="btn_back_to_cat", help="Retour aux catégories"):
                 st.session_state.nav_level = 'category_selection'
-                st.session_state.selected_category = None
+                st.session_state.selected_categories = []
                 st.rerun()
 
-            # Filtrer par type et catégorie
+            # Filtrer par type et catégories sélectionnées
             df_filtered = df[
                 (df['type'] == st.session_state.selected_type) &
-                (df['categorie'] == st.session_state.selected_category)
+                (df['categorie'].isin(st.session_state.selected_categories))
             ]
 
             # Breadcrumb
             type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
-            st.markdown(f'<div class="breadcrumb-nav">Sélection → <span>{type_label}</span> → <span>{st.session_state.selected_category}</span></div>', unsafe_allow_html=True)
+            categories_str = " + ".join(st.session_state.selected_categories)
+            st.markdown(f'<div class="breadcrumb-nav">Sélection → <span>{type_label}</span> → <span>{categories_str}</span></div>', unsafe_allow_html=True)
 
-            # Titre section
-            category_emoji = _get_category_emoji(st.session_state.selected_category)
-            st.markdown(f'<div class="section-header"><h2>{category_emoji} {st.session_state.selected_category}</h2></div>', unsafe_allow_html=True)
+            # Titre section avec nombre de catégories
+            if len(st.session_state.selected_categories) == 1:
+                title = st.session_state.selected_categories[0]
+                emoji = _get_category_emoji(title)
+                st.markdown(f'<div class="section-header"><h2>{emoji} {title}</h2></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="section-header"><h2>📊 {len(st.session_state.selected_categories)} catégories sélectionnées</h2></div>', unsafe_allow_html=True)
 
             # Statistiques avec style amélioré
             col1, col2, col3 = st.columns(3)
@@ -838,18 +987,31 @@ def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
             with col3:
                 st.markdown(f"""
                 <div class="metric-enhanced">
-                    <div class="metric-label">🏷️ Sous-catégories</div>
-                    <div class="metric-value">{df_filtered['sous_categorie'].nunique()}</div>
+                    <div class="metric-label">🏷️ Catégories</div>
+                    <div class="metric-value">{len(st.session_state.selected_categories)}</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # Afficher les catégories sélectionnées en chips
+            if len(st.session_state.selected_categories) > 1:
+                st.markdown("**Catégories filtrées:**")
+                chip_html = '<div class="selection-list">'
+                for cat in st.session_state.selected_categories:
+                    emoji = _get_category_emoji(cat)
+                    chip_html += f'<div class="selection-chip">{emoji} {cat}</div>'
+                chip_html += '</div>'
+                st.markdown(chip_html, unsafe_allow_html=True)
 
             # Divider
             st.markdown('<div class="elegant-divider"></div>', unsafe_allow_html=True)
 
             # Afficher les transactions
             st.subheader("📋 Détail des transactions")
-            for idx, transaction in df_filtered.iterrows():
-                afficher_carte_transaction(transaction, idx)
+            if len(df_filtered) > 0:
+                for idx, transaction in df_filtered.iterrows():
+                    afficher_carte_transaction(transaction, idx)
+            else:
+                st.warning("Aucune transaction trouvée pour cette sélection.")
 
             return df_filtered
 
