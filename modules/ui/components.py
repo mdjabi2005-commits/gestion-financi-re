@@ -532,15 +532,24 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     full_html = f'''
     <style>
     .bubble-universe {{
-        background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1e 100%);
-        border-radius: 30px;
-        min-height: 700px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+        border-radius: 20px;
+        padding: 60px 40px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 20px;
+        justify-items: center;
+        align-items: center;
+        box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
+    }}
+
+    #bubbleContainer {{
+        position: relative;
+        width: 100%;
+        min-height: 500px;
         display: flex;
         justify-content: center;
         align-items: center;
-        position: relative;
-        overflow: visible;
-        box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
     }}
 
     .main-bubble {{
@@ -554,14 +563,13 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         align-items: center;
         cursor: pointer;
         box-shadow: 0 20px 60px rgba(59, 130, 246, 0.4);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         color: white;
         font-weight: 700;
         text-align: center;
-        position: relative;
         animation: main-bubble-pulse 2s ease-in-out infinite;
         z-index: 10;
         user-select: none;
+        transition: all 0.3s ease;
     }}
 
     .main-bubble:hover {{
@@ -600,7 +608,6 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     }}
 
     .category-bubble {{
-        position: absolute;
         border-radius: 50%;
         display: flex;
         flex-direction: column;
@@ -613,32 +620,31 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         padding: 0;
-        font-size: 0.9em;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
         user-select: none;
+        border: none;
+        opacity: 0;
+        transform: scale(0) rotate(-180deg);
     }}
 
     .category-bubble:hover {{
-        transform: translate(-50%, -50%) scale(1.1);
+        transform: scale(1.1) rotate(0);
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
         filter: brightness(1.1);
     }}
 
+    .category-bubble.appearing {{
+        animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }}
+
     @keyframes category-appear {{
         0% {{
-            transform: translate(-50%, -50%) scale(0) rotate(-180deg);
+            transform: scale(0) rotate(-180deg);
             opacity: 0;
         }}
         100% {{
-            transform: translate(-50%, -50%) scale(1) rotate(0);
+            transform: scale(1) rotate(0);
             opacity: 1;
         }}
-    }}
-
-    .category-bubble.appearing {{
-        animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }}
 
     .bubble-title {{
@@ -670,23 +676,23 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     }}
 
     .bubble-name {{
-        font-size: 0.85em;
+        font-size: 0.75em;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 5px;
+        margin-bottom: 3px;
     }}
 
     .bubble-cat-amount {{
-        font-size: 1.3em;
+        font-size: 1.1em;
         font-weight: 900;
-        margin: 3px 0;
+        margin: 2px 0;
     }}
 
     .bubble-count {{
-        font-size: 0.75em;
+        font-size: 0.7em;
         opacity: 0.8;
-        margin-top: 3px;
+        margin-top: 2px;
     }}
 
     @keyframes bounce {{
@@ -695,7 +701,7 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     }}
     </style>
 
-    <div class="bubble-universe" id="bubbleContainer">
+    <div id="bubbleContainer">
         <div class="main-bubble" id="mainBubble">
             <div class="bubble-title">💰 Total Dépenses</div>
             <div class="bubble-amount">{total:,.0f}€</div>
@@ -727,7 +733,9 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
             bubble.addEventListener('click', function(e) {{
                 e.stopPropagation();
                 var category = bubble.getAttribute('data-category');
-                window.Streamlit.setComponentValue(category);
+                // Trigger hidden button click
+                var button = document.querySelector('[data-category-button="' + category + '"]');
+                if (button) button.click();
             }});
         }});
     }})();
@@ -755,15 +763,16 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     </style>
     """, unsafe_allow_html=True)
 
+    # Hidden buttons for click handling
     with st.container():
-        st.markdown('<div class="bubble-buttons">', unsafe_allow_html=True)
+        st.markdown('<style>.hidden-buttons { display: none !important; }</style><div class="hidden-buttons">', unsafe_allow_html=True)
         cols = st.columns(max(1, len(stats)))
         for i, (_, row) in enumerate(stats.iterrows()):
             cat = row['categorie']
             if i < len(cols):
                 with cols[i]:
-                    # These buttons are hidden but needed to capture clicks
-                    if st.button(cat, key=f"cat_{cat}", use_container_width=False):
+                    # These buttons are invisible but handle the click events
+                    if st.button(cat, key=f"cat_btn_{cat}", use_container_width=False):
                         st.session_state.selected_category = cat
                         st.session_state.bubble_level = 'subcategories'
                         st.rerun()
