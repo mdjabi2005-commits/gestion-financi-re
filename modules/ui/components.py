@@ -478,25 +478,33 @@ CATEGORY_COLORS = {
 def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
     """
     Render the main bubble showing total expenses.
-    Click on it to explode into categories.
+    Click on it to explode into category bubbles.
     """
     df_expenses = df[df['type'] == 'dépense']
     total = df_expenses['montant'].sum()
     n_categories = df_expenses['categorie'].nunique()
     n_transactions = len(df_expenses)
 
-    # CSS for universe background and main bubble
+    # Get category stats for spiral
+    stats = df_expenses.groupby('categorie').agg({
+        'montant': 'sum',
+        'sous_categorie': 'count'
+    }).reset_index()
+    stats.columns = ['categorie', 'montant', 'count']
+    stats = stats.sort_values('montant', ascending=False).reset_index(drop=True)
+
+    # CSS for main bubble with explosion and category bubbles
     css = """
     <style>
     .bubble-universe {
         background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1e 100%);
         border-radius: 30px;
-        min-height: 500px;
+        min-height: 700px;
         display: flex;
         justify-content: center;
         align-items: center;
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
     }
 
@@ -517,11 +525,17 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         text-align: center;
         position: relative;
         animation: main-bubble-pulse 2s ease-in-out infinite;
+        z-index: 10;
     }
 
     .main-bubble:hover {
         transform: scale(1.05);
         box-shadow: 0 30px 80px rgba(59, 130, 246, 0.6);
+    }
+
+    .main-bubble.exploding {
+        animation: bubble-explode 0.8s cubic-bezier(0.6, 0, 0.8, 1) forwards;
+        pointer-events: none;
     }
 
     @keyframes main-bubble-pulse {
@@ -531,6 +545,64 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         50% {
             box-shadow: 0 25px 70px rgba(59, 130, 246, 0.6);
         }
+    }
+
+    @keyframes bubble-explode {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.4);
+            opacity: 0.6;
+            filter: blur(2px);
+        }
+        100% {
+            transform: scale(0);
+            opacity: 0;
+        }
+    }
+
+    .category-bubble {
+        position: absolute;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        color: white;
+        font-weight: 700;
+        text-align: center;
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        padding: 0;
+        font-size: 0.9em;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    .category-bubble:hover {
+        transform: translate(-50%, -50%) scale(1.1);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        filter: brightness(1.1);
+    }
+
+    @keyframes category-appear {
+        0% {
+            transform: translate(-50%, -50%) scale(0) rotate(-180deg);
+            opacity: 0;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(1) rotate(0);
+            opacity: 1;
+        }
+    }
+
+    .category-bubble.appearing {
+        animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }
 
     .bubble-title {
@@ -561,6 +633,26 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
         animation: bounce 2s infinite;
     }
 
+    .bubble-name {
+        font-size: 0.85em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 5px;
+    }
+
+    .bubble-cat-amount {
+        font-size: 1.3em;
+        font-weight: 900;
+        margin: 3px 0;
+    }
+
+    .bubble-count {
+        font-size: 0.75em;
+        opacity: 0.8;
+        margin-top: 3px;
+    }
+
     @keyframes bounce {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-10px); }
@@ -570,10 +662,31 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
 
     st.markdown(css, unsafe_allow_html=True)
 
-    # HTML for main bubble
+    # JavaScript to handle bubble click and trigger Streamlit callback
+    js = """
+    <script>
+    function triggerCategoryExplode() {
+        var mainBubble = document.getElementById('mainBubble');
+        if (mainBubble) {
+            mainBubble.classList.add('exploding');
+            // Show all category bubbles with delay
+            var categoryBubbles = document.querySelectorAll('.category-bubble');
+            categoryBubbles.forEach(function(bubble, index) {
+                setTimeout(function() {
+                    bubble.classList.add('appearing');
+                }, 100 + (index * 50));
+            });
+        }
+    }
+    </script>
+    """
+
+    st.markdown(js, unsafe_allow_html=True)
+
+    # HTML for main bubble and category bubbles
     bubble_html = f'''
     <div class="bubble-universe">
-        <div class="main-bubble">
+        <div class="main-bubble" id="mainBubble" onclick="triggerCategoryExplode()">
             <div class="bubble-title">💰 Total Dépenses</div>
             <div class="bubble-amount">{total:,.0f}€</div>
             <div class="bubble-info">
@@ -582,158 +695,68 @@ def _render_main_bubble(df: pd.DataFrame) -> pd.DataFrame:
             </div>
             <div class="bubble-hint">👆 Cliquez pour explorer</div>
         </div>
-    </div>
     '''
 
+    # Calculate spiral positions (golden ratio)
+    golden_angle = 137.5
+    max_amount = stats['montant'].max() if not stats.empty else 1
+    container_width = 600  # pixels
+    container_height = 700  # pixels
+
+    for i, (_, row) in enumerate(stats.iterrows()):
+        cat = row['categorie']
+        amount = row['montant']
+        count = int(row['count'])
+
+        # Spiral positioning (centered, radiating outward)
+        angle = i * golden_angle * (math.pi / 180)
+        radius = 120 + (i * 40)  # Expanding spiral
+        x = 50 + (radius / 250) * 40 * math.cos(angle)
+        y = 50 + (radius / 280) * 40 * math.sin(angle)
+
+        # Size proportional to amount
+        size = 60 + (amount / max_amount * 80)
+
+        # Color from mapping
+        color = CATEGORY_COLORS.get(cat, '#6b7280')
+
+        # Build bubble
+        bubble_html += f'''
+        <button class="category-bubble"
+                style="left:{x}%; top:{y}%; width:{size}px; height:{size}px;
+                        background: linear-gradient(135deg, {color} 0%, {color}dd 100%);"
+                onclick="selectCategoryAndRerun('{cat}')">
+            <div class="bubble-name">{cat}</div>
+            <div class="bubble-cat-amount">{amount:.0f}€</div>
+            <div class="bubble-count">{count} items</div>
+        </button>
+        '''
+
+    bubble_html += '</div>'
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Button for state change - centered below the bubble
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Explorer les catégories", key="go_to_categories", use_container_width=True):
-            st.session_state.bubble_level = 'categories'
-            st.rerun()
+    # Hidden Streamlit callbacks (placed below visible area with empty container)
+    with st.container():
+        cols = st.columns(len(stats))
+        for i, (_, row) in enumerate(stats.iterrows()):
+            cat = row['categorie']
+            with cols[i]:
+                # Use st.empty() to hide buttons, but they still capture clicks
+                placeholder = st.empty()
+                if st.button(f"🔘", key=f"cat_select_{cat}", use_container_width=False):
+                    st.session_state.selected_category = cat
+                    st.session_state.bubble_level = 'subcategories'
+                    st.rerun()
 
     return df_expenses
 
 
 def _render_category_bubbles(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Render categories as bubbles in a spiral arrangement.
-    Click on a bubble to drill into subcategories.
+    This function is deprecated - now we go directly from main bubble to subcategories.
+    Kept for backward compatibility.
     """
-    df_expenses = df[df['type'] == 'dépense']
-    stats = df_expenses.groupby('categorie').agg({
-        'montant': 'sum',
-        'sous_categorie': 'count'
-    }).reset_index()
-    stats.columns = ['categorie', 'montant', 'count']
-    stats = stats.sort_values('montant', ascending=False).reset_index(drop=True)
-
-    if stats.empty:
-        st.info("Aucune catégorie trouvée")
-        return df_expenses
-
-    # CSS for category bubbles (spiral arrangement)
-    css = """
-    <style>
-    .bubble-universe {
-        background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1e 100%);
-        border-radius: 30px;
-        min-height: 600px;
-        position: relative;
-        overflow: visible;
-        box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
-    }
-
-    .bubble-container {
-        position: relative;
-        width: 100%;
-        height: 600px;
-    }
-
-    .category-bubble {
-        position: absolute;
-        border-radius: 50%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        color: white;
-        font-weight: 700;
-        text-align: center;
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        animation: category-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        border: none;
-        padding: 0;
-    }
-
-    .category-bubble:hover {
-        transform: scale(1.1);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-        filter: brightness(1.1);
-    }
-
-    @keyframes category-appear {
-        0% {
-            transform: scale(0) rotate(-180deg);
-            opacity: 0;
-        }
-        100% {
-            transform: scale(1) rotate(0);
-            opacity: 1;
-        }
-    }
-
-    .bubble-name {
-        font-size: 1em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-    }
-
-    .bubble-amount {
-        font-size: 1.6em;
-        font-weight: 900;
-        margin: 5px 0;
-    }
-
-    .bubble-count {
-        font-size: 0.8em;
-        opacity: 0.8;
-        margin-top: 5px;
-    }
-    </style>
-    """
-
-    st.markdown(css, unsafe_allow_html=True)
-
-    # Header with breadcrumb and back button
-    col_bread, col_space, col_back = st.columns([2, 5, 1])
-
-    with col_bread:
-        st.markdown("### 🏠 Catégories")
-
-    with col_back:
-        if st.button("← Retour", key="back_to_main"):
-            _reset_to_main()
-            st.rerun()
-
-    st.markdown("---")
-
-    # Calculate spiral positions (golden ratio)
-    golden_angle = 137.5  # Golden angle in degrees
-    max_amount = stats['montant'].max()
-
-    # Create columns for bubble buttons
-    cols = st.columns([1] * min(3, len(stats)))  # 3 bubbles per row
-
-    col_idx = 0
-    for i, (_, row) in enumerate(stats.iterrows()):
-        cat = row['categorie']
-        amount = row['montant']
-        count = int(row['count'])
-
-        # Get the column for this bubble
-        col = cols[col_idx % len(cols)]
-
-        with col:
-            # Create button with category info
-            if st.button(
-                f"💰 {cat}\n{amount:.0f}€\n({count} items)",
-                key=f"select_{cat}",
-                use_container_width=True
-            ):
-                st.session_state.selected_category = cat
-                st.session_state.bubble_level = 'subcategories'
-                st.rerun()
-
-        col_idx += 1
-
-    return df_expenses
+    return df[df['type'] == 'dépense']
 
 
 def _render_subcategory_bubbles(df: pd.DataFrame) -> pd.DataFrame:
