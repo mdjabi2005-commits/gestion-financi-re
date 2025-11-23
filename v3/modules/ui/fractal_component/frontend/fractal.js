@@ -16,6 +16,8 @@
 let hierarchyData = {};
 let currentNode = 'TR';
 let navigationStack = ['TR'];
+let selectedNodes = new Set();  // NOUVEAU: Nœuds sélectionnés
+let isSelectionMode = false;    // NOUVEAU: Mode sélection actif
 let hoveredTriangle = null;
 let animationInProgress = false;
 
@@ -106,6 +108,29 @@ function resizeCanvas() {
 }
 
 // ==============================
+// UTILITY FUNCTIONS - LEVEL DETECTION
+// ==============================
+
+/**
+ * Détecte si le nœud est au dernier niveau
+ * (ses enfants n'ont pas d'enfants)
+ */
+function isLastLevel(node) {
+    if (!node || !node.children || node.children.length === 0) {
+        return false;
+    }
+
+    for (let childCode of node.children) {
+        const child = hierarchyData[childCode];
+        if (child && child.children && child.children.length > 0) {
+            return false;  // Un enfant a des enfants = pas le dernier niveau
+        }
+    }
+
+    return true;  // Tous les enfants sont des feuilles = dernier niveau
+}
+
+// ==============================
 // MAIN UPDATE & RENDER
 // ==============================
 
@@ -124,6 +149,10 @@ function update() {
         return;
     }
 
+    // Détecter si on est en mode sélection (dernier niveau)
+    isSelectionMode = isLastLevel(node);
+    console.log('[FRACTAL] Mode sélection:', isSelectionMode);
+
     // Update UI
     updateInfoPanel(node);
     updateBreadcrumb(node);
@@ -132,6 +161,9 @@ function update() {
 
     // Render triangles
     render(node);
+
+    // Envoyer l'état à Streamlit
+    sendSelectionToStreamlit();
 }
 
 /**
@@ -413,6 +445,9 @@ function getRenderManyTriangles(node) {
 function drawTriangle(tri, nodeData, index) {
     const { p1, p2, p3 } = tri;
 
+    const isSelected = nodeData && selectedNodes.has(nodeData.code);
+    const isHovered = hoveredTriangle === index;
+
     // Draw triangle
     ctx.fillStyle = nodeData ? nodeData.color : '#6b7280';
     ctx.beginPath();
@@ -422,25 +457,45 @@ function drawTriangle(tri, nodeData, index) {
     ctx.closePath();
     ctx.fill();
 
-    // Draw border
-    ctx.strokeStyle = hoveredTriangle === index ?
-        'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = hoveredTriangle === index ? 3 : 2;
+    // Draw border (style différent si sélectionné)
+    if (isSelected) {
+        // Bordure brillante + glow pour sélection
+        ctx.strokeStyle = '#3b82f6';  // Bleu brillant
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#3b82f6';
+    } else if (isHovered) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 0;
+    } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+    }
     ctx.stroke();
+    ctx.shadowBlur = 0;  // Reset shadow
 
     // Draw label
     if (nodeData) {
         const centroidX = (p1.x + p2.x + p3.x) / 3;
         const centroidY = (p1.y + p2.y + p3.y) / 3;
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // Checkmark si sélectionné
+        if (isSelected) {
+            ctx.fillStyle = '#3b82f6';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('✓', centroidX + 15, centroidY - 15);
+        }
 
         // Emoji
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.font = '24px sans-serif';
-        ctx.fillText(getCategoryEmoji(nodeData.label), centroidX, centroidY - 15);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(getCategoryEmoji(nodeData.label), centroidX, centroidY - 10);
 
         // Label
         ctx.font = 'bold 12px sans-serif';
@@ -460,7 +515,7 @@ function drawTriangle(tri, nodeData, index) {
 // ==============================
 
 /**
- * Handle canvas click
+ * Handle canvas click - Navigation OU Sélection
  */
 function handleCanvasClick(e) {
     if (animationInProgress) return;
@@ -475,29 +530,53 @@ function handleCanvasClick(e) {
     for (let i = 0; i < triangles.length; i++) {
         const tri = triangles[i];
         if (isPointInTriangle(clickX, clickY, tri)) {
-            console.log('[FRACTAL] ✅ Clicked triangle:', tri.code);
+            const node = hierarchyData[currentNode];
+            const childCode = tri.code;
+            const childNode = hierarchyData[childCode];
 
-            // Send message to Streamlit
-            const nodeData = hierarchyData[tri.code];
-            if (window.parent !== window) {
-                window.parent.postMessage({
-                    type: 'fractal_selection',
-                    data: {
-                        code: tri.code,
-                        label: nodeData?.label || tri.code,
-                        level: navigationStack.length,
-                        action: 'select'
-                    }
-                }, '*');
-                console.log('[FRACTAL] 📤 Sent selection message:', tri.code);
+            console.log('[FRACTAL] ✅ Clicked triangle:', childCode);
+
+            if (!childNode) break;
+
+            // MODE SÉLECTION (dernier niveau)
+            if (isSelectionMode) {
+                console.log('[FRACTAL] Mode SÉLECTION - Toggle:', childCode);
+                toggleSelection(childCode);
+            }
+            // MODE NAVIGATION (niveaux supérieurs)
+            else if (childNode.children && childNode.children.length > 0) {
+                console.log('[FRACTAL] Mode NAVIGATION - Zoom:', childCode);
+                handleZoomIn(childCode);
+            } else {
+                console.log('[FRACTAL] Feuille sans enfants - Pas de navigation');
             }
 
-            handleZoomIn(tri.code);
             return;
         }
     }
 
     console.log('[FRACTAL] ⚠️  No triangle under click');
+}
+
+/**
+ * Toggle selection d'un nœud
+ */
+function toggleSelection(nodeCode) {
+    if (selectedNodes.has(nodeCode)) {
+        selectedNodes.delete(nodeCode);
+        console.log('[FRACTAL] 🔴 Désélectionné:', nodeCode);
+    } else {
+        selectedNodes.add(nodeCode);
+        console.log('[FRACTAL] 🟢 Sélectionné:', nodeCode);
+    }
+
+    console.log('[FRACTAL] Sélections actuelles:', Array.from(selectedNodes));
+
+    // Re-render pour afficher le changement
+    render(hierarchyData[currentNode]);
+
+    // Envoyer l'état à Streamlit
+    sendSelectionToStreamlit();
 }
 
 /**
@@ -591,6 +670,10 @@ async function handleZoomIn(targetCode) {
     navigationStack.push(targetCode);
     currentNode = targetCode;
 
+    // Réinitialiser la sélection quand on change de nœud
+    selectedNodes.clear();
+    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
+
     // Fade in new
     for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
         const progress = frame / FRAMES_PER_ANIMATION;
@@ -620,6 +703,10 @@ function handleBack() {
     navigationStack.pop();
     currentNode = navigationStack[navigationStack.length - 1];
 
+    // Réinitialiser la sélection
+    selectedNodes.clear();
+    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
+
     // Simple fade effect
     const originalNode = hierarchyData[currentNode];
     for (let frame = 0; frame < Math.floor(FRAMES_PER_ANIMATION / 2); frame++) {
@@ -645,6 +732,10 @@ function handleReset() {
 
     navigationStack = ['TR'];
     currentNode = 'TR';
+
+    // Réinitialiser la sélection
+    selectedNodes.clear();
+    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
 
     animationInProgress = true;
 
@@ -825,4 +916,31 @@ function renderLeafNodeMessage() {
     ctx.font = '16px sans-serif';
     ctx.fillText(`${transactions} transaction(s)`, centerX, centerY + 20);
     ctx.fillText(formatCurrency(node.amount || 0), centerX, centerY + 50);
+}
+
+/**
+ * Envoyer l'état de sélection à Streamlit
+ */
+function sendSelectionToStreamlit() {
+    const state = {
+        action: isSelectionMode ? 'selection' : 'navigation',
+        currentNode: currentNode,
+        selectedNodes: Array.from(selectedNodes),
+        level: navigationStack.length,
+        isSelectionMode: isSelectionMode
+    };
+
+    console.log('[FRACTAL] 📤 Envoi à Streamlit:', state);
+
+    // Essayer d'envoyer à Streamlit si disponible
+    if (typeof window.parent !== 'undefined' && window.parent !== window) {
+        try {
+            window.parent.postMessage({
+                type: 'fractal_state',
+                data: state
+            }, '*');
+        } catch (e) {
+            console.log('[FRACTAL] ℹ️ Streamlit API non disponible');
+        }
+    }
 }
