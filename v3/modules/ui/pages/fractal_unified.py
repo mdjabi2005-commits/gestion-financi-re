@@ -142,12 +142,81 @@ def display_active_filters(hierarchy: Dict, selected_codes: List[str]):
                 st.rerun()
 
 
+def sync_fractal_selections_from_js():
+    """
+    Synchronize selections from JavaScript to Streamlit using URL query parameters.
+    JavaScript periodically updates the URL, and Streamlit reads it via st.query_params.
+    """
+    import json
+
+    # JavaScript code that syncs fractal state to URL query parameters
+    sync_script = """
+    <script>
+    console.log('[SYNC-INIT] Initializing URL-based synchronization...');
+
+    // Function to get current fractal state from localStorage
+    function getFractalState() {
+        try {
+            const stateJson = localStorage.getItem('fractal_state_v6') ||
+                             sessionStorage.getItem('fractal_state_v6');
+            if (stateJson) {
+                return JSON.parse(stateJson);
+            }
+        } catch (e) {
+            console.log('[SYNC-ERROR] Parse error:', e);
+        }
+        return { selectedNodes: [], action: 'navigation', level: 1 };
+    }
+
+    // Update URL query parameters with current selections
+    function syncStateToURL() {
+        const state = getFractalState();
+        const selections = state.selectedNodes || [];
+
+        // Build query string
+        const params = new URLSearchParams();
+        if (selections.length > 0) {
+            // Encode selections as comma-separated list
+            params.set('fractal_selections', selections.join(','));
+        }
+        params.set('fractal_level', state.level || 1);
+        params.set('fractal_node', state.currentNode || 'TR');
+
+        const newUrl = window.location.pathname + '?' + params.toString();
+
+        // Update URL without full page reload
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState({ state }, '', newUrl);
+            console.log('[SYNC-URL] Updated URL:', newUrl);
+        }
+    }
+
+    // Sync on fractal state changes
+    document.addEventListener('fractalStateChanged', function(e) {
+        console.log('[SYNC-EVENT] Fractal state changed, updating URL');
+        syncStateToURL();
+    });
+
+    // Also sync periodically (every 500ms) in case of direct localStorage changes
+    setInterval(syncStateToURL, 500);
+
+    // Initial sync
+    syncStateToURL();
+
+    console.log('[SYNC-INIT] ✅ URL synchronization ready');
+    </script>
+    """
+
+    # Display the synchronization script
+    st.markdown(sync_script, unsafe_allow_html=True)
+
+
 def interface_fractal_unified():
-    """Main unified fractal navigation interface."""
+    """Main unified fractal navigation interface - Pure Fractal Only."""
     init_session_state()
 
     st.set_page_config(
-        page_title="Navigation Fractale Unifiée",
+        page_title="🔺 Navigation Fractale Unifiée",
         layout="wide",
         initial_sidebar_state="collapsed"
     )
@@ -188,145 +257,102 @@ def interface_fractal_unified():
 
     st.markdown("---")
 
-    # ===== SECTION 1: FRACTAL TRIANGLES (NAVIGATION + SÉLECTION) =====
-    st.markdown("### 🔺 Navigation Visuelle")
+    # Initialize synchronization
+    sync_fractal_selections_from_js()
 
-    fractal_navigation(hierarchy, key='unified_fractal_v6', height=700)
+    # ===== UNIFIED LAYOUT: 60% FRACTAL + 40% TABLE =====
+    col_left, col_right = st.columns([60, 40])
 
-    st.markdown("---")
+    # LEFT: FRACTAL TRIANGLES (NAVIGATION + SÉLECTION)
+    with col_left:
+        st.markdown("### 🔺 Navigation Visuelle")
+        st.markdown("**Mode:** Cliquez sur les triangles pour sélectionner/désélectionner")
+        fractal_navigation(hierarchy, key='unified_fractal_v6', height=700)
 
-    # ===== SECTION 2: TABLEAU ET FILTRES ACTIFS =====
-    st.markdown("### 📊 Données Filtrées")
+    # RIGHT: TABLE DYNAMIQUE ET FILTRES
+    with col_right:
+        st.markdown("### 📊 Transactions Filtrées")
 
-    # IMPORTANT: Lire l'état du fractal depuis le session_state ou localStorage
-    # Pour maintenant, utiliser une approche manuelle: les filtres sont gérés via st.session_state
-    # Le JavaScript mettra à jour l'état, que nous lirons via une méthode custom
+        # ===== LIRE LES SÉLECTIONS DEPUIS LES URL QUERY PARAMETERS =====
+        # Le JavaScript met les sélections dans l'URL, et Streamlit les lit ici
+        selections_from_url = st.query_params.get('fractal_selections', '')
 
-    # Placeholder pour recevoir l'état du fractal (sera rempli par custom component)
-    st_placeholder = st.empty()
+        # Parse the comma-separated list of selected codes
+        if selections_from_url:
+            selected_nodes_list = [code.strip() for code in selections_from_url.split(',') if code.strip()]
+            # Update session state to maintain consistency
+            st.session_state.fractal_manual_filters = set(selected_nodes_list)
+        else:
+            selected_nodes_list = list(st.session_state.fractal_manual_filters)
 
-    # JavaScript pour synchroniser l'état avec Streamlit
-    st.markdown("""
-    <script>
-    // Lire l'état du fractal depuis le storage toutes les secondes
-    function syncFractalState() {
-        try {
-            const stateJson = localStorage.getItem('fractal_state_v6') || sessionStorage.getItem('fractal_state_v6');
-            if (stateJson) {
-                const state = JSON.parse(stateJson);
-                // Sauvegarder pour accès Streamlit
-                window.lastFractalState = state;
-                console.log('[SYNC] État fractal synchronisé:', state.selectedNodes);
-            }
-        } catch (e) {
-            console.log('[SYNC] Erreur sync:', e);
-        }
-    }
+        # ===== AFFICHAGE CONDITIONNEL DANS LA COLONNE DROITE =====
+        if selected_nodes_list:
+            # ✅ AVEC SÉLECTIONS
+            st.markdown("**Filtres actifs:**")
 
-    // Sync initial et périodique
-    syncFractalState();
-    setInterval(syncFractalState, 1000);
-    </script>
-    """, unsafe_allow_html=True)
+            # Afficher les filtres comme badges avec boutons de suppression
+            for code in selected_nodes_list:
+                node = hierarchy.get(code, {})
+                label = node.get('label', code)
+                col_badge, col_remove = st.columns([4, 1])
 
-    # SIMPLIFICATION: Utiliser un formulaire avec des boutons pour ajouter les filtres
-    # manuellement depuis Python. Les utilisateurs cliqueront sur les triangles dans le fractal
-    # et nous afficherons les sélections en dessous.
+                with col_badge:
+                    st.write(f"🔹 {label}")
 
-    # Pour cette version v6, on va faire simple:
-    # - L'utilisateur clique sur les triangles (JavaScript gère la sélection visuelle)
-    # - Nous offrons une UI pour ajouter/retirer les filtres manuellement
-    # - Le tableau se met à jour selon les filtres actifs
-
-    # Utilisateurs peuvent ajouter les codes manuellement
-    with st.expander("➕ Ajouter manuellement des filtres", expanded=False):
-        st.markdown("*Alternative: cliquez sur les triangles (la façon normale)*")
-
-        # Lister les sous-catégories disponibles
-        all_subcats = []
-        for code, node in hierarchy.items():
-            if code.startswith('SUBCAT_'):
-                all_subcats.append({
-                    'code': code,
-                    'label': node.get('label', code),
-                    'total': node.get('total', 0)
-                })
-
-        selected_filter = st.selectbox(
-            "Sélectionner une sous-catégorie à filtrer:",
-            options=[s['label'] for s in all_subcats],
-            key="manual_select"
-        )
-
-        if selected_filter:
-            selected_subcat = next((s for s in all_subcats if s['label'] == selected_filter), None)
-            if selected_subcat and st.button("✅ Ajouter ce filtre"):
-                st.session_state.fractal_manual_filters.add(selected_subcat['code'])
-                st.rerun()
-
-    # ===== AFFICHAGE DU TABLEAU SELON LES FILTRES =====
-
-    # Utiliser les filtres manuels comme source de vérité
-    selected_nodes_list = list(st.session_state.fractal_manual_filters)
-
-    if selected_nodes_list:
-        # Display active filters with removal buttons
-        display_active_filters(hierarchy, selected_nodes_list)
-
-        st.markdown("---")
-
-        # Calculate statistics
-        df_filtered = get_transactions_for_codes(selected_nodes_list, df_all)
-
-        if not df_filtered.empty:
-            # Display metrics
-            total_count = len(df_filtered)
-            total_revenus = df_filtered[df_filtered['type'].str.lower() == 'revenu']['montant'].sum()
-            total_depenses = df_filtered[df_filtered['type'].str.lower() == 'dépense']['montant'].sum()
-            solde = total_revenus + total_depenses
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric("📋 Transactions", total_count)
-
-            with col2:
-                st.metric("💹 Revenus", f"{total_revenus:,.2f}€")
-
-            with col3:
-                st.metric("💸 Dépenses", f"{abs(total_depenses):,.2f}€")
-
-            with col4:
-                st.metric("📈 Solde", f"{solde:,.2f}€")
+                with col_remove:
+                    if st.button("❌", key=f"remove_{code}"):
+                        st.session_state.fractal_manual_filters.discard(code)
+                        st.rerun()
 
             st.markdown("---")
 
-            # Display transactions table
-            st.markdown("### 📋 Transactions")
-            display_transactions_table(df_filtered)
+            # Calculate statistics
+            df_filtered = get_transactions_for_codes(selected_nodes_list, df_all)
+
+            if not df_filtered.empty:
+                # Display metrics (compacts pour la droite)
+                total_count = len(df_filtered)
+                total_revenus = df_filtered[df_filtered['type'].str.lower() == 'revenu']['montant'].sum()
+                total_depenses = df_filtered[df_filtered['type'].str.lower() == 'dépense']['montant'].sum()
+                solde = total_revenus + total_depenses
+
+                # Deux colonnes pour les métriques
+                m1, m2 = st.columns(2)
+                with m1:
+                    st.metric("📋 Trans.", total_count)
+                with m2:
+                    st.metric("💹 Rev.", f"{total_revenus:,.0f}€")
+
+                m3, m4 = st.columns(2)
+                with m3:
+                    st.metric("💸 Dép.", f"{abs(total_depenses):,.0f}€")
+                with m4:
+                    st.metric("📈 Solde", f"{solde:,.0f}€")
+
+                st.markdown("---")
+
+                # Display transactions table
+                st.markdown("**Transactions:**", help="Cliquez sur les triangles pour filtrer")
+                display_transactions_table(df_filtered)
+            else:
+                st.warning("Aucune transaction pour cette sélection")
+
         else:
-            st.warning("Aucune transaction pour cette sélection")
+            # ❌ SANS SÉLECTIONS
+            st.info("👇 Cliquez sur les triangles pour sélectionner")
 
-    else:
-        # No selection - show global stats
-        st.info("👇 Naviguez dans les triangles et sélectionnez des sous-catégories pour voir les transactions")
-
-        # Global statistics
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
+            # Global statistics (simples)
             revenus_node = hierarchy.get('REVENUS', {})
             total_revenus = revenus_node.get('total', 0)
-            st.metric("💰 Total Revenus", f"{total_revenus:,.2f}€")
 
-        with col2:
             depenses_node = hierarchy.get('DEPENSES', {})
             total_depenses = depenses_node.get('total', 0)
-            st.metric("🛒 Total Dépenses", f"{abs(total_depenses):,.2f}€")
 
-        with col3:
             solde = total_revenus + total_depenses
-            st.metric("💵 Solde", f"{solde:,.2f}€")
+
+            st.metric("💰 Revenus", f"{total_revenus:,.0f}€")
+            st.metric("💸 Dépenses", f"{abs(total_depenses):,.0f}€")
+            st.metric("💵 Solde", f"{solde:,.0f}€")
 
 
 if __name__ == "__main__":

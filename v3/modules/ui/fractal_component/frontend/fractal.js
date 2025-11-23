@@ -112,10 +112,22 @@ function resizeCanvas() {
 // ==============================
 
 /**
- * Détecte si le nœud est au dernier niveau
- * (ses enfants n'ont pas d'enfants)
+ * Détecte si le nœud est au dernier niveau (mode sélection)
+ * STRATÉGIE: Forcer le niveau 3+ comme dernier niveau de sélection
+ * - Niveau 1: TR (racine) → Navigation
+ * - Niveau 2: REVENUS/DEPENSES → Navigation
+ * - Niveau 3+: Catégories/Sous-catégories → SÉLECTION
  */
 function isLastLevel(node) {
+    // Forcer le mode sélection au niveau 3 ou plus
+    const currentLevel = navigationStack.length - 1;
+
+    if (currentLevel >= 2) {
+        console.log('[FRACTAL] Niveau', currentLevel, '→ MODE SÉLECTION FORCÉ');
+        return true;
+    }
+
+    // Niveau 1-2 : Navigation normale
     if (!node || !node.children || node.children.length === 0) {
         return false;
     }
@@ -123,11 +135,11 @@ function isLastLevel(node) {
     for (let childCode of node.children) {
         const child = hierarchyData[childCode];
         if (child && child.children && child.children.length > 0) {
-            return false;  // Un enfant a des enfants = pas le dernier niveau
+            return false;
         }
     }
 
-    return true;  // Tous les enfants sont des feuilles = dernier niveau
+    return true;
 }
 
 // ==============================
@@ -670,9 +682,10 @@ async function handleZoomIn(targetCode) {
     navigationStack.push(targetCode);
     currentNode = targetCode;
 
-    // Réinitialiser la sélection quand on change de nœud
-    selectedNodes.clear();
-    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
+    // ✅ NE PAS réinitialiser la sélection !
+    // Les filtres doivent rester actifs pour permettre le multi-filtrage
+    console.log('[FRACTAL] ✅ Navigation vers', targetCode);
+    console.log('[FRACTAL] 📌 Filtres conservés:', Array.from(selectedNodes));
 
     // Fade in new
     for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
@@ -703,9 +716,8 @@ function handleBack() {
     navigationStack.pop();
     currentNode = navigationStack[navigationStack.length - 1];
 
-    // Réinitialiser la sélection
-    selectedNodes.clear();
-    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
+    // ✅ CONSERVER LES SÉLECTIONS pour permettre le multi-filtrage
+    console.log('[FRACTAL] 📌 Filtres conservés:', Array.from(selectedNodes));
 
     // Simple fade effect
     const originalNode = hierarchyData[currentNode];
@@ -936,20 +948,32 @@ function sendSelectionToStreamlit() {
     try {
         window.sessionStorage.setItem('fractal_state_v6', JSON.stringify(state));
         window.localStorage.setItem('fractal_state_v6', JSON.stringify(state));
-        console.log('[FRACTAL] ✅ État sauvegardé');
+        console.log('[FRACTAL] ✅ État sauvegardé en storage');
     } catch (e) {
         console.log('[FRACTAL] ℹ️ Storage non disponible:', e);
     }
 
-    // Essayer aussi postMessage
+    // Essayer aussi postMessage pour communication avec parent
     if (typeof window.parent !== 'undefined' && window.parent !== window) {
         try {
             window.parent.postMessage({
                 type: 'fractal_state',
                 data: state
             }, '*');
+            console.log('[FRACTAL] 📨 postMessage envoyé');
         } catch (e) {
             console.log('[FRACTAL] ℹ️ postMessage non disponible');
         }
+    }
+
+    // Trigger a custom event que Streamlit peut écouter
+    try {
+        const event = new CustomEvent('fractalStateChanged', {
+            detail: state
+        });
+        document.dispatchEvent(event);
+        console.log('[FRACTAL] 🔔 CustomEvent envoyé');
+    } catch (e) {
+        console.log('[FRACTAL] ℹ️ CustomEvent non disponible');
     }
 }
