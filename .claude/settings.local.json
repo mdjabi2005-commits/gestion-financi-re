@@ -6,7 +6,11 @@
       "Bash(\"C:\\Users\\djabi\\gestion-financière\\modules\\ui\\components_clean.py\")",
       "Bash(findstr:*)",
       "Bash(nul)",
-      "Bash(dir /s /b *v3* 2)"
+      "Bash(dir /s /b *v3* 2)",
+      "Bash(timeout 30 streamlit run:*)",
+      "Bash(copy:*)",
+      "Bash(timeout 15 streamlit run:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []
