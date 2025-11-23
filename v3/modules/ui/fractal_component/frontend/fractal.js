@@ -476,6 +476,22 @@ function handleCanvasClick(e) {
         const tri = triangles[i];
         if (isPointInTriangle(clickX, clickY, tri)) {
             console.log('[FRACTAL] ✅ Clicked triangle:', tri.code);
+
+            // Send message to Streamlit
+            const nodeData = hierarchyData[tri.code];
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'fractal_selection',
+                    data: {
+                        code: tri.code,
+                        label: nodeData?.label || tri.code,
+                        level: navigationStack.length,
+                        action: 'select'
+                    }
+                }, '*');
+                console.log('[FRACTAL] 📤 Sent selection message:', tri.code);
+            }
+
             handleZoomIn(tri.code);
             return;
         }

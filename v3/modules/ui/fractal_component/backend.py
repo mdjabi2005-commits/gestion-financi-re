@@ -25,7 +25,8 @@ _COMPONENT_DIR = os.path.dirname(os.path.abspath(__file__))
 def fractal_navigation(
     data: Dict[str, Any],
     key: Optional[str] = None,
-    height: int = 800
+    height: int = 800,
+    enable_selection_callback: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
     Fractal Navigation Component - Interactive hierarchical data visualization.
@@ -46,6 +47,9 @@ def fractal_navigation(
         key: Unique key for this component instance (required by Streamlit)
 
         height: Height of the component in pixels (default: 800)
+
+        enable_selection_callback: If True, sends selection messages to parent window
+                                   (for integration with other components)
 
     Returns:
         Dictionary with interaction result:
@@ -152,8 +156,10 @@ def fractal_navigation(
             <script>
                 // Inject data into global scope for fractal.js to use
                 window.hierarchyDataInjected = {data_json};
+                window.enableSelectionCallback = {str(enable_selection_callback).lower()};
 
                 console.log('[BACKEND] Data injected to window:', Object.keys(window.hierarchyDataInjected).length, 'nodes');
+                console.log('[BACKEND] Selection callback enabled:', window.enableSelectionCallback);
 
                 {js_content}
             </script>
