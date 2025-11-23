@@ -932,7 +932,16 @@ function sendSelectionToStreamlit() {
 
     console.log('[FRACTAL] 📤 Envoi à Streamlit:', state);
 
-    // Essayer d'envoyer à Streamlit si disponible
+    // Sauvegarder dans sessionStorage et localStorage pour que Streamlit puisse le lire
+    try {
+        window.sessionStorage.setItem('fractal_state_v6', JSON.stringify(state));
+        window.localStorage.setItem('fractal_state_v6', JSON.stringify(state));
+        console.log('[FRACTAL] ✅ État sauvegardé');
+    } catch (e) {
+        console.log('[FRACTAL] ℹ️ Storage non disponible:', e);
+    }
+
+    // Essayer aussi postMessage
     if (typeof window.parent !== 'undefined' && window.parent !== window) {
         try {
             window.parent.postMessage({
@@ -940,7 +949,7 @@ function sendSelectionToStreamlit() {
                 data: state
             }, '*');
         } catch (e) {
-            console.log('[FRACTAL] ℹ️ Streamlit API non disponible');
+            console.log('[FRACTAL] ℹ️ postMessage non disponible');
         }
     }
 }
