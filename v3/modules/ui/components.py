@@ -5,6 +5,7 @@ This module contains toast notifications, badges, and transaction display compon
 
 import os
 import logging
+import hashlib
 from typing import Dict, Any, Optional, List, Tuple
 import streamlit as st
 import streamlit.components.v1 as components
@@ -264,7 +265,7 @@ def afficher_carte_transaction(transaction: Dict[str, Any], idx: Optional[int] =
                 afficher_documents_associes(transaction)
 
 
-def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
+def afficher_documents_associes(transaction: Dict[str, Any], context: Optional[str] = None) -> None:
     """
     Display documents associated with a transaction in an enhanced format.
 
@@ -278,6 +279,10 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
             - date: Transaction date
             - source: Transaction source
             - type: Transaction type
+
+        context: Optional unique context identifier to distinguish between
+                multiple renders of the same transaction on the same page.
+                Used for generating unique Streamlit widget keys.
 
     Side effects:
         - Displays images using st.image()
@@ -293,8 +298,17 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
         ...     'type': 'dépense'
         ... }
         >>> afficher_documents_associes(tx)
+        >>> afficher_documents_associes(tx, context='detail_view')
     """
     fichiers = trouver_fichiers_associes(transaction)
+
+    # If no context provided, generate one from transaction properties
+    if not context:
+        # Create a unique context from transaction date and category
+        tx_date = str(transaction.get("date", ""))
+        tx_cat = str(transaction.get("categorie", ""))
+        tx_subcat = str(transaction.get("sous_categorie", ""))
+        context = f"{tx_date}_{tx_cat}_{tx_subcat}"
 
     if not fichiers:
         source = transaction.get("source", "")
@@ -358,12 +372,16 @@ def afficher_documents_associes(transaction: Dict[str, Any]) -> None:
 
                 # Download button
                 with open(fichier, "rb") as f:
+                    file_hash = hashlib.md5(fichier.encode()).hexdigest()[:8]
+                    # Create context-aware key to avoid duplicates when same transaction appears multiple times
+                    context_suffix = f"_{context}" if context else ""
                     st.download_button(
                         label="⬇️ Télécharger le document",
                         data=f.read(),
                         file_name=nom_fichier,
                         mime="application/pdf",
-                        use_container_width=True
+                        use_container_width=True,
+                        key=f"dl_{file_hash}_{i}{context_suffix}"
                     )
 
 

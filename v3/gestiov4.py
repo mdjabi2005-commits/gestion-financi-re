@@ -9,7 +9,7 @@ import os
 import shutil
 import sqlite3
 import pandas as pd
-import pytesseract 
+import pytesseract
 from PIL import Image
 import re
 import streamlit as st
@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 import logging
 import json
+import hashlib
 import streamlit.components.v1 as components
 import plotly.express as px
 import plotly.graph_objects as go
@@ -1188,12 +1189,14 @@ def afficher_documents_associes(transaction):
                 
                 # Téléchargement
                 with open(fichier, "rb") as f:
+                    file_hash = hashlib.md5(fichier.encode()).hexdigest()[:8]
                     st.download_button(
                         label="⬇️ Télécharger le document",
                         data=f.read(),
                         file_name=nom_fichier,
                         mime="application/pdf",
-                        use_container_width=True
+                        use_container_width=True,
+                        key=f"dl_gesto_{file_hash}_{i}"
                     )
 
 def insert_transaction_batch(transactions):
@@ -3398,7 +3401,8 @@ revenu,2024-01-15,freelance,mission,450.00,Projet X"""
                 data=modele_csv,
                 file_name="modele_transactions.csv",
                 mime="text/csv",
-                help="Modèle avec exemples de transactions"
+                help="Modèle avec exemples de transactions",
+                key="dl_csv_template"
             )
 
         with col2:
