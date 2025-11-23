@@ -61,7 +61,7 @@ from modules.ui.pages import (
 # ==============================
 # IMPORTS - Triangle & Table Pages
 # ==============================
-from modules.ui.pages.triangle_table_final import interface_triangle_table_final
+from modules.ui.pages.triangle_table_interactive import interface_triangle_table_interactive
 
 # ==============================
 # LOGGING CONFIGURATION
@@ -156,7 +156,7 @@ def main():
             render_problematic_tickets_page()
 
         elif page == "🔺 Navigation Fractale":
-            interface_triangle_table_final()
+            interface_triangle_table_interactive()
 
     except Exception as e:
         logger.critical(f"Application V4 failed: {e}", exc_info=True)
