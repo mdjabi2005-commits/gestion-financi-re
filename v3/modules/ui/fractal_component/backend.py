@@ -170,6 +170,11 @@ def fractal_navigation(
         # Display the HTML component
         components.html(html_content, height=height, scrolling=True)
 
+        # Since components.html() returns None, we rely on session_state
+        # JavaScript code in the HTML will update window variables that
+        # can be monitored through Streamlit's session state if needed
+        # For now, navigation is handled by passing data through the hierarchy structure
+
         return None
 
     except Exception as e:
