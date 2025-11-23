@@ -433,280 +433,121 @@ def calculate_category_stats(df: pd.DataFrame) -> pd.DataFrame:
 
 def render_category_management(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Navigation compacte par bulles rondes avec transitions fluides.
+    Navigation fractal avec Sierpinski triangles interactifs.
 
-    3 niveaux de navigation avec design optimisé:
-    - Niveau 1: Type Selection (2 bulles: Revenus/Dépenses)
-    - Niveau 2: Category Selection (Grille compacte de bulles)
-    - Niveau 3: Detail View (Transactions filtrées)
+    Remplace le système de bulles par une visualisation Sierpinski triangle.
+    Les utilisateurs cliquent sur les nœuds pour filtrer les transactions.
     """
-    # État de navigation
-    if 'nav_level' not in st.session_state:
-        st.session_state.nav_level = 'type_selection'
-    if 'selected_type' not in st.session_state:
-        st.session_state.selected_type = None
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
+    from modules.services.fractal_service import build_fractal_hierarchy
 
-    # CSS pour bulles rondes compactes
-    st.markdown("""
-    <style>
-    /* Container centré */
-    .bubble-container {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 30px 20px;
-    }
+    # État de navigation fractal
+    if 'fractal_nav_level' not in st.session_state:
+        st.session_state.fractal_nav_level = 'root'  # root, type, category
+    if 'fractal_selected_type' not in st.session_state:
+        st.session_state.fractal_selected_type = None
+    if 'fractal_selected_category' not in st.session_state:
+        st.session_state.fractal_selected_category = None
 
-    /* Grille de bulles */
-    .bubble-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 20px;
-        padding: 40px 0;
-        animation: fadeIn 0.4s ease-out;
-    }
+    st.subheader("🔺 Explorez par Triangles Fractals")
 
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+    # Construire la hiérarchie fractal
+    hierarchy = build_fractal_hierarchy()
 
-    /* Vraie bulle ronde */
-    .bubble {
-        aspect-ratio: 1;
-        border-radius: 50%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        text-align: center;
-        padding: 20px;
-    }
+    # Afficher le composant fractal pour la visualisation
+    from modules.ui.fractal_component.backend import fractal_navigation
+    fractal_navigation(hierarchy, key="fractal_transactions_view", height=600)
 
-    .bubble:hover {
-        transform: scale(1.12) translateY(-8px);
-        box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
-    }
+    st.info("💡 Cliquez sur les triangles pour zoomer. Les transactions se filtrent selon votre sélection.")
+    st.markdown("---")
 
-    /* Revenus bulle */
-    .bubble-revenus {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    }
+    # === NAVIGATION MANUELLE PAR NIVEAUX ===
+    # Afficher les niveaux de sélection pour permettre le filtrage
 
-    /* Dépenses bulle */
-    .bubble-depenses {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    }
+    # NIVEAU 1: Sélection du type (Revenus / Dépenses)
+    if st.session_state.fractal_nav_level == 'root':
+        st.markdown("### 🔍 Étape 1 : Choisir le type")
 
-    /* Catégorie bulles avec couleurs variées */
-    .bubble-cat-1 { background: linear-gradient(135deg, #f59e0b, #f97316); }
-    .bubble-cat-2 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-    .bubble-cat-3 { background: linear-gradient(135deg, #ec4899, #db2777); }
-    .bubble-cat-4 { background: linear-gradient(135deg, #14b8a6, #0d9488); }
-    .bubble-cat-5 { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .bubble-cat-6 { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-    .bubble-cat-7 { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-    .bubble-cat-8 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-
-    /* Texte dans la bulle */
-    .bubble-emoji {
-        font-size: 32px;
-        margin-bottom: 8px;
-    }
-
-    .bubble-name {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 4px;
-    }
-
-    .bubble-amount {
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 2px;
-    }
-
-    .bubble-count {
-        font-size: 12px;
-        opacity: 0.9;
-    }
-
-    /* Titre principal */
-    .bubble-title {
-        text-align: center;
-        color: white;
-        font-size: 28px;
-        font-weight: 700;
-        margin-bottom: 30px;
-    }
-
-    /* Breadcrumb */
-    .breadcrumb {
-        text-align: center;
-        color: #94a3b8;
-        margin-bottom: 25px;
-        font-size: 14px;
-    }
-
-    .breadcrumb strong {
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # NIVEAU 1: Type Selection
-    if st.session_state.nav_level == 'type_selection':
-        st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
-        st.markdown('<div class="bubble-title">💰 Explorez votre Univers Financier</div>', unsafe_allow_html=True)
-
-        revenus_total = df[df['type'] == 'revenu']['montant'].sum()
-        revenus_count = len(df[df['type'] == 'revenu'])
-        depenses_total = df[df['type'] == 'dépense']['montant'].sum()
-        depenses_count = len(df[df['type'] == 'dépense'])
-
-        col1, col2 = st.columns(2, gap="large")
+        col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown(f"""
-            <div class="bubble bubble-revenus">
-                <div class="bubble-emoji">💼</div>
-                <div class="bubble-name">REVENUS</div>
-                <div class="bubble-amount">{revenus_total:,.0f}€</div>
-                <div class="bubble-count">{revenus_count} tx</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Sélectionner", key="btn_rev", use_container_width=True):
-                st.session_state.selected_type = 'revenu'
-                st.session_state.nav_level = 'category_selection'
+            if st.button("💼 Revenus", use_container_width=True, key="btn_type_revenus"):
+                st.session_state.fractal_selected_type = 'revenu'
+                st.session_state.fractal_nav_level = 'type'
                 st.rerun()
 
         with col2:
-            st.markdown(f"""
-            <div class="bubble bubble-depenses">
-                <div class="bubble-emoji">🛒</div>
-                <div class="bubble-name">DÉPENSES</div>
-                <div class="bubble-amount">{depenses_total:,.0f}€</div>
-                <div class="bubble-count">{depenses_count} tx</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Sélectionner", key="btn_dep", use_container_width=True):
-                st.session_state.selected_type = 'dépense'
-                st.session_state.nav_level = 'category_selection'
+            if st.button("🛒 Dépenses", use_container_width=True, key="btn_type_depenses"):
+                st.session_state.fractal_selected_type = 'dépense'
+                st.session_state.fractal_nav_level = 'type'
                 st.rerun()
 
-        st.markdown('</div>', unsafe_allow_html=True)
         return df
 
-    # NIVEAU 2: Category Selection
-    elif st.session_state.nav_level == 'category_selection':
-        if st.session_state.selected_type:
-            st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
-
-            # Bouton retour
-            col1, col2, col3 = st.columns([1, 10, 1])
-            with col1:
-                if st.button("← Retour", key="back_type"):
-                    st.session_state.nav_level = 'type_selection'
-                    st.session_state.selected_type = None
-                    st.session_state.selected_categories = []
-                    st.rerun()
-
-            # Breadcrumb
-            type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
-            st.markdown(f'<div class="breadcrumb">Univers → <strong>{type_label}</strong></div>', unsafe_allow_html=True)
-
-            # Titre
-            emoji = "💼" if st.session_state.selected_type == 'revenu' else "🛒"
-            st.markdown(f'<div class="bubble-title" style="font-size: 24px;">{emoji} Catégories</div>', unsafe_allow_html=True)
-
-            # Statistiques par catégorie
-            df_filtered = df[df['type'] == st.session_state.selected_type]
-            cat_stats = df_filtered.groupby('categorie').agg({
-                'montant': 'sum',
-                'sous_categorie': 'count'
-            }).reset_index()
-            cat_stats.columns = ['categorie', 'montant', 'count']
-            cat_stats = cat_stats.sort_values('montant', ascending=False)
-
-            # Grille de bulles
-            st.markdown('<div class="bubble-grid">', unsafe_allow_html=True)
-
-            for idx, (_, row) in enumerate(cat_stats.iterrows()):
-                col = st.columns(3)[idx % 3]
-                with col:
-                    cat_name = row['categorie']
-                    color_class = f"bubble-cat-{(idx % 8) + 1}"
-                    emoji = _get_category_emoji(cat_name)
-
-                    st.markdown(f"""
-                    <div class="bubble {color_class}">
-                        <div class="bubble-emoji">{emoji}</div>
-                        <div class="bubble-name">{cat_name}</div>
-                        <div class="bubble-amount">{row['montant']:,.0f}€</div>
-                        <div class="bubble-count">{int(row['count'])} items</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    if st.button("Voir", key=f"cat_{cat_name}", use_container_width=True):
-                        st.session_state.selected_categories = [cat_name]
-                        st.session_state.nav_level = 'detail'
-                        st.rerun()
-
-            st.markdown('</div></div>', unsafe_allow_html=True)
-            return df_filtered
-
-    # NIVEAU 3: Detail View
-    elif st.session_state.nav_level == 'detail':
-        if st.session_state.selected_categories:
-            st.markdown('<div class="bubble-container">', unsafe_allow_html=True)
-
-            # Bouton retour
-            if st.button("← Retour aux catégories", key="back_cat"):
-                st.session_state.nav_level = 'category_selection'
-                st.session_state.selected_categories = []
+    # NIVEAU 2: Sélection de la catégorie
+    elif st.session_state.fractal_nav_level == 'type':
+        col1, col2 = st.columns([1, 10])
+        with col1:
+            if st.button("← Retour", key="fractal_back_to_root"):
+                st.session_state.fractal_nav_level = 'root'
+                st.session_state.fractal_selected_type = None
+                st.session_state.fractal_selected_category = None
                 st.rerun()
 
-            # Breadcrumb
-            type_label = "Revenus" if st.session_state.selected_type == 'revenu' else "Dépenses"
-            cat_str = " + ".join(st.session_state.selected_categories)
-            st.markdown(f'<div class="breadcrumb">Univers → <strong>{type_label}</strong> → <strong>{cat_str}</strong></div>', unsafe_allow_html=True)
+        type_label = "Revenus" if st.session_state.fractal_selected_type == 'revenu' else "Dépenses"
+        st.markdown(f"### 🔍 Étape 2 : Choisir une catégorie dans {type_label}")
 
-            # Titre
-            cat_emoji = _get_category_emoji(st.session_state.selected_categories[0])
-            st.markdown(f'<div class="bubble-title" style="font-size: 24px;">{cat_emoji} {st.session_state.selected_categories[0]}</div>', unsafe_allow_html=True)
+        # Récupérer les catégories pour ce type
+        df_filtered = df[df['type'] == st.session_state.fractal_selected_type]
+        categories = df_filtered['categorie'].unique()
 
-            # Filtrer les données
-            df_filtered = df[
-                (df['type'] == st.session_state.selected_type) &
-                (df['categorie'].isin(st.session_state.selected_categories))
-            ]
+        # Afficher les catégories en grille
+        cols = st.columns(3)
+        for idx, category in enumerate(sorted(categories)):
+            with cols[idx % 3]:
+                cat_total = df_filtered[df_filtered['categorie'] == category]['montant'].sum()
+                cat_count = len(df_filtered[df_filtered['categorie'] == category])
 
-            # Métriques
+                if st.button(f"{category}\n{cat_total:.0f}€ ({cat_count})",
+                            use_container_width=True,
+                            key=f"btn_cat_{category}"):
+                    st.session_state.fractal_selected_category = category
+                    st.session_state.fractal_nav_level = 'category'
+                    st.rerun()
+
+        return df_filtered
+
+    # NIVEAU 3: Affichage des transactions pour la catégorie sélectionnée
+    elif st.session_state.fractal_nav_level == 'category':
+        col1, col2 = st.columns([1, 10])
+        with col1:
+            if st.button("← Retour", key="fractal_back_to_type"):
+                st.session_state.fractal_nav_level = 'type'
+                st.session_state.fractal_selected_category = None
+                st.rerun()
+
+        type_label = "Revenus" if st.session_state.fractal_selected_type == 'revenu' else "Dépenses"
+        st.markdown(f"### 🔍 Transactions : {type_label} → {st.session_state.fractal_selected_category}")
+
+        # Filtrer par type et catégorie
+        df_filtered = df[
+            (df['type'] == st.session_state.fractal_selected_type) &
+            (df['categorie'] == st.session_state.fractal_selected_category)
+        ]
+
+        if not df_filtered.empty:
+            # Afficher les métriques
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("💰 Total", f"{df_filtered['montant'].sum():,.0f}€")
+                st.metric("Montant", f"{df_filtered['montant'].sum():.0f}€")
             with col2:
-                st.metric("📊 Transactions", len(df_filtered))
+                st.metric("Transactions", len(df_filtered))
             with col3:
-                st.metric("🏷️ Catégories", len(st.session_state.selected_categories))
+                st.metric("Sous-catégories", df_filtered['sous_categorie'].nunique())
 
-            st.divider()
-
-            # Transactions
-            st.subheader("📋 Détail des transactions")
-            if len(df_filtered) > 0:
-                for idx, transaction in df_filtered.iterrows():
-                    afficher_carte_transaction(transaction, idx)
-            else:
-                st.warning("Aucune transaction trouvée")
-
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("---")
+            return df_filtered
+        else:
+            st.warning("Aucune transaction trouvée")
             return df_filtered
 
     return df
