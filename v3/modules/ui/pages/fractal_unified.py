@@ -273,17 +273,26 @@ def interface_fractal_unified():
     with col_right:
         st.markdown("### 📊 Transactions Filtrées")
 
+        # DEBUG: Show current state
+        with st.expander("🔍 DEBUG - État Actuel", expanded=False):
+            st.write("**URL Query Params:**", st.query_params)
+            st.write("**Session State Filters:**", st.session_state.fractal_manual_filters if hasattr(st.session_state, 'fractal_manual_filters') else "None")
+
         # ===== LIRE LES SÉLECTIONS DEPUIS LES URL QUERY PARAMETERS =====
         # Le JavaScript met les sélections dans l'URL, et Streamlit les lit ici
         selections_from_url = st.query_params.get('fractal_selections', '')
+
+        st.write(f"**DEBUG**: selections_from_url = `{selections_from_url}`")
 
         # Parse the comma-separated list of selected codes
         if selections_from_url:
             selected_nodes_list = [code.strip() for code in selections_from_url.split(',') if code.strip()]
             # Update session state to maintain consistency
             st.session_state.fractal_manual_filters = set(selected_nodes_list)
+            st.write(f"**DEBUG**: Parsed {len(selected_nodes_list)} codes from URL: {selected_nodes_list}")
         else:
             selected_nodes_list = list(st.session_state.fractal_manual_filters)
+            st.write(f"**DEBUG**: No URL params, using session state: {selected_nodes_list}")
 
         # ===== AFFICHAGE CONDITIONNEL DANS LA COLONNE DROITE =====
         if selected_nodes_list:

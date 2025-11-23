@@ -113,33 +113,40 @@ function resizeCanvas() {
 
 /**
  * Détecte si le nœud est au dernier niveau (mode sélection)
- * STRATÉGIE: Forcer le niveau 3+ comme dernier niveau de sélection
- * - Niveau 1: TR (racine) → Navigation
- * - Niveau 2: REVENUS/DEPENSES → Navigation
- * - Niveau 3+: Catégories/Sous-catégories → SÉLECTION
+ *
+ * HIÉRARCHIE:
+ * - navigationStack[0] = 'TR' (Niveau 0 - Racine)
+ * - navigationStack[1] = 'REVENUS'/'DEPENSES' (Niveau 1 - Types)
+ * - navigationStack[2] = 'CAT_*' (Niveau 2 - Catégories) → SÉLECTION MODE
+ * - navigationStack[3+] = 'SUBCAT_*' (Niveau 3+ - Sous-catégories) → SÉLECTION MODE
+ *
+ * currentLevel = navigationStack.length - 1
+ * Donc : currentLevel >= 2 = Mode sélection ✓
  */
 function isLastLevel(node) {
-    // Forcer le mode sélection au niveau 3 ou plus
     const currentLevel = navigationStack.length - 1;
+    const nodeCode = currentNode;
 
+    console.log('[FRACTAL] ═══════════════════════════════════');
+    console.log('[FRACTAL] isLastLevel() Check:');
+    console.log('[FRACTAL]   navigationStack:', navigationStack);
+    console.log('[FRACTAL]   currentLevel:', currentLevel);
+    console.log('[FRACTAL]   currentNode:', nodeCode);
+    console.log('[FRACTAL]   node.children:', node?.children?.length || 0);
+
+    // Mode sélection au niveau 2+ (Catégories et Sous-catégories)
+    // Level 0 (TR) → Navigation
+    // Level 1 (REVENUS/DEPENSES) → Navigation
+    // Level 2+ (CAT_* and SUBCAT_*) → SÉLECTION
     if (currentLevel >= 2) {
-        console.log('[FRACTAL] Niveau', currentLevel, '→ MODE SÉLECTION FORCÉ');
+        console.log('[FRACTAL] ✅ Niveau', currentLevel, '→ MODE SÉLECTION');
+        console.log('[FRACTAL] ═══════════════════════════════════');
         return true;
     }
 
-    // Niveau 1-2 : Navigation normale
-    if (!node || !node.children || node.children.length === 0) {
-        return false;
-    }
-
-    for (let childCode of node.children) {
-        const child = hierarchyData[childCode];
-        if (child && child.children && child.children.length > 0) {
-            return false;
-        }
-    }
-
-    return true;
+    console.log('[FRACTAL] ❌ Niveau', currentLevel, '→ MODE NAVIGATION');
+    console.log('[FRACTAL] ═══════════════════════════════════');
+    return false;
 }
 
 // ==============================
