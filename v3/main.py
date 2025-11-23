@@ -61,7 +61,7 @@ from modules.ui.pages import (
 # ==============================
 # IMPORTS - Triangle & Table Pages
 # ==============================
-from modules.ui.pages.triangle_unified import interface_triangle_unified
+from modules.ui.pages.triangle_table_final import interface_triangle_table_final
 
 # ==============================
 # LOGGING CONFIGURATION
@@ -113,7 +113,7 @@ def main():
                 "🔍 Analyse OCR",
                 "🔧 Tickets Problématiques",
                 "---",
-                "🔺 Navigation Fractale Unifiée"
+                "🔺 Navigation Fractale"
             ]
         )
 
@@ -155,8 +155,8 @@ def main():
         elif page == "🔧 Tickets Problématiques":
             render_problematic_tickets_page()
 
-        elif page == "🔺 Navigation Fractale Unifiée":
-            interface_triangle_unified()
+        elif page == "🔺 Navigation Fractale":
+            interface_triangle_table_final()
 
     except Exception as e:
         logger.critical(f"Application V4 failed: {e}", exc_info=True)
