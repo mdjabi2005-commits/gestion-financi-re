@@ -2,7 +2,7 @@
 Streamlit Component Backend for Fractal Navigation.
 
 Provides interactive Sierpinski triangle-based fractal visualization.
-Uses custom Streamlit component compiled with Webpack.
+Uses HTML/Canvas with Streamlit's components.html()
 
 @author: djabi
 @version: 2.0
@@ -14,18 +14,12 @@ import streamlit.components.v1 as components
 import logging
 from typing import Dict, Any, Optional
 import os
+import json
 
 logger = logging.getLogger(__name__)
 
 # Get the directory where this component is located
 _COMPONENT_DIR = os.path.dirname(os.path.abspath(__file__))
-_BUILD_DIR = os.path.join(_COMPONENT_DIR, "build")
-
-# Declare the component
-fractal_component = components.declare_component(
-    name="fractal_navigation",
-    path=_BUILD_DIR
-)
 
 
 def fractal_navigation(
@@ -85,14 +79,92 @@ def fractal_navigation(
             st.error("Structure de hiérarchie invalide")
             return None
 
-        # Call the custom Streamlit component
-        result = fractal_component(
-            data=data,
-            key=key,
-            height=height
-        )
+        # Read the CSS file
+        css_file = os.path.join(_COMPONENT_DIR, "frontend", "fractal.css")
+        with open(css_file, "r", encoding="utf-8") as f:
+            css_content = f.read()
 
-        return result
+        # Read the JavaScript file
+        js_file = os.path.join(_COMPONENT_DIR, "frontend", "fractal.js")
+        with open(js_file, "r", encoding="utf-8") as f:
+            js_content = f.read()
+
+        # Prepare data as JSON (properly escaped for embedding in JS)
+        data_json = json.dumps(data, ensure_ascii=False)
+
+        # Create the HTML with embedded CSS and JS
+        html_content = f"""
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Fractal Navigation</title>
+            <style>
+                {css_content}
+            </style>
+        </head>
+        <body>
+            <div id="app" class="fractal-container">
+                <canvas id="fractalCanvas"></canvas>
+                <div class="info-panel">
+                    <div class="info-title">🔺 Univers Fractal</div>
+                    <div class="info-content">
+                        <div class="info-item">
+                            <span class="info-label">Niveau</span>
+                            <span class="info-value" id="levelDisplay">1</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Montant Total</span>
+                            <span class="info-value" id="totalDisplay">0€</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Catégories</span>
+                            <span class="info-value" id="categoriesDisplay">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Zoom</span>
+                            <span class="info-value" id="zoomDisplay">1.0x</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="breadcrumb-container">
+                    <div class="breadcrumb">
+                        <span id="breadcrumbText">TR</span>
+                    </div>
+                </div>
+                <div class="zoom-indicator">
+                    <div class="zoom-bar">
+                        <div class="zoom-progress" id="zoomProgress"></div>
+                    </div>
+                    <div class="zoom-label">Profondeur</div>
+                </div>
+                <div class="controls">
+                    <button id="backBtn" class="control-btn back-btn" title="Retour au niveau précédent">
+                        ← Retour
+                    </button>
+                    <button id="resetBtn" class="control-btn reset-btn" title="Retour à la vue d'ensemble">
+                        🏠 Vue d'ensemble
+                    </button>
+                </div>
+                <div id="tooltip" class="tooltip" style="display: none;"></div>
+            </div>
+
+            <script>
+                // Inject data into global scope for fractal.js to use
+                window.hierarchyDataInjected = {data_json};
+
+                console.log('[BACKEND] Data injected to window:', Object.keys(window.hierarchyDataInjected).length, 'nodes');
+
+                {js_content}
+            </script>
+        </body>
+        </html>
+        """
+
+        # Display the HTML component
+        components.html(html_content, height=height, scrolling=True)
+
+        return None
 
     except Exception as e:
         logger.error(f"Error in fractal_navigation component: {e}", exc_info=True)

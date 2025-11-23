@@ -5,12 +5,12 @@
  * Supports multi-level hierarchical exploration of financial data.
  *
  * @author djabi
- * @version 1.0
- * @date 2025-11-22
+ * @version 1.1 (Standalone - no Streamlit component lib)
+ * @date 2025-11-23
  */
 
 // ==============================
-// GLOBAL STATE
+// GLOBAL STATE - SINGLE DECLARATIONS
 // ==============================
 
 let hierarchyData = {};
@@ -18,58 +18,67 @@ let currentNode = 'TR';
 let navigationStack = ['TR'];
 let hoveredTriangle = null;
 let animationInProgress = false;
+
 const ANIMATION_DURATION = 700; // ms
 const FRAME_RATE = 60;
 const FRAMES_PER_ANIMATION = Math.round(ANIMATION_DURATION / (1000 / FRAME_RATE));
 
 // Canvas setup
-let canvas, ctx, rect;
-let canvasWidth, canvasHeight;
+let canvas = null;
+let ctx = null;
+let canvasWidth = 0;
+let canvasHeight = 0;
 let triangles = [];
-let centerX, centerY;
+let centerX = 0;
+let centerY = 0;
 
 // ==============================
 // INITIALIZATION
 // ==============================
 
 /**
- * Initialize the component when Streamlit sends data
+ * Initialize when page loads
  */
-Streamlit.setComponentValue(null);
-
 window.addEventListener('load', () => {
+    console.log('[FRACTAL] ✅ Page loaded');
+
     canvas = document.getElementById('fractalCanvas');
+    if (!canvas) {
+        console.error('[FRACTAL] ❌ Canvas not found!');
+        return;
+    }
+
     ctx = canvas.getContext('2d');
+    console.log('[FRACTAL] ✅ Canvas and context ready');
 
     // Set canvas size
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Streamlit data handler
-    Streamlit.setFrameHeight(document.body.scrollHeight);
-
-    // Listen for data from Streamlit
-    window.parent.addEventListener('streamlit:render', () => {
-        const receivedData = Streamlit.getComponentValue();
-        if (receivedData && receivedData.data) {
-            hierarchyData = receivedData.data;
-            currentNode = 'TR';
-            navigationStack = ['TR'];
-            update();
-        }
-    });
-
     // Button handlers
-    document.getElementById('backBtn').addEventListener('click', handleBack);
-    document.getElementById('resetBtn').addEventListener('click', handleReset);
+    const backBtn = document.getElementById('backBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    if (backBtn) backBtn.addEventListener('click', handleBack);
+    if (resetBtn) resetBtn.addEventListener('click', handleReset);
 
     // Canvas interaction
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasMouseMove);
     canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
 
-    // Initial render
-    update();
+    console.log('[FRACTAL] ✅ Event listeners attached');
+
+    // Initial render with injected data
+    if (typeof window.hierarchyDataInjected !== 'undefined') {
+        hierarchyData = window.hierarchyDataInjected;
+        console.log('[FRACTAL] ✅ Hierarchy data injected:', Object.keys(hierarchyData).length, 'nodes');
+        currentNode = 'TR';
+        navigationStack = ['TR'];
+        update();
+    } else {
+        console.warn('[FRACTAL] ⚠️  No hierarchy data injected yet');
+    }
 });
 
 /**
@@ -77,14 +86,23 @@ window.addEventListener('load', () => {
  */
 function resizeCanvas() {
     const container = document.querySelector('.fractal-container');
-    canvasWidth = container.clientWidth || window.innerWidth;
-    canvasHeight = container.clientHeight || window.innerHeight;
+    if (!container) {
+        console.warn('[FRACTAL] Container not found for resize');
+        return;
+    }
 
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    canvasWidth = container.clientWidth || 800;
+    canvasHeight = container.clientHeight || 600;
+
+    if (canvas) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+    }
 
     centerX = canvasWidth / 2;
     centerY = canvasHeight / 2;
+
+    console.log('[FRACTAL] ✅ Canvas resized:', canvasWidth, 'x', canvasHeight);
 }
 
 // ==============================
@@ -97,8 +115,11 @@ function resizeCanvas() {
 function update() {
     if (animationInProgress) return;
 
+    console.log('[FRACTAL] 🔄 Update called for node:', currentNode);
+
     const node = hierarchyData[currentNode];
     if (!node) {
+        console.error('[FRACTAL] ❌ Node not found:', currentNode);
         renderErrorState();
         return;
     }
@@ -117,6 +138,13 @@ function update() {
  * Render the current state
  */
 function render(node) {
+    if (!ctx || !canvas) {
+        console.error('[FRACTAL] ❌ Canvas context not available');
+        return;
+    }
+
+    console.log('[FRACTAL] 🎨 Rendering node:', node.code, 'with', (node.children || []).length, 'children');
+
     // Clear canvas
     ctx.fillStyle = 'rgba(15, 23, 42, 0.05)';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -124,7 +152,7 @@ function render(node) {
     // Get triangles for current level
     triangles = [];
 
-    const childCount = node.children.length;
+    const childCount = (node.children || []).length;
 
     if (childCount === 0) {
         // Leaf node - show message
@@ -149,6 +177,8 @@ function render(node) {
         triangles = getRenderManyTriangles(node);
     }
 
+    console.log('[FRACTAL] 🔺 Generated', triangles.length, 'triangles');
+
     // Draw all triangles
     triangles.forEach((tri, idx) => {
         const childCode = node.children[idx];
@@ -156,6 +186,8 @@ function render(node) {
 
         drawTriangle(tri, childNode, idx);
     });
+
+    console.log('[FRACTAL] ✅ Render complete');
 }
 
 // ==============================
@@ -437,14 +469,19 @@ function handleCanvasClick(e) {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
+    console.log('[FRACTAL] 🖱️ Click at:', clickX, clickY);
+
     // Find clicked triangle
     for (let i = 0; i < triangles.length; i++) {
         const tri = triangles[i];
         if (isPointInTriangle(clickX, clickY, tri)) {
+            console.log('[FRACTAL] ✅ Clicked triangle:', tri.code);
             handleZoomIn(tri.code);
             return;
         }
     }
+
+    console.log('[FRACTAL] ⚠️  No triangle under click');
 }
 
 /**
@@ -473,7 +510,7 @@ function handleCanvasMouseMove(e) {
 
     // Show/hide tooltip
     const tooltip = document.getElementById('tooltip');
-    if (hoveredData) {
+    if (hoveredData && tooltip) {
         tooltip.style.display = 'block';
         tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
         tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
@@ -486,7 +523,7 @@ function handleCanvasMouseMove(e) {
             <div class="value">${formatCurrency(amount)}</div>
             <div class="percentage">${percentage.toFixed(1)}%</div>
         `;
-    } else {
+    } else if (tooltip) {
         tooltip.style.display = 'none';
     }
 
@@ -499,7 +536,8 @@ function handleCanvasMouseMove(e) {
  */
 function handleCanvasMouseLeave() {
     hoveredTriangle = null;
-    document.getElementById('tooltip').style.display = 'none';
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.style.display = 'none';
     render(hierarchyData[currentNode]);
 }
 
@@ -508,6 +546,8 @@ function handleCanvasMouseLeave() {
  */
 async function handleZoomIn(targetCode) {
     if (!targetCode || animationInProgress) return;
+
+    console.log('[FRACTAL] 🔍 Zooming to:', targetCode);
 
     animationInProgress = true;
 
@@ -548,15 +588,7 @@ async function handleZoomIn(targetCode) {
 
     animationInProgress = false;
 
-    // Send event to Streamlit
-    Streamlit.setComponentValue({
-        action: 'zoom',
-        code: targetCode,
-        level: navigationStack.length,
-        timestamp: Date.now(),
-        current_node: targetNode
-    });
-
+    console.log('[FRACTAL] ✅ Zoom complete');
     update();
 }
 
@@ -565,6 +597,8 @@ async function handleZoomIn(targetCode) {
  */
 function handleBack() {
     if (navigationStack.length <= 1 || animationInProgress) return;
+
+    console.log('[FRACTAL] ⏮️ Going back');
 
     animationInProgress = true;
     navigationStack.pop();
@@ -581,15 +615,7 @@ function handleBack() {
 
     animationInProgress = false;
 
-    // Send event
-    Streamlit.setComponentValue({
-        action: 'back',
-        code: currentNode,
-        level: navigationStack.length,
-        timestamp: Date.now(),
-        current_node: currentNode
-    });
-
+    console.log('[FRACTAL] ✅ Back complete');
     update();
 }
 
@@ -598,6 +624,8 @@ function handleBack() {
  */
 function handleReset() {
     if (currentNode === 'TR' || animationInProgress) return;
+
+    console.log('[FRACTAL] 🏠 Resetting to root');
 
     navigationStack = ['TR'];
     currentNode = 'TR';
@@ -619,14 +647,7 @@ function handleReset() {
 
     animationInProgress = false;
 
-    Streamlit.setComponentValue({
-        action: 'reset',
-        code: 'TR',
-        level: 0,
-        timestamp: Date.now(),
-        current_node: 'TR'
-    });
-
+    console.log('[FRACTAL] ✅ Reset complete');
     update();
 }
 
@@ -699,14 +720,21 @@ function updateInfoPanel(node) {
     const categories = node.children ? node.children.length : 0;
     const zoom = (level / 3).toFixed(1);
 
-    document.getElementById('levelDisplay').textContent = level;
-    document.getElementById('totalDisplay').textContent = formatCurrency(total);
-    document.getElementById('categoriesDisplay').textContent = categories;
-    document.getElementById('zoomDisplay').textContent = zoom + 'x';
+    const levelDisplay = document.getElementById('levelDisplay');
+    const totalDisplay = document.getElementById('totalDisplay');
+    const categoriesDisplay = document.getElementById('categoriesDisplay');
+    const zoomDisplay = document.getElementById('zoomDisplay');
+
+    if (levelDisplay) levelDisplay.textContent = level;
+    if (totalDisplay) totalDisplay.textContent = formatCurrency(total);
+    if (categoriesDisplay) categoriesDisplay.textContent = categories;
+    if (zoomDisplay) zoomDisplay.textContent = zoom + 'x';
 
     // Update colors
-    const levelColor = level === 1 ? '#10b981' : level === 2 ? '#f59e0b' : '#ef4444';
-    document.getElementById('levelDisplay').style.color = levelColor;
+    if (levelDisplay) {
+        const levelColor = level === 1 ? '#10b981' : level === 2 ? '#f59e0b' : '#ef4444';
+        levelDisplay.style.color = levelColor;
+    }
 }
 
 /**
@@ -718,7 +746,8 @@ function updateBreadcrumb(node) {
         return n ? n.label : code;
     }).join(' → ');
 
-    document.getElementById('breadcrumbText').innerHTML = path;
+    const breadcrumbText = document.getElementById('breadcrumbText');
+    if (breadcrumbText) breadcrumbText.innerHTML = path;
 }
 
 /**
@@ -727,7 +756,8 @@ function updateBreadcrumb(node) {
 function updateZoomIndicator() {
     const level = navigationStack.length;
     const progress = (level / 3) * 100;
-    document.getElementById('zoomProgress').style.width = progress + '%';
+    const zoomProgress = document.getElementById('zoomProgress');
+    if (zoomProgress) zoomProgress.style.width = progress + '%';
 }
 
 /**
@@ -737,14 +767,16 @@ function updateControlButtons() {
     const backBtn = document.getElementById('backBtn');
     const resetBtn = document.getElementById('resetBtn');
 
-    backBtn.disabled = navigationStack.length <= 1;
-    resetBtn.disabled = currentNode === 'TR';
+    if (backBtn) backBtn.disabled = navigationStack.length <= 1;
+    if (resetBtn) resetBtn.disabled = currentNode === 'TR';
 }
 
 /**
  * Render error state
  */
 function renderErrorState() {
+    if (!ctx) return;
+
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -759,6 +791,8 @@ function renderErrorState() {
  * Render leaf node message
  */
 function renderLeafNodeMessage() {
+    if (!ctx) return;
+
     const node = hierarchyData[currentNode];
     const transactions = node.transactions || 0;
 

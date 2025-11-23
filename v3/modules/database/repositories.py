@@ -74,7 +74,7 @@ class TransactionRepository:
     @staticmethod
     def insert(transaction: Transaction) -> Optional[int]:
         """
-        Insert new transaction.
+        Insert new transaction with normalized categories.
 
         Args:
             transaction: Transaction to insert
@@ -82,10 +82,16 @@ class TransactionRepository:
         Returns:
             ID of inserted transaction or None on error
         """
+        from modules.services.normalization import normalize_category, normalize_subcategory
+
         conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
+
+            # Normalize category and subcategory
+            normalized_category = normalize_category(transaction.categorie)
+            normalized_subcategory = normalize_subcategory(transaction.sous_categorie)
 
             cursor.execute("""
                 INSERT INTO transactions
@@ -93,8 +99,8 @@ class TransactionRepository:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 transaction.type,
-                transaction.categorie,
-                transaction.sous_categorie,
+                normalized_category,
+                normalized_subcategory,
                 transaction.description,
                 transaction.montant,
                 transaction.date.isoformat() if isinstance(transaction.date, date) else transaction.date,
@@ -117,7 +123,7 @@ class TransactionRepository:
     @staticmethod
     def insert_batch(transactions: List[Transaction]) -> int:
         """
-        Insert multiple transactions.
+        Insert multiple transactions with normalized categories.
 
         Args:
             transactions: List of transactions to insert
@@ -125,15 +131,23 @@ class TransactionRepository:
         Returns:
             Number of transactions inserted
         """
+        from modules.services.normalization import normalize_category, normalize_subcategory
+
         conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
 
+            # Normalize categories for all transactions
             data = [(
-                t.type, t.categorie, t.sous_categorie, t.description, t.montant,
+                t.type,
+                normalize_category(t.categorie),
+                normalize_subcategory(t.sous_categorie),
+                t.description,
+                t.montant,
                 t.date.isoformat() if isinstance(t.date, date) else t.date,
-                t.source, t.recurrence,
+                t.source,
+                t.recurrence,
                 t.date_fin.isoformat() if t.date_fin and isinstance(t.date_fin, date) else t.date_fin
             ) for t in transactions]
 
@@ -157,7 +171,7 @@ class TransactionRepository:
     @staticmethod
     def update(transaction: Transaction) -> bool:
         """
-        Update existing transaction.
+        Update existing transaction with normalized categories.
 
         Args:
             transaction: Transaction with updated values (must have id)
@@ -165,6 +179,8 @@ class TransactionRepository:
         Returns:
             True if successful, False otherwise
         """
+        from modules.services.normalization import normalize_category, normalize_subcategory
+
         if not transaction.id:
             logger.error("Cannot update transaction without ID")
             return False
@@ -174,6 +190,10 @@ class TransactionRepository:
             conn = get_db_connection()
             cursor = conn.cursor()
 
+            # Normalize category and subcategory
+            normalized_category = normalize_category(transaction.categorie)
+            normalized_subcategory = normalize_subcategory(transaction.sous_categorie)
+
             cursor.execute("""
                 UPDATE transactions
                 SET type = ?, categorie = ?, sous_categorie = ?, description = ?,
@@ -181,8 +201,8 @@ class TransactionRepository:
                 WHERE id = ?
             """, (
                 transaction.type,
-                transaction.categorie,
-                transaction.sous_categorie,
+                normalized_category,
+                normalized_subcategory,
                 transaction.description,
                 transaction.montant,
                 transaction.date.isoformat() if isinstance(transaction.date, date) else transaction.date,
