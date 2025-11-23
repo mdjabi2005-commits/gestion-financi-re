@@ -61,9 +61,8 @@ from modules.ui.pages import (
 # ==============================
 # IMPORTS - Triangle & Table Pages
 # ==============================
-from modules.ui.pages.triangle_table_demo import show_demo
 from modules.ui.pages.triangle_table_v1 import interface_triangle_table_v1
-from modules.ui.pages.triangle_table_v2 import interface_triangle_table_v2
+from modules.ui.pages.triangle_table_v3 import interface_triangle_table_v3
 
 # ==============================
 # LOGGING CONFIGURATION
@@ -115,9 +114,8 @@ def main():
                 "🔍 Analyse OCR",
                 "🔧 Tickets Problématiques",
                 "---",
-                "📊 Triangle & Table Demo",
                 "📊 Triangle & Table V1",
-                "📊 Triangle & Table V2"
+                "📊 Triangle & Table V3 (Multi-Filter)"
             ]
         )
 
@@ -159,14 +157,11 @@ def main():
         elif page == "🔧 Tickets Problématiques":
             render_problematic_tickets_page()
 
-        elif page == "📊 Triangle & Table Demo":
-            show_demo()
-
         elif page == "📊 Triangle & Table V1":
             interface_triangle_table_v1()
 
-        elif page == "📊 Triangle & Table V2":
-            interface_triangle_table_v2()
+        elif page == "📊 Triangle & Table V3 (Multi-Filter)":
+            interface_triangle_table_v3()
 
     except Exception as e:
         logger.critical(f"Application V4 failed: {e}", exc_info=True)
