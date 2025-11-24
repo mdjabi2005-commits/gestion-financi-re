@@ -938,6 +938,34 @@ function renderLeafNodeMessage() {
 }
 
 /**
+ * Synchroniser automatiquement l'URL quand on est au Niveau 3 avec sélections
+ */
+function autoSyncURLAtLevel3() {
+    // Vérifier si on est au Niveau 3 (dernière profondeur)
+    if (navigationStack.length === 4 && selectedNodes.size > 0) {
+        console.log('[FRACTAL-AUTO-SYNC] ✅ Niveau 3 détecté avec sélections');
+        console.log('[FRACTAL-AUTO-SYNC] Sélections:', Array.from(selectedNodes));
+
+        try {
+            // Construire l'URL avec les sélections
+            const selections = Array.from(selectedNodes).join(',');
+            const newUrl = window.location.pathname + '?fractal_selections=' + encodeURIComponent(selections);
+
+            console.log('[FRACTAL-AUTO-SYNC] 🔄 Mise à jour automatique de l\'URL');
+            console.log('[FRACTAL-AUTO-SYNC] Nouvelle URL:', newUrl);
+
+            // Mettre à jour l'URL sans recharger la page
+            window.history.replaceState({}, '', newUrl);
+
+            console.log('[FRACTAL-AUTO-SYNC] ✅ URL synchronisée automatiquement');
+            console.log('[FRACTAL-AUTO-SYNC] Le tableau devrait maintenant être visible dans Streamlit');
+        } catch (e) {
+            console.log('[FRACTAL-AUTO-SYNC] ⚠️  Erreur lors de la sync URL:', e);
+        }
+    }
+}
+
+/**
  * Envoyer l'état de sélection à Streamlit
  */
 function sendSelectionToStreamlit() {
@@ -983,4 +1011,7 @@ function sendSelectionToStreamlit() {
     } catch (e) {
         console.log('[FRACTAL] ℹ️ CustomEvent non disponible');
     }
+
+    // AUTO-SYNC: Si on est au Niveau 3 avec sélections, synchroniser l'URL automatiquement
+    autoSyncURLAtLevel3();
 }
