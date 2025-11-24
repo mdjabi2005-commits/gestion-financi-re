@@ -243,6 +243,128 @@ def interface_fractal_unified():
 
     st.title("🔺 Navigation Fractale Unifiée")
 
+    # ===== JAVASCRIPT: Mettre à jour l'URL quand sélections changent =====
+    # Système ROBUSTE avec double surveillance pour assurer la synchronisation
+    st.markdown("""
+    <script>
+    console.log('[SYNC-SYSTEM] 🚀 Démarrage du système de synchronisation');
+
+
+    let lastUrlUpdate = 0;
+    const URL_UPDATE_DELAY = 200; // Limiter les updates (200ms throttle)
+
+    // Fonction principale de mise à jour de l'URL
+    function updateURLWithSelections() {
+        const now = Date.now();
+        if (now - lastUrlUpdate < URL_UPDATE_DELAY) return; // Throttle
+        lastUrlUpdate = now;
+
+        try {
+            // Essayer localStorage d'abord (source de vérité)
+            let state = null;
+            try {
+                const stateJson = localStorage.getItem('fractal_state_v6');
+                if (stateJson) {
+                    state = JSON.parse(stateJson);
+                }
+            } catch (e) {
+                console.log('[SYNC-SYSTEM] ⚠️ localStorage read error:', e);
+            }
+
+            // Fallback à sessionStorage
+            if (!state) {
+                try {
+                    const stateJson = sessionStorage.getItem('fractal_state_v6');
+                    if (stateJson) {
+                        state = JSON.parse(stateJson);
+                    }
+                } catch (e) {
+                    console.log('[SYNC-SYSTEM] ⚠️ sessionStorage read error:', e);
+                }
+            }
+
+            if (!state) {
+                console.log('[SYNC-SYSTEM] ℹ️ Pas d\'état trouvé');
+                return;
+            }
+
+            const selections = state.selectedNodes || [];
+            console.log('[SYNC-SYSTEM] 📍 État lu:', { selections, currentNode: state.currentNode });
+
+            if (selections.length > 0) {
+                const selectionsStr = selections.join(',');
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentSelections = urlParams.get('fractal_selections') || '';
+
+                if (selectionsStr !== currentSelections) {
+                    // Les sélections ont changé, mettre à jour l'URL
+                    const newUrl = window.location.pathname +
+                                  '?fractal_selections=' + encodeURIComponent(selectionsStr);
+
+                    console.log('[SYNC-SYSTEM] 📤 Changement de sélections détecté');
+                    console.log('[SYNC-SYSTEM]   Ancien selections:', currentSelections || '(aucun)');
+                    console.log('[SYNC-SYSTEM]   Nouveau selections:', selectionsStr);
+                    console.log('[SYNC-SYSTEM]   Nouvelle URL:', newUrl);
+
+                    try {
+                        // Naviguer vers la nouvelle URL pour causer un rerun de Streamlit
+                        console.log('[SYNC-SYSTEM] 🔄 Navigation vers nouvelle URL...');
+                        window.location.href = newUrl;
+
+                        // Note: window.location.href causera:
+                        // 1. Rechargement de la page (reload)
+                        // 2. Réexécution du Python côté serveur
+                        // 3. Streamlit relira l'URL via st.query_params
+                        // 4. Le tableau s'affichera avec les filtres appliqués
+                        // C'est NORMAL et ATTENDU - c'est la façon que Streamlit fonctionne
+                    } catch (e) {
+                        console.log('[SYNC-SYSTEM] ❌ Navigation ERROR:', e);
+                    }
+                } else {
+                    console.log('[SYNC-SYSTEM] ℹ️ Sélections inchangées, pas de navigation');
+                }
+            } else {
+                console.log('[SYNC-SYSTEM] ℹ️ Aucune sélection');
+            }
+        } catch (e) {
+            console.log('[SYNC-SYSTEM] ❌ ERREUR CRITIQUE:', e);
+        }
+    }
+
+    // STRATÉGIE 1: Écouter les changements d'état du Fractal
+    console.log('[SYNC-SYSTEM] 📍 Enregistrement listener fractalStateChanged');
+    document.addEventListener('fractalStateChanged', function(e) {
+        console.log('[SYNC-SYSTEM] 🔔 EVENT fractalStateChanged reçu');
+        updateURLWithSelections();
+    });
+
+    // STRATÉGIE 2: Polling périodique du localStorage (fallback robuste)
+    let lastStoredSelections = '';
+    setInterval(function() {
+        try {
+            const state = JSON.parse(localStorage.getItem('fractal_state_v6') || '{}');
+            const selections = (state.selectedNodes || []).join(',');
+
+            if (selections !== lastStoredSelections) {
+                console.log('[SYNC-SYSTEM] 📍 Changement détecté via polling');
+                console.log('[SYNC-SYSTEM]   Avant:', lastStoredSelections);
+                console.log('[SYNC-SYSTEM]   Après:', selections);
+                lastStoredSelections = selections;
+                updateURLWithSelections();
+            }
+        } catch (e) {
+            // Ignorer les erreurs du polling
+        }
+    }, 200); // Check every 200ms
+
+    // STRATÉGIE 3: Sync initiale au chargement
+    console.log('[SYNC-SYSTEM] 🚀 Sync initiale');
+    setTimeout(updateURLWithSelections, 500);
+
+    console.log('[SYNC-SYSTEM] ✅ Tous les listeners installés');
+    </script>
+    """)
+
     # Load data
     hierarchy = build_fractal_hierarchy()
     df_all = load_transactions()
@@ -277,55 +399,6 @@ def interface_fractal_unified():
 
     st.markdown("---")
 
-    # ===== JAVASCRIPT AUTO-SYNC POUR NIVEAU 3 =====
-    # Détecte quand on arrive au Niveau 3 avec sélections et force Streamlit rerun
-    st.markdown("""
-    <script>
-    console.log('[AUTO-SYNC] 🚀 Initialisation du système automatique');
-
-    let lastUrl = window.location.href;
-    let syncInProgress = false;
-
-    // Écouter les changements d'état du fractal
-    document.addEventListener('fractalStateChanged', function(e) {
-        const detail = e.detail;
-        console.log('[AUTO-SYNC] 📡 État changé:', detail);
-
-        // Si on est au Niveau 3 avec sélections
-        if (detail.level === 4 && detail.selectedNodes && detail.selectedNodes.length > 0) {
-            console.log('[AUTO-SYNC] ✅ NIVEAU 3 DÉTECTÉ!');
-            console.log('[AUTO-SYNC] Sélections:', detail.selectedNodes);
-
-            if (!syncInProgress) {
-                syncInProgress = true;
-
-                // Construire l'URL
-                const selections = detail.selectedNodes.join(',');
-                const newUrl = window.location.pathname + '?fractal_selections=' + encodeURIComponent(selections);
-
-                console.log('[AUTO-SYNC] 🔄 Mise à jour URL:', newUrl);
-
-                // Mettre à jour l'URL
-                window.history.replaceState({}, '', newUrl);
-
-                // Vérifier que l'URL a changé
-                if (newUrl !== lastUrl) {
-                    lastUrl = newUrl;
-                    console.log('[AUTO-SYNC] ✅ URL mise à jour');
-                    console.log('[AUTO-SYNC] 🔄 Reloading page pour Streamlit...');
-                    // Recharger la page pour que Streamlit relit les params
-                    setTimeout(() => location.reload(), 100);
-                }
-
-                syncInProgress = false;
-            }
-        }
-    });
-
-    console.log('[AUTO-SYNC] ✅ Système prêt');
-    </script>
-    """, unsafe_allow_html=True)
-
     # ===== UNIFIED LAYOUT: 60% FRACTAL + 40% TABLE =====
     col_left, col_right = st.columns([60, 40])
 
@@ -340,18 +413,24 @@ def interface_fractal_unified():
     with col_right:
         st.markdown("### 📊 Transactions Filtrées")
 
-        # ===== LIRE LES SÉLECTIONS DEPUIS URL =====
-        # Quand le Niveau 3 est atteint avec sélections, JavaScript met à jour l'URL
-        # Streamlit relit les query params et affiche le tableau
+        # ===== LIRE LES SÉLECTIONS DEPUIS L'URL =====
+        # Quand JavaScript change une sélection:
+        # 1. JavaScript met à jour le localStorage
+        # 2. JavaScript envoie un event 'fractalStateChanged'
+        # 3. Notre code JavaScript détecte le changement via polling du localStorage
+        # 4. JavaScript met à jour l'URL via window.location.href
+        # 5. Streamlit recharge et reexecute ce code Python
+        # 6. Streamlit relit l'URL via st.query_params
 
         selections_from_url = st.query_params.get('fractal_selections', '')
 
-        # Parse the comma-separated list of selected codes
         if selections_from_url:
+            # Parser les sélections depuis l'URL
             selected_nodes_list = [code.strip() for code in selections_from_url.split(',') if code.strip()]
-            # Update session state to maintain consistency
+            # Sauvegarder dans session state pour persistance
             st.session_state.fractal_manual_filters = set(selected_nodes_list)
         else:
+            # Utiliser session state si l'URL est vide (backward compat)
             selected_nodes_list = list(st.session_state.fractal_manual_filters)
 
         # ===== AFFICHAGE CONDITIONNEL DANS LA COLONNE DROITE =====
