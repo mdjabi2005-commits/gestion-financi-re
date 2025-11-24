@@ -173,6 +173,10 @@ def sync_fractal_selections_from_js():
         const state = getFractalState();
         const selections = state.selectedNodes || [];
 
+        console.log('[SYNC-URL] syncStateToURL called');
+        console.log('[SYNC-URL]   selections:', selections);
+        console.log('[SYNC-URL]   state:', state);
+
         // Build query string
         const params = new URLSearchParams();
         if (selections.length > 0) {
@@ -184,10 +188,24 @@ def sync_fractal_selections_from_js():
 
         const newUrl = window.location.pathname + '?' + params.toString();
 
+        console.log('[SYNC-URL] Prepared URL:', newUrl);
+        console.log('[SYNC-URL] window.history exists:', !!window.history);
+        console.log('[SYNC-URL] replaceState exists:', !!(window.history && window.history.replaceState));
+
         // Update URL without full page reload
-        if (window.history && window.history.replaceState) {
-            window.history.replaceState({ state }, '', newUrl);
-            console.log('[SYNC-URL] Updated URL:', newUrl);
+        try {
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState({ state }, '', newUrl);
+                console.log('[SYNC-URL] ✅ replaceState SUCCESS');
+                console.log('[SYNC-URL] Current URL now:', window.location.href);
+            } else {
+                console.log('[SYNC-URL] ❌ replaceState not available');
+                // Fallback: try to update hash
+                window.location.hash = '?' + params.toString();
+                console.log('[SYNC-URL] Fallback: updated hash');
+            }
+        } catch (e) {
+            console.log('[SYNC-URL] ❌ Error during replaceState:', e);
         }
     }
 
@@ -269,6 +287,38 @@ def interface_fractal_unified():
         st.markdown("**Mode:** Cliquez sur les triangles pour sélectionner/désélectionner")
         fractal_navigation(hierarchy, key='unified_fractal_v6', height=700)
 
+        # Button to sync selections from JavaScript to Python
+        st.markdown("---")
+        if st.button("✅ Appliquer les Sélections", key="apply_selections_button", use_container_width=True):
+            # Read from localStorage via JavaScript injection
+            st.markdown("""
+            <script>
+            // When button is clicked, we need to send state to Streamlit
+            // Try to navigate to URL with selections
+            const state = (() => {
+                try {
+                    return JSON.parse(localStorage.getItem('fractal_state_v6') || sessionStorage.getItem('fractal_state_v6') || '{}');
+                } catch (e) {
+                    return {};
+                }
+            })();
+
+            const selections = (state.selectedNodes || []).join(',');
+            if (selections) {
+                console.log('[BUTTON-CLICK] Syncing selections:', selections);
+                // Force URL update
+                const newUrl = window.location.pathname + '?fractal_selections=' + encodeURIComponent(selections);
+                window.history.replaceState({}, '', newUrl);
+                console.log('[BUTTON-CLICK] URL updated to:', newUrl);
+                // Reload to apply
+                location.reload();
+            } else {
+                console.log('[BUTTON-CLICK] No selections found');
+                alert('Sélectionnez d\'abord des triangles');
+            }
+            </script>
+            """, unsafe_allow_html=True)
+
     # RIGHT: TABLE DYNAMIQUE ET FILTRES
     with col_right:
         st.markdown("### 📊 Transactions Filtrées")
@@ -278,11 +328,44 @@ def interface_fractal_unified():
             st.write("**URL Query Params:**", st.query_params)
             st.write("**Session State Filters:**", st.session_state.fractal_manual_filters if hasattr(st.session_state, 'fractal_manual_filters') else "None")
 
-        # ===== LIRE LES SÉLECTIONS DEPUIS LES URL QUERY PARAMETERS =====
-        # Le JavaScript met les sélections dans l'URL, et Streamlit les lit ici
-        selections_from_url = st.query_params.get('fractal_selections', '')
+        # ===== LIRE LES SÉLECTIONS DEPUIS JAVASCRIPT (localStorage) =====
+        # Le JavaScript sauvegarde l'état dans localStorage
+        # On va lire directement depuis JavaScript via un hidden div
 
-        st.write(f"**DEBUG**: selections_from_url = `{selections_from_url}`")
+        st.markdown("""
+        <div id="fractal_state_holder" style="display: none;"></div>
+        <script>
+        // Injecter l'état du localStorage dans le DOM que Streamlit peut lire
+        function updateFractalStateDiv() {
+            const state = (() => {
+                try {
+                    return JSON.parse(localStorage.getItem('fractal_state_v6') || sessionStorage.getItem('fractal_state_v6') || '{}');
+                } catch (e) {
+                    return {};
+                }
+            })();
+
+            const div = document.getElementById('fractal_state_holder');
+            if (div) {
+                div.textContent = JSON.stringify({
+                    selectedNodes: state.selectedNodes || [],
+                    timestamp: new Date().toISOString()
+                });
+                console.log('[STATE-SYNC] Updated DOM with state:', state.selectedNodes);
+            }
+        }
+
+        // Update immediately and periodically
+        updateFractalStateDiv();
+        setInterval(updateFractalStateDiv, 200);
+
+        // Also update when fractal state changes
+        document.addEventListener('fractalStateChanged', updateFractalStateDiv);
+        </script>
+        """, unsafe_allow_html=True)
+
+        # Essayer d'abord de lire depuis l'URL (backward compat)
+        selections_from_url = st.query_params.get('fractal_selections', '')
 
         # Parse the comma-separated list of selected codes
         if selections_from_url:
@@ -292,7 +375,10 @@ def interface_fractal_unified():
             st.write(f"**DEBUG**: Parsed {len(selected_nodes_list)} codes from URL: {selected_nodes_list}")
         else:
             selected_nodes_list = list(st.session_state.fractal_manual_filters)
-            st.write(f"**DEBUG**: No URL params, using session state: {selected_nodes_list}")
+            if selected_nodes_list:
+                st.write(f"**DEBUG**: Using session state: {selected_nodes_list}")
+            else:
+                st.write(f"**DEBUG**: No selections active yet")
 
         # ===== AFFICHAGE CONDITIONNEL DANS LA COLONNE DROITE =====
         if selected_nodes_list:
