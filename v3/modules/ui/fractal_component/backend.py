@@ -63,11 +63,44 @@ def fractal_navigation(
         # Get current node info
         node = data.get(current_node, {})
         label = node.get('label', current_node)
-        total = node.get('total', 0)
+        total = node.get('amount') or node.get('total') or 0
         children_codes = node.get('children', [])
 
         # Display current node info
         st.markdown(f"### 📍 {label} ({total:,.0f}€)")
+
+        # Afficher les métriques (comme cap8)
+        # On a besoin du nombre de transactions du nœud courant
+        tx_count = node.get('transactions', 0)
+        if tx_count > 0:
+            # Importer la fonction pour récupérer les transactions du nœud
+            from modules.services.fractal_service import get_transactions_for_node
+            from modules.database.repositories import TransactionRepository
+
+            # Récupérer les transactions réelles pour ce nœud
+            df_node_transactions = get_transactions_for_node(current_node, data)
+
+            # Calculer revenus et dépenses
+            total_revenus = 0
+            total_depenses = 0
+
+            if not df_node_transactions.empty:
+                total_revenus = df_node_transactions[df_node_transactions['type'].str.lower() == 'revenu']['montant'].sum()
+                total_depenses = df_node_transactions[df_node_transactions['type'].str.lower() == 'dépense']['montant'].sum()
+
+            # Solde = Revenus - Dépenses (dépenses sont négatives)
+            solde = total_revenus + total_depenses
+
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Transactions", tx_count)
+            with col2:
+                st.metric("Revenus", f"{total_revenus:,.0f}€")
+            with col3:
+                st.metric("Dépenses", f"{abs(total_depenses):,.0f}€")
+            with col4:
+                st.metric("Solde", f"{solde:,.0f}€")
+            st.markdown("---")
 
         # Navigation buttons
         col1, col2 = st.columns([1, 1])
@@ -96,8 +129,9 @@ def fractal_navigation(
             for idx, child_code in enumerate(children_codes):
                 child_node = data.get(child_code, {})
                 child_label = child_node.get('label', child_code)
-                # Pour les niveaux 1-2: 'total', pour le niveau 3: 'amount'
-                child_total = child_node.get('total', child_node.get('amount', 0))
+                # Pour les niveaux 1-2: 'total' ou 'amount', pour le niveau 3: 'amount'
+                child_total = child_node.get('amount') or child_node.get('total') or 0
+
                 child_level = child_node.get('level', 0)
 
                 # Get sub-children count
