@@ -25,229 +25,140 @@ _COMPONENT_DIR = os.path.dirname(os.path.abspath(__file__))
 def fractal_navigation(
     data: Dict[str, Any],
     key: Optional[str] = None,
-    height: int = 800,
-    enable_selection_callback: bool = False
-) -> Optional[Dict[str, Any]]:
+    height: int = 800
+) -> None:
     """
-    Fractal Navigation Component - Interactive hierarchical data visualization.
+    Fractal Navigation Component - Simple hierarchical selector using Streamlit buttons.
 
-    Renders Sierpinski triangle-based interactive interface for hierarchical exploration.
-    Users can click on triangles to navigate the hierarchy with smooth animations.
+    Renders an interactive interface for exploring hierarchical financial data.
+    Users can navigate and select categories to filter transactions.
 
     Args:
         data: Complete fractal hierarchy from build_fractal_hierarchy()
-              Expected structure:
-              {
-                  'TR': {...},
-                  'REVENUS': {...},
-                  'CAT_SALAIRE': {...},
-                  'SUBCAT_SALAIRE_NET': {...}
-              }
-
         key: Unique key for this component instance (required by Streamlit)
-
-        height: Height of the component in pixels (default: 800)
-
-        enable_selection_callback: If True, sends selection messages to parent window
-                                   (for integration with other components)
-
-    Returns:
-        Dictionary with interaction result:
-        {
-            'code': 'CAT_INVESTISSEMENT',
-            'label': 'Category Name',
-            'level': 2,
-            'action': 'zoom' | 'back' | 'reset'
-        }
-        Returns None if no data provided or error occurs.
+        height: Height parameter (kept for compatibility)
 
     Example:
         >>> from modules.services.fractal_service import build_fractal_hierarchy
         >>> from modules.ui.fractal_component import fractal_navigation
         >>>
         >>> hierarchy = build_fractal_hierarchy()
-        >>> result = fractal_navigation(hierarchy, key='main_fractal')
-        >>> if result:
-        >>>     st.info(f"Navigated to: {result['label']}")
+        >>> fractal_navigation(hierarchy, key='main_fractal')
     """
-
     try:
-        # Validate input data
-        if not data:
-            logger.warning("No data provided to fractal_navigation component")
-            st.warning("Aucune donnée disponible pour la visualisation fractale")
-            return None
-
-        if 'TR' not in data:
-            logger.warning("Invalid hierarchy structure: missing 'TR' root node")
+        if not data or 'TR' not in data:
             st.error("Structure de hiérarchie invalide")
-            return None
+            return
 
-        # Read the CSS file
-        css_file = os.path.join(_COMPONENT_DIR, "frontend", "fractal.css")
-        with open(css_file, "r", encoding="utf-8") as f:
-            css_content = f.read()
+        # Initialize state
+        if f'{key}_current_node' not in st.session_state:
+            st.session_state[f'{key}_current_node'] = 'TR'
+        if f'{key}_nav_stack' not in st.session_state:
+            st.session_state[f'{key}_nav_stack'] = ['TR']
 
-        # Read the JavaScript file
-        js_file = os.path.join(_COMPONENT_DIR, "frontend", "fractal.js")
-        with open(js_file, "r", encoding="utf-8") as f:
-            js_content = f.read()
+        current_node = st.session_state[f'{key}_current_node']
+        nav_stack = st.session_state[f'{key}_nav_stack']
 
-        # Prepare data as JSON (properly escaped for embedding in JS)
-        data_json = json.dumps(data, ensure_ascii=False)
+        # Get current node info
+        node = data.get(current_node, {})
+        label = node.get('label', current_node)
+        total = node.get('total', 0)
+        children_codes = node.get('children', [])
 
-        # Create the HTML with embedded CSS and JS
-        html_content = f"""
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Fractal Navigation</title>
-            <style>
-                {css_content}
-            </style>
-        </head>
-        <body>
-            <div id="app" class="fractal-container">
-                <canvas id="fractalCanvas"></canvas>
-                <div class="info-panel">
-                    <div class="info-title">🔺 Univers Fractal</div>
-                    <div class="info-content">
-                        <div class="info-item">
-                            <span class="info-label">Niveau</span>
-                            <span class="info-value" id="levelDisplay">1</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Montant Total</span>
-                            <span class="info-value" id="totalDisplay">0€</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Catégories</span>
-                            <span class="info-value" id="categoriesDisplay">0</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Zoom</span>
-                            <span class="info-value" id="zoomDisplay">1.0x</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="breadcrumb-container">
-                    <div class="breadcrumb">
-                        <span id="breadcrumbText">TR</span>
-                    </div>
-                </div>
-                <div class="zoom-indicator">
-                    <div class="zoom-bar">
-                        <div class="zoom-progress" id="zoomProgress"></div>
-                    </div>
-                    <div class="zoom-label">Profondeur</div>
-                </div>
-                <div class="controls">
-                    <button id="backBtn" class="control-btn back-btn" title="Retour au niveau précédent">
-                        ← Retour
-                    </button>
-                    <button id="resetBtn" class="control-btn reset-btn" title="Retour à la vue d'ensemble">
-                        🏠 Vue d'ensemble
-                    </button>
-                </div>
-                <div id="tooltip" class="tooltip" style="display: none;"></div>
-            </div>
+        # Display current node info
+        st.markdown(f"### 📍 {label} ({total:,.0f}€)")
 
-            <script>
-                // Inject data into global scope for fractal.js to use
-                window.hierarchyDataInjected = {data_json};
-                window.enableSelectionCallback = {str(enable_selection_callback).lower()};
+        # Navigation buttons
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if len(nav_stack) > 1:
+                nav_depth = '_'.join(nav_stack)
+                if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
+                    nav_stack.pop()
+                    st.session_state[f'{key}_current_node'] = nav_stack[-1]
+                    st.session_state[f'{key}_nav_stack'] = nav_stack
+                    st.rerun()
+        with col2:
+            if current_node != 'TR':
+                nav_depth = '_'.join(nav_stack)
+                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
+                    st.session_state[f'{key}_current_node'] = 'TR'
+                    st.session_state[f'{key}_nav_stack'] = ['TR']
+                    st.rerun()
 
-                console.log('[BACKEND] Data injected to window:', Object.keys(window.hierarchyDataInjected).length, 'nodes');
-                console.log('[BACKEND] Selection callback enabled:', window.enableSelectionCallback);
+        st.markdown("---")
 
-                {js_content}
+        # Display children
+        if children_codes:
+            st.markdown("**Sous-niveaux:**")
 
-                // ========== COMMUNICATION AVEC STREAMLIT VIA postMessage ==========
-                console.log('[POSTMESSAGE-SYNC] Initialisation du système postMessage');
+            for idx, child_code in enumerate(children_codes):
+                child_node = data.get(child_code, {})
+                child_label = child_node.get('label', child_code)
+                # Pour les niveaux 1-2: 'total', pour le niveau 3: 'amount'
+                child_total = child_node.get('total', child_node.get('amount', 0))
+                child_level = child_node.get('level', 0)
 
-                // Quand les sélections changent, envoyer un postMessage au parent (Streamlit)
-                document.addEventListener('fractalStateChanged', function(e) {{
-                    console.log('[POSTMESSAGE-SYNC] fractalStateChanged détecté');
-                    try {{
-                        const state = JSON.parse(localStorage.getItem('fractal_state_v6') || '{{}}');
-                        const selections = state.selectedNodes || [];
-                        console.log('[POSTMESSAGE-SYNC] Envoi postMessage avec sélections:', selections);
-                        window.parent.postMessage({{
-                            type: 'fractal_selections_changed',
-                            selections: selections,
-                            timestamp: Date.now()
-                        }}, '*');
-                        console.log('[POSTMESSAGE-SYNC] ✅ postMessage envoyé');
-                    }} catch (e) {{
-                        console.log('[POSTMESSAGE-SYNC] ❌ Erreur:', e);
-                    }}
-                }});
+                # Get sub-children count
+                sub_children = child_node.get('children', [])
+                has_children = len(sub_children) > 0
 
-                // Polling aussi
-                let lastSelections = '';
-                setInterval(function() {{
-                    try {{
-                        const state = JSON.parse(localStorage.getItem('fractal_state_v6') || '{{}}');
-                        const selectionsStr = (state.selectedNodes || []).join(',');
-                        if (selectionsStr !== lastSelections) {{
-                            lastSelections = selectionsStr;
-                            console.log('[POSTMESSAGE-SYNC] Changement via polling, envoi postMessage');
-                            window.parent.postMessage({{
-                                type: 'fractal_selections_changed',
-                                selections: state.selectedNodes || [],
-                                timestamp: Date.now()
-                            }}, '*');
-                        }}
-                    }} catch (e) {{}}
-                }}, 300);
+                # Create button text
+                if has_children:
+                    btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
+                else:
+                    btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
 
-                console.log('[POSTMESSAGE-SYNC] ✅ Prêt');
-            </script>
-        </body>
-        </html>
-        """
+                # Create unique key including navigation path
+                unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
 
-        # Display the HTML component
-        components.html(html_content, height=height, scrolling=True)
+                # Button to navigate or select
+                if st.button(btn_text, key=unique_key, use_container_width=True):
+                    if has_children:
+                        # Navigate deeper
+                        nav_stack.append(child_code)
+                        st.session_state[f'{key}_current_node'] = child_code
+                        st.session_state[f'{key}_nav_stack'] = nav_stack
+                        st.rerun()
+                    else:
+                        # Leaf node: select for filtering
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
 
-        # Since components.html() returns None, we rely on session_state
-        # JavaScript code in the HTML will update window variables that
-        # can be monitored through Streamlit's session state if needed
-        # For now, navigation is handled by passing data through the hierarchy structure
+                        if child_code in st.session_state.fractal_selections:
+                            st.session_state.fractal_selections.discard(child_code)
+                        else:
+                            st.session_state.fractal_selections.add(child_code)
 
-        return None
+                        st.rerun()
+
+                # Pour les niveaux 2 (catégories), ajouter aussi un bouton de sélection directe
+                child_level = child_node.get('level', 0)
+                if child_level == 2 and has_children:
+                    # Ajouter un bouton "Ajouter filtre" pour les catégories
+                    nav_depth = '_'.join(nav_stack)
+                    add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
+                    if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
+                        st.session_state.fractal_selections.add(child_code)
+                        st.rerun()
+
+        else:
+            # Leaf node info
+            st.info("✅ Cliquez sur ce bouton pour sélectionner")
+            unique_key = f"{key}_select_{'_'.join(nav_stack)}"
+            if st.button(f"✓ Sélectionner {label}", key=unique_key, use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+
+                if current_node in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.discard(current_node)
+                else:
+                    st.session_state.fractal_selections.add(current_node)
+
+                st.rerun()
 
     except Exception as e:
         logger.error(f"Error in fractal_navigation component: {e}", exc_info=True)
         st.error(f"Erreur dans la visualisation fractale: {str(e)}")
-        return None
-
-
-def _get_emoji_for_node(node: Dict[str, Any]) -> str:
-    """Get appropriate emoji for a node based on its label."""
-
-    label = node.get('label', '').lower()
-    code = node.get('code', '').lower()
-
-    emoji_map = {
-        'revenus': '💼',
-        'dépenses': '🛒',
-        'salaire': '💵',
-        'freelance': '🖥️',
-        'investissement': '📈',
-        'alimentation': '🍔',
-        'transport': '🚗',
-        'logement': '🏠',
-        'santé': '⚕️',
-        'loisirs': '🎮',
-        'factures': '📄',
-        'vêtements': '👕',
-        'education': '📚',
-    }
-
-    for key, emoji in emoji_map.items():
-        if key in label or key in code:
-            return emoji
-
-    return '📁'
