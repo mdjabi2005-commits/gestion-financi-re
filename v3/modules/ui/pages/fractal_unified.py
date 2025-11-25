@@ -365,6 +365,33 @@ def interface_fractal_unified():
     </script>
     """)
 
+    # Ajouter un listener Python pour les postMessage du fractal
+    st.markdown("""
+    <script>
+    console.log('[STREAMLIT-SYNC] 🚀 Écoute des messages du composant fractal');
+
+    // Écouter les messages du componant fractal (iFrame)
+    window.addEventListener('message', function(event) {
+        console.log('[STREAMLIT-SYNC] 📨 Message reçu:', event.data);
+
+        if (event.data && event.data.type === 'fractal_selections_changed') {
+            const selections = event.data.selections || [];
+            console.log('[STREAMLIT-SYNC] 📤 Sélections reçues:', selections);
+
+            // Mettre à jour l'URL avec les sélections
+            if (selections.length > 0) {
+                const selectionsStr = selections.join(',');
+                const newUrl = window.location.pathname + '?fractal_selections=' + encodeURIComponent(selectionsStr);
+                console.log('[STREAMLIT-SYNC] 🔄 Mise à jour URL:', newUrl);
+                window.location.href = newUrl;
+            }
+        }
+    });
+
+    console.log('[STREAMLIT-SYNC] ✅ Listener postMessage installé');
+    </script>
+    """)
+
     # Load data
     hierarchy = build_fractal_hierarchy()
     df_all = load_transactions()
@@ -414,24 +441,23 @@ def interface_fractal_unified():
         st.markdown("### 📊 Transactions Filtrées")
 
         # ===== LIRE LES SÉLECTIONS DEPUIS L'URL =====
-        # Quand JavaScript change une sélection:
-        # 1. JavaScript met à jour le localStorage
-        # 2. JavaScript envoie un event 'fractalStateChanged'
-        # 3. Notre code JavaScript détecte le changement via polling du localStorage
-        # 4. JavaScript met à jour l'URL via window.location.href
-        # 5. Streamlit recharge et reexecute ce code Python
-        # 6. Streamlit relit l'URL via st.query_params
-
         selections_from_url = st.query_params.get('fractal_selections', '')
+
+        # DEBUG: Afficher toutes les query params pour voir ce qui arrive
+        st.write(f"🔍 DEBUG: Tous les query_params: {dict(st.query_params)}")
+        st.write(f"🔍 DEBUG: fractal_selections = `{selections_from_url}`")
 
         if selections_from_url:
             # Parser les sélections depuis l'URL
             selected_nodes_list = [code.strip() for code in selections_from_url.split(',') if code.strip()]
+            st.write(f"✅ DEBUG: Sélections parsées: {selected_nodes_list}")
             # Sauvegarder dans session state pour persistance
             st.session_state.fractal_manual_filters = set(selected_nodes_list)
         else:
             # Utiliser session state si l'URL est vide (backward compat)
             selected_nodes_list = list(st.session_state.fractal_manual_filters)
+            if selected_nodes_list:
+                st.write(f"📝 DEBUG: Depuis session_state: {selected_nodes_list}")
 
         # ===== AFFICHAGE CONDITIONNEL DANS LA COLONNE DROITE =====
         if selected_nodes_list:

@@ -162,6 +162,47 @@ def fractal_navigation(
                 console.log('[BACKEND] Selection callback enabled:', window.enableSelectionCallback);
 
                 {js_content}
+
+                // ========== COMMUNICATION AVEC STREAMLIT VIA postMessage ==========
+                console.log('[POSTMESSAGE-SYNC] Initialisation du système postMessage');
+
+                // Quand les sélections changent, envoyer un postMessage au parent (Streamlit)
+                document.addEventListener('fractalStateChanged', function(e) {{
+                    console.log('[POSTMESSAGE-SYNC] fractalStateChanged détecté');
+                    try {{
+                        const state = JSON.parse(localStorage.getItem('fractal_state_v6') || '{{}}');
+                        const selections = state.selectedNodes || [];
+                        console.log('[POSTMESSAGE-SYNC] Envoi postMessage avec sélections:', selections);
+                        window.parent.postMessage({{
+                            type: 'fractal_selections_changed',
+                            selections: selections,
+                            timestamp: Date.now()
+                        }}, '*');
+                        console.log('[POSTMESSAGE-SYNC] ✅ postMessage envoyé');
+                    }} catch (e) {{
+                        console.log('[POSTMESSAGE-SYNC] ❌ Erreur:', e);
+                    }}
+                }});
+
+                // Polling aussi
+                let lastSelections = '';
+                setInterval(function() {{
+                    try {{
+                        const state = JSON.parse(localStorage.getItem('fractal_state_v6') || '{{}}');
+                        const selectionsStr = (state.selectedNodes || []).join(',');
+                        if (selectionsStr !== lastSelections) {{
+                            lastSelections = selectionsStr;
+                            console.log('[POSTMESSAGE-SYNC] Changement via polling, envoi postMessage');
+                            window.parent.postMessage({{
+                                type: 'fractal_selections_changed',
+                                selections: state.selectedNodes || [],
+                                timestamp: Date.now()
+                            }}, '*');
+                        }}
+                    }} catch (e) {{}}
+                }}, 300);
+
+                console.log('[POSTMESSAGE-SYNC] ✅ Prêt');
             </script>
         </body>
         </html>
