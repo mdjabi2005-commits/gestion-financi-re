@@ -136,7 +136,7 @@ def fractal_navigation(
                                 parent_code = child_node.get('parent', '')
                                 if parent_code in st.session_state.fractal_selections:
                                     # Parent est déjà sélectionné, afficher un warning
-                                    toast_warning(f"⚠️ {child_label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
+                                    toast_warning(f"{child_label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
                                 else:
                                     st.session_state.fractal_selections.add(child_code)
                                     st.rerun()
@@ -156,7 +156,7 @@ def fractal_navigation(
 
                         # Vérifier si c'est déjà sélectionné
                         if child_code in st.session_state.fractal_selections:
-                            toast_warning(f"⚠️ {child_label} est déjà sélectionnée", duration=10000)
+                            toast_warning(f"{child_label} est déjà sélectionnée", duration=10000)
                         else:
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
@@ -178,7 +178,7 @@ def fractal_navigation(
                     if current_level == 3:
                         parent_code = node.get('parent', '')
                         if parent_code in st.session_state.fractal_selections:
-                            toast_warning(f"⚠️ {label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
+                            toast_warning(f"{label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
                         else:
                             st.session_state.fractal_selections.add(current_node)
                             st.rerun()
