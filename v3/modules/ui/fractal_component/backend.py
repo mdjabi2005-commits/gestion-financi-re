@@ -15,6 +15,7 @@ import logging
 from typing import Dict, Any, Optional
 import os
 import json
+from modules.ui.components import toast_warning
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +128,21 @@ def fractal_navigation(
 
                         if child_code in st.session_state.fractal_selections:
                             st.session_state.fractal_selections.discard(child_code)
+                            st.rerun()
                         else:
-                            st.session_state.fractal_selections.add(child_code)
-
-                        st.rerun()
+                            # Vérifier si c'est une sous-catégorie (niveau 3) et si son parent est déjà sélectionné
+                            child_level = child_node.get('level', 0)
+                            if child_level == 3:
+                                parent_code = child_node.get('parent', '')
+                                if parent_code in st.session_state.fractal_selections:
+                                    # Parent est déjà sélectionné, afficher un warning
+                                    toast_warning(f"⚠️ {child_label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
+                                else:
+                                    st.session_state.fractal_selections.add(child_code)
+                                    st.rerun()
+                            else:
+                                st.session_state.fractal_selections.add(child_code)
+                                st.rerun()
 
                 # Pour les niveaux 2 (catégories), ajouter aussi un bouton de sélection directe
                 child_level = child_node.get('level', 0)
@@ -141,8 +153,13 @@ def fractal_navigation(
                     if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
                         if 'fractal_selections' not in st.session_state:
                             st.session_state.fractal_selections = set()
-                        st.session_state.fractal_selections.add(child_code)
-                        st.rerun()
+
+                        # Vérifier si c'est déjà sélectionné
+                        if child_code in st.session_state.fractal_selections:
+                            toast_warning(f"⚠️ {child_label} est déjà sélectionnée", duration=10000)
+                        else:
+                            st.session_state.fractal_selections.add(child_code)
+                            st.rerun()
 
         else:
             # Leaf node info
@@ -154,10 +171,20 @@ def fractal_navigation(
 
                 if current_node in st.session_state.fractal_selections:
                     st.session_state.fractal_selections.discard(current_node)
+                    st.rerun()
                 else:
-                    st.session_state.fractal_selections.add(current_node)
-
-                st.rerun()
+                    # Vérifier si c'est une sous-catégorie et si son parent est déjà sélectionné
+                    current_level = node.get('level', 0)
+                    if current_level == 3:
+                        parent_code = node.get('parent', '')
+                        if parent_code in st.session_state.fractal_selections:
+                            toast_warning(f"⚠️ {label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
+                        else:
+                            st.session_state.fractal_selections.add(current_node)
+                            st.rerun()
+                    else:
+                        st.session_state.fractal_selections.add(current_node)
+                        st.rerun()
 
     except Exception as e:
         logger.error(f"Error in fractal_navigation component: {e}", exc_info=True)
