@@ -365,12 +365,47 @@ def _build_fractal_html(
         const longClickDuration = 1500; // 1.5 secondes
         const triangles = [];
 
-        function drawTriangle(x, y, size, data, isHovered, isHeld) {{
+        // Fonction pour obtenir les items sélectionnés depuis la page
+        function getSelectedItems() {{
+            const selected = new Set();
+            try {{
+                const parentDoc = window.parent.document;
+                // Chercher la section "Filtres sélectionnés"
+                const filterElements = parentDoc.querySelectorAll('[data-testid*="filter"], .filter-chip, [class*="filter"]');
+
+                // Alternative: chercher tous les éléments avec un X de suppression
+                const filterChips = parentDoc.querySelectorAll('button');
+                for (let btn of filterChips) {{
+                    const text = (btn.innerText || btn.textContent || '').trim();
+                    // Si le bouton contient une croix X et du texte, c'est un élément sélectionné
+                    if (text.includes('×') || text.includes('X') || text.includes('⊗')) {{
+                        // Extraire le nom avant le X
+                        const parts = text.split(/[×X⊗]/);
+                        if (parts[0]) {{
+                            selected.add(parts[0].trim());
+                        }}
+                    }}
+                }}
+            }} catch (e) {{
+                console.warn('Erreur lecture filtres sélectionnés:', e.message);
+            }}
+            return selected;
+        }}
+
+        // Récupérer les items sélectionnés au démarrage
+        let selectedItems = getSelectedItems();
+
+        function drawTriangle(x, y, size, data, isHovered, isHeld, isSelected) {{
             // Gradient principal avec direction verticale - utiliser la couleur de la catégorie
             const grad = ctx.createLinearGradient(x, y - size - 5, x, y + size + 5);
 
             if (isHeld) {{
                 // Long-click held: version brillante et saturée (vert)
+                grad.addColorStop(0, '#10b981');
+                grad.addColorStop(0.5, '#059669');
+                grad.addColorStop(1, '#047857');
+            }} else if (isSelected) {{
+                // Item sélectionné: reste vert
                 grad.addColorStop(0, '#10b981');
                 grad.addColorStop(0.5, '#059669');
                 grad.addColorStop(1, '#047857');
@@ -413,6 +448,20 @@ def _build_fractal_html(
                 // Inner border - vert bright
                 ctx.strokeStyle = '#34d399';
                 ctx.lineWidth = 2;
+            }} else if (isSelected) {{
+                // Border pour item sélectionné (vert mais moins épais)
+                ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size, y + size);
+                ctx.lineTo(x + size, y + size);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Inner border - vert
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 1.5;
             }} else if (isHovered) {{
                 // Border glow effect on hover
                 ctx.strokeStyle = 'rgba(244, 63, 94, 0.8)';
@@ -496,6 +545,9 @@ def _build_fractal_html(
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Rafraîchir la liste des items sélectionnés
+            selectedItems = getSelectedItems();
+
             // Draw triangles
             CHILDREN_CODES.forEach((code, idx) => {{
                 const pos = POSITIONS[idx];
@@ -505,8 +557,9 @@ def _build_fractal_html(
                 const data = CHILDREN_DATA[code];
                 const isHovered = hoveredIdx === idx;
                 const isHeld = heldTriangleIdx === idx;
+                const isSelected = selectedItems.has(data.label);
 
-                drawTriangle(x, y, size, data, isHovered, isHeld);
+                drawTriangle(x, y, size, data, isHovered, isHeld, isSelected);
             }});
         }}
 
@@ -605,6 +658,10 @@ def _build_fractal_html(
                         if (button) {{
                             console.log('✅ Bouton "Ajouter le filtre" trouvé pour:', heldLabel);
                             button.click();
+                            // Rafraîchir pour afficher la couleur verte
+                            setTimeout(() => {{
+                                render();
+                            }}, 100);
                         }} else {{
                             console.warn('⚠️ Bouton "Ajouter le filtre" NON trouvé pour:', heldLabel);
                         }}
