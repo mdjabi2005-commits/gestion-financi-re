@@ -50,6 +50,9 @@ def fractal_navigation(
     node = hierarchy.get(current_node, {})
     children_codes = node.get('children', [])
 
+    # Créer un placeholder pour stocker les clics sur triangles
+    triangle_click_placeholder = st.empty()
+
     # Render the triangle visualization (pure visual)
     html_content = _build_fractal_html(hierarchy, current_node, children_codes, key)
     triangle_click = components.html(html_content, height=650)
@@ -314,13 +317,35 @@ def _build_fractal_html(
         const POSITIONS = {json.dumps(positions)};
         const BUTTON_KEY_MAP = {json.dumps(button_key_map)};
 
-        // Importer Streamlit pour communication
-        let Streamlit;
+        // Importer Streamlit pour communication - essayer plusieurs chemins
+        let Streamlit = null;
         try {{
-            Streamlit = window.parent.Streamlit;
+            // Essai 1: window.parent.Streamlit (ancienne méthode)
+            if (window.parent && window.parent.Streamlit) {{
+                Streamlit = window.parent.Streamlit;
+            }}
+            // Essai 2: window.top.Streamlit
+            else if (window.top && window.top.Streamlit) {{
+                Streamlit = window.top.Streamlit;
+            }}
+            // Essai 3: Chercher dans les frames
+            else if (window.frames && window.frames.length > 0) {{
+                for (let i = 0; i < window.frames.length; i++) {{
+                    if (window.frames[i].Streamlit) {{
+                        Streamlit = window.frames[i].Streamlit;
+                        break;
+                    }}
+                }}
+            }}
+            // Essai 4: Chercher dans parent.parent
+            else if (window.parent && window.parent.parent && window.parent.parent.Streamlit) {{
+                Streamlit = window.parent.parent.Streamlit;
+            }}
         }} catch (e) {{
-            console.warn('Streamlit not available in this context');
+            console.warn('Erreur accès Streamlit:', e.message);
         }}
+
+        console.log('Streamlit disponible?', !!Streamlit);
 
         const canvas = document.getElementById('fractal-canvas-' + KEY);
         if (!canvas) return;
@@ -524,20 +549,34 @@ def _build_fractal_html(
 
                 console.log('✅ Triangle cliqué:', clickedLabel, '(Code:', clickedCode, ')');
 
-                // Envoyer le clic à Streamlit via setComponentValue
-                if (Streamlit) {{
-                    // Envoyer un message spécial "triangle_click"
-                    Streamlit.setComponentValue({{
-                        type: 'triangle_click',
-                        code: clickedCode,
-                        label: clickedLabel,
-                        index: clickedIdx,
-                        timestamp: Date.now()
-                    }});
+                const messageData = {{
+                    type: 'triangle_click',
+                    code: clickedCode,
+                    label: clickedLabel,
+                    index: clickedIdx,
+                    timestamp: Date.now()
+                }};
 
-                    console.log('📤 Message envoyé à Streamlit');
-                }} else {{
-                    console.error('❌ Streamlit non disponible');
+                // Stratégie 1: Envoyer via Streamlit.setComponentValue si disponible
+                if (Streamlit && typeof Streamlit.setComponentValue === 'function') {{
+                    try {{
+                        Streamlit.setComponentValue(messageData);
+                        console.log('📤 Message envoyé via Streamlit.setComponentValue');
+                    }} catch (e) {{
+                        console.error('Erreur setComponentValue:', e);
+                    }}
+                }}
+                // Stratégie 2: Envoyer via postMessage au parent
+                else {{
+                    try {{
+                        window.parent.postMessage({{
+                            type: 'streamlit:setComponentValue',
+                            data: messageData
+                        }}, '*');
+                        console.log('📤 Message envoyé via postMessage');
+                    }} catch (e) {{
+                        console.error('Erreur postMessage:', e);
+                    }}
                 }}
             }}
         }});
