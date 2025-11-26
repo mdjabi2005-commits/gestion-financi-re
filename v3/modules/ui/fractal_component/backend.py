@@ -168,6 +168,27 @@ def fractal_navigation(
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
 
+            # Add hidden filter button for long-click (not displayed, just for JavaScript to find)
+            child_level = child_node.get('level', 0)
+            if child_level == 2 and has_children:
+                nav_depth = '_'.join(nav_stack)
+                add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
+
+                # Create hidden button that can be found by JavaScript but not visible to user
+                st.markdown(
+                    "<div style='display: none;' data-testid='hidden-filter-button'>",
+                    unsafe_allow_html=True
+                )
+                if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
+
+                    if child_code in st.session_state.fractal_selections:
+                        st.warning(f"{child_label} est déjà sélectionnée")
+                    else:
+                        st.session_state.fractal_selections.add(child_code)
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _get_category_emoji(label: str) -> str:
