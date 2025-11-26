@@ -13,7 +13,9 @@
       "Bash(dir \"C:\\Users\\djabi\\gestion-financière\\v3\\modules\\ui\\fractal_component\")",
       "Bash(findstr:*)",
       "Bash(npm run build:*)",
-      "Bash(claude doctor)"
+      "Bash(claude doctor)",
+      "Bash(find:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

@@ -365,35 +365,41 @@ def _build_fractal_html(
         const longClickDuration = 1500; // 1.5 secondes
         const triangles = [];
 
-        // Fonction pour obtenir les items sélectionnés depuis la page
-        function getSelectedItems() {{
-            const selected = new Set();
+        // Fonction pour obtenir les codes des items sélectionnés depuis la page
+        function getSelectedCodes() {{
+            const selectedCodes = new Set();
             try {{
                 const parentDoc = window.parent.document;
-                // Chercher la section "Filtres sélectionnés"
-                const filterElements = parentDoc.querySelectorAll('[data-testid*="filter"], .filter-chip, [class*="filter"]');
+                // Chercher tous les éléments avec un X de suppression (items sélectionnés)
+                const allButtons = parentDoc.querySelectorAll('button');
 
-                // Alternative: chercher tous les éléments avec un X de suppression
-                const filterChips = parentDoc.querySelectorAll('button');
-                for (let btn of filterChips) {{
+                for (let btn of allButtons) {{
                     const text = (btn.innerText || btn.textContent || '').trim();
                     // Si le bouton contient une croix X et du texte, c'est un élément sélectionné
                     if (text.includes('×') || text.includes('X') || text.includes('⊗')) {{
                         // Extraire le nom avant le X
                         const parts = text.split(/[×X⊗]/);
-                        if (parts[0]) {{
-                            selected.add(parts[0].trim());
+                        const selectedName = parts[0].trim();
+
+                        // Chercher tous les codes des enfants qui correspondent à ce nom
+                        // On parcourt CHILDREN_DATA pour trouver quel code a ce label
+                        for (const [code, data] of Object.entries(CHILDREN_DATA)) {{
+                            if (data.label === selectedName) {{
+                                selectedCodes.add(code);
+                            }}
                         }}
                     }}
                 }}
+
+                console.log('Codes sélectionnés trouvés:', Array.from(selectedCodes));
             }} catch (e) {{
                 console.warn('Erreur lecture filtres sélectionnés:', e.message);
             }}
-            return selected;
+            return selectedCodes;
         }}
 
         // Récupérer les items sélectionnés au démarrage
-        let selectedItems = getSelectedItems();
+        let selectedCodes = getSelectedCodes();
 
         function drawTriangle(x, y, size, data, isHovered, isHeld, isSelected) {{
             // Gradient principal avec direction verticale - utiliser la couleur de la catégorie
@@ -545,8 +551,8 @@ def _build_fractal_html(
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Rafraîchir la liste des items sélectionnés
-            selectedItems = getSelectedItems();
+            // Rafraîchir la liste des codes sélectionnés
+            selectedCodes = getSelectedCodes();
 
             // Draw triangles
             CHILDREN_CODES.forEach((code, idx) => {{
@@ -557,7 +563,7 @@ def _build_fractal_html(
                 const data = CHILDREN_DATA[code];
                 const isHovered = hoveredIdx === idx;
                 const isHeld = heldTriangleIdx === idx;
-                const isSelected = selectedItems.has(data.label);
+                const isSelected = selectedCodes.has(code);
 
                 drawTriangle(x, y, size, data, isHovered, isHeld, isSelected);
             }});
