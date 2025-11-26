@@ -283,6 +283,14 @@ def _build_fractal_html(
         const POSITIONS = {json.dumps(positions)};
         const BUTTON_KEY_MAP = {json.dumps(button_key_map)};
 
+        // Importer Streamlit pour communication
+        let Streamlit;
+        try {{
+            Streamlit = window.parent.Streamlit;
+        }} catch (e) {{
+            console.warn('Streamlit not available in this context');
+        }}
+
         const canvas = document.getElementById('fractal-canvas-' + KEY);
         if (!canvas) return;
 
@@ -478,20 +486,59 @@ def _build_fractal_html(
                 }}
             }});
 
-            // Si un triangle a été cliqué, simuler le clic sur le bouton correspondant
+            // Si un triangle a été cliqué, chercher et cliquer le bouton correspondant
             if (clickedIdx >= 0) {{
                 const clickedCode = CHILDREN_CODES[clickedIdx];
-                const buttonKey = BUTTON_KEY_MAP[clickedCode];
-                if (buttonKey) {{
-                    const button = document.querySelector(`[data-testid="stButton"][key="${{buttonKey}}"]`) ||
-                                   document.querySelector(`button[id*="${{buttonKey}}"]`) ||
-                                   Array.from(document.querySelectorAll('button')).find(btn =>
-                                       btn.textContent.includes(CHILDREN_DATA[clickedCode].label)
-                                   );
-                    if (button) {{
-                        button.click();
+                const clickedLabel = CHILDREN_DATA[clickedCode].label;
+                const clickedData = CHILDREN_DATA[clickedCode];
+
+                console.log('Triangle cliqué:', clickedLabel, '| Index:', clickedIdx);
+
+                // Attendre un peu pour laisser le DOM se stabiliser
+                setTimeout(() => {{
+                    // Chercher le bouton par son texte visible (approche 1)
+                    let button = null;
+                    const allButtons = document.querySelectorAll('button');
+
+                    for (let btn of allButtons) {{
+                        const btnText = (btn.innerText || btn.textContent || '').trim();
+                        // Chercher une correspondance partielle du label
+                        if (btnText.includes(clickedLabel)) {{
+                            button = btn;
+                            console.log('Bouton trouvé par texte:', btnText);
+                            break;
+                        }}
                     }}
-                }}
+
+                    // Approche 2: Si pas trouvé, chercher par position (le clickedIdx-ème bouton)
+                    if (!button && allButtons.length > clickedIdx) {{
+                        button = allButtons[clickedIdx + 6]; // +6 car les premiers boutons sont Back/Reset
+                        console.log('Bouton trouvé par index alternatif');
+                    }}
+
+                    // Approche 3: chercher le premier bouton après la canvas (logique Streamlit)
+                    if (!button) {{
+                        const canvasContainer = canvas.closest('[data-testid="stVerticalBlock"]') || canvas.parentElement;
+                        if (canvasContainer) {{
+                            const buttons = canvasContainer.parentElement.querySelectorAll('button');
+                            if (buttons.length > clickedIdx) {{
+                                button = buttons[clickedIdx];
+                                console.log('Bouton trouvé dans conteneur parent');
+                            }}
+                        }}
+                    }}
+
+                    // Cliquer le bouton si trouvé
+                    if (button) {{
+                        console.log('✅ Clic sur le bouton pour:', clickedLabel);
+                        button.click();
+                        // Force un petit délai pour Streamlit
+                        setTimeout(() => {{}}, 100);
+                    }} else {{
+                        console.error('❌ Bouton NON trouvé pour:', clickedLabel);
+                        console.log('Total boutons dans la page:', allButtons.length);
+                    }}
+                }}, 50);
             }}
         }});
 
