@@ -362,7 +362,7 @@ def _build_fractal_html(
         let heldTriangleIdx = null;
         let longClickTimer = null;
         let mouseDownTime = null;
-        const longClickDuration = 3000; // 3 secondes
+        const longClickDuration = 1500; // 1.5 secondes
         const triangles = [];
 
         function drawTriangle(x, y, size, data, isHovered, isHeld) {{
