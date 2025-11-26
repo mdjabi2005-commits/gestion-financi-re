@@ -370,10 +370,10 @@ def _build_fractal_html(
             const grad = ctx.createLinearGradient(x, y - size - 5, x, y + size + 5);
 
             if (isHeld) {{
-                // Long-click held: version brillante et saturée (cyan/turquoise)
-                grad.addColorStop(0, '#06b6d4');
-                grad.addColorStop(0.5, '#0891b2');
-                grad.addColorStop(1, '#0d9488');
+                // Long-click held: version brillante et saturée (vert)
+                grad.addColorStop(0, '#10b981');
+                grad.addColorStop(0.5, '#059669');
+                grad.addColorStop(1, '#047857');
             }} else if (isHovered) {{
                 // Hover: version plus claire et saturée de la couleur
                 const baseColor = data.color || '#fbbf24';
@@ -400,8 +400,8 @@ def _build_fractal_html(
 
             // Draw border avec effet plus prononcé
             if (isHeld) {{
-                // Border glow effect on long-click held
-                ctx.strokeStyle = 'rgba(6, 182, 212, 0.9)';
+                // Border glow effect on long-click held (vert)
+                ctx.strokeStyle = 'rgba(16, 185, 129, 0.9)';
                 ctx.lineWidth = 5;
                 ctx.beginPath();
                 ctx.moveTo(x, y - size);
@@ -410,8 +410,8 @@ def _build_fractal_html(
                 ctx.closePath();
                 ctx.stroke();
 
-                // Inner border - cyan bright
-                ctx.strokeStyle = '#22d3ee';
+                // Inner border - vert bright
+                ctx.strokeStyle = '#34d399';
                 ctx.lineWidth = 2;
             }} else if (isHovered) {{
                 // Border glow effect on hover
