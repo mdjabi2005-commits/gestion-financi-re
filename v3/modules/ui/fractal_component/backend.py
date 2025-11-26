@@ -189,6 +189,50 @@ def _get_category_emoji(label: str) -> str:
     return emoji_map.get(label, '📁')
 
 
+def _get_category_color(label: str) -> str:
+    """Get color for category label - restore original colors."""
+    color_map = {
+        # Jaune/Orange
+        'Stationnement': '#fbbf24',
+        'Autoroute': '#fbbf24',
+        'Boulangerie': '#fbbf24',
+        'Banque': '#fbbf24',
+        'Essence': '#fbbf24',
+        'Restaurant': '#fbbf24',
+        'Uca': '#fbbf24',
+        'Alimentation': '#fbbf24',
+        'Supermarché': '#fbbf24',
+        'Loyer': '#fbbf24',
+        'Logement': '#fbbf24',
+
+        # Violet/Magenta pour Transport
+        'Transport': '#a855f7',
+        'Autoroute': '#a855f7',
+
+        # Vert/Teal/Cyan pour Assurance et Divers
+        'Assurance': '#06b6d4',
+        'Divers': '#06b6d4',
+
+        # Roses pour certaines catégories
+        'Santé': '#ec4899',
+        'Loisirs': '#f43f5e',
+        'Vêtements': '#f43f5e',
+        'Education': '#ec4899',
+
+        # Bleu pour Revenus/Factures
+        'Revenus': '#3b82f6',
+        'Dépenses': '#f59e0b',
+        'Factures': '#06b6d4',
+        'Abonnement': '#06b6d4',
+        'Freelance': '#3b82f6',
+        'Salaire': '#f59e0b',
+        'Investissement': '#10b981'
+    }
+
+    # Retourner la couleur, sinon jaune par défaut
+    return color_map.get(label, '#fbbf24')
+
+
 def _build_fractal_html(
     hierarchy: Dict[str, Any],
     current_node: str,
@@ -208,6 +252,7 @@ def _build_fractal_html(
         children_data[child_code] = {
             'label': label,
             'emoji': _get_category_emoji(label),
+            'color': _get_category_color(label),
             'amount': child_node.get('amount') or child_node.get('total') or 0,
             'has_children': len(child_node.get('children', [])) > 0,
         }
@@ -250,19 +295,22 @@ def _build_fractal_html(
         const triangles = [];
 
         function drawTriangle(x, y, size, data, isHovered) {{
-            // Gradient principal avec direction verticale pour meilleur relief
+            // Gradient principal avec direction verticale - utiliser la couleur de la catégorie
             const grad = ctx.createLinearGradient(x, y - size - 5, x, y + size + 5);
 
             if (isHovered) {{
-                // Hover: magenta vibrant avec plus de couleur
-                grad.addColorStop(0, '#f472b6');
-                grad.addColorStop(0.5, '#ec4899');
-                grad.addColorStop(1, '#be185d');
+                // Hover: version plus claire et saturée de la couleur
+                const baseColor = data.color || '#fbbf24';
+                grad.addColorStop(0, baseColor);
+                grad.addColorStop(0.5, '#f472b6');
+                grad.addColorStop(1, '#ec4899');
             }} else {{
-                // Normal: orange/gold avec profondeur
-                grad.addColorStop(0, '#fbbf24');
-                grad.addColorStop(0.5, '#f59e0b');
-                grad.addColorStop(1, '#d97706');
+                // Normal: gradient basé sur la couleur de la catégorie
+                const baseColor = data.color || '#fbbf24';
+                // Créer un gradient avec nuances de la couleur
+                grad.addColorStop(0, baseColor);
+                grad.addColorStop(0.5, baseColor);
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
             }}
 
             // Draw triangle fill
@@ -277,7 +325,7 @@ def _build_fractal_html(
             // Draw border avec effet plus prononcé
             if (isHovered) {{
                 // Border glow effect on hover
-                ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
+                ctx.strokeStyle = 'rgba(244, 63, 94, 0.8)';
                 ctx.lineWidth = 4;
                 ctx.beginPath();
                 ctx.moveTo(x, y - size);
@@ -287,7 +335,7 @@ def _build_fractal_html(
                 ctx.stroke();
 
                 // Inner border
-                ctx.strokeStyle = '#3b82f6';
+                ctx.strokeStyle = '#f43f5e';
                 ctx.lineWidth = 2;
             }} else {{
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
