@@ -3,73 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fractal Navigation - Sierpinski Triangle</title>
-    <script src="https://cdn.jsdelivr.net/npm/streamlit-component-lib@1.4.0/streamlit.js"></script>
-    <link rel="stylesheet" href="fractal.css">
+    <title>Fractal Navigation</title>
+    <link rel="stylesheet" href="./fractal.css">
 </head>
 <body>
-    <div id="app" class="fractal-container">
-        <!-- Canvas for rendering -->
-        <canvas id="fractalCanvas"></canvas>
+    <!-- Canvas pour les triangles -->
+    <canvas id="fractal-canvas"></canvas>
 
-        <!-- Info Panel (top-right) -->
-        <div class="info-panel">
-            <div class="info-title">🔺 Univers Fractal</div>
-            <div class="info-content">
-                <div class="info-item">
-                    <span class="info-label">Niveau</span>
-                    <span class="info-value" id="levelDisplay">1</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Montant Total</span>
-                    <span class="info-value" id="totalDisplay">0€</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Catégories</span>
-                    <span class="info-value" id="categoriesDisplay">0</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Zoom</span>
-                    <span class="info-value" id="zoomDisplay">1.0x</span>
-                </div>
-            </div>
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="spinner-container">
+        <div class="spinner"></div>
+        <p>Chargement...</p>
+    </div>
+
+    <!-- Info Panel (top-right) -->
+    <div id="info-panel" class="info-panel">
+        <div class="info-title">
+            <span class="emoji">🔺</span>
+            <span>UNIVERS FRACTAL</span>
         </div>
-
-        <!-- Breadcrumb Navigation (top-left) -->
-        <div class="breadcrumb-container">
-            <div class="breadcrumb">
-                <span id="breadcrumbText">TR</span>
-            </div>
+        <div class="info-item">
+            <span class="label">Niveau</span>
+            <span class="value" id="level-value">0</span>
         </div>
-
-        <!-- Zoom Indicator (bottom-left) -->
-        <div class="zoom-indicator">
-            <div class="zoom-bar">
-                <div class="zoom-progress" id="zoomProgress"></div>
-            </div>
-            <div class="zoom-label">Profondeur</div>
+        <div class="info-item">
+            <span class="label">Montant Total</span>
+            <span class="value" id="amount-value">0€</span>
         </div>
-
-        <!-- Control Buttons -->
-        <div class="controls">
-            <button id="backBtn" class="control-btn back-btn" title="Retour au niveau précédent">
-                ← Retour
-            </button>
-            <button id="resetBtn" class="control-btn reset-btn" title="Retour à la vue d'ensemble">
-                🏠 Vue d'ensemble
-            </button>
+        <div class="info-item">
+            <span class="label">Catégories</span>
+            <span class="value" id="categories-value">0</span>
         </div>
-
-        <!-- Tooltip -->
-        <div id="tooltip" class="tooltip" style="display: none;"></div>
-
-        <!-- Loading indicator -->
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Chargement des données...</p>
+        <div class="info-item">
+            <span class="label">Zoom</span>
+            <span class="value" id="zoom-value">1.0x</span>
         </div>
     </div>
 
-    <script src="fractal.js"></script>
+    <!-- Breadcrumb (top-left) -->
+    <div id="breadcrumb" class="breadcrumb">
+        Univers Financier
+    </div>
+
+    <!-- Controls (bottom-right) -->
+    <div class="controls">
+        <button id="back-btn" class="control-btn back-btn" style="display: none;">
+            ← Retour
+        </button>
+        <button id="reset-btn" class="control-btn reset-btn">
+            🏠 Vue d'ensemble
+        </button>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/streamlit-component-lib@latest/streamlit-component-lib.js"></script>
+    <script src="./fractal.js"></script>
 </body>
 </html>

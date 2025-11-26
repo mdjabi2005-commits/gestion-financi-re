@@ -8,7 +8,8 @@
       "Bash(cd:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(dir \"C:\\Users\\djabi\\gestion-financière\\v3\\modules\\ui\\fractal_component\\frontend\")"
     ],
     "deny": [],
     "ask": []

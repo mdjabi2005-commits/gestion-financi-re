@@ -5,221 +5,379 @@ Provides interactive Sierpinski triangle-based fractal visualization.
 Uses HTML/Canvas with Streamlit's components.html()
 
 @author: djabi
-@version: 2.0
-@date: 2025-11-23
+@version: 3.1 (Simplified - triangles + buttons)
+@date: 2025-11-25
 """
 
 import streamlit as st
 import streamlit.components.v1 as components
-import logging
-from typing import Dict, Any, Optional
-import os
 import json
-from modules.ui.components import toast_warning
-
-logger = logging.getLogger(__name__)
-
-# Get the directory where this component is located
-_COMPONENT_DIR = os.path.dirname(os.path.abspath(__file__))
+from typing import Dict, Any, Optional
 
 
 def fractal_navigation(
-    data: Dict[str, Any],
+    hierarchy: Dict[str, Any],
     key: Optional[str] = None,
-    height: int = 800
+    default: Optional[Dict[str, Any]] = None
 ) -> None:
     """
-    Fractal Navigation Component - Simple hierarchical selector using Streamlit buttons.
+    Render interactive Sierpinski triangle navigation.
 
-    Renders an interactive interface for exploring hierarchical financial data.
-    Users can navigate and select categories to filter transactions.
+    Displays triangles as a beautiful visual interface.
+    Actual filtering/selection is handled via visible buttons below.
 
     Args:
-        data: Complete fractal hierarchy from build_fractal_hierarchy()
-        key: Unique key for this component instance (required by Streamlit)
-        height: Height parameter (kept for compatibility)
-
-    Example:
-        >>> from modules.services.fractal_service import build_fractal_hierarchy
-        >>> from modules.ui.fractal_component import fractal_navigation
-        >>>
-        >>> hierarchy = build_fractal_hierarchy()
-        >>> fractal_navigation(hierarchy, key='main_fractal')
+        hierarchy: Complete fractal hierarchy from build_fractal_hierarchy()
+        key: Unique key for this component instance
+        default: Unused (kept for compatibility)
     """
-    try:
-        if not data or 'TR' not in data:
-            st.error("Structure de hiérarchie invalide")
-            return
+    if not isinstance(hierarchy, dict):
+        raise ValueError("hierarchy doit être un dictionnaire")
 
-        # Initialize state
-        if f'{key}_current_node' not in st.session_state:
-            st.session_state[f'{key}_current_node'] = 'TR'
-        if f'{key}_nav_stack' not in st.session_state:
-            st.session_state[f'{key}_nav_stack'] = ['TR']
+    if 'TR' not in hierarchy:
+        raise ValueError("hierarchy doit contenir un nœud racine 'TR'")
 
-        current_node = st.session_state[f'{key}_current_node']
-        nav_stack = st.session_state[f'{key}_nav_stack']
+    # Initialize session state
+    if f'{key}_current_node' not in st.session_state:
+        st.session_state[f'{key}_current_node'] = 'TR'
+    if f'{key}_nav_stack' not in st.session_state:
+        st.session_state[f'{key}_nav_stack'] = ['TR']
 
-        # Get current node info
-        node = data.get(current_node, {})
-        label = node.get('label', current_node)
-        total = node.get('amount') or node.get('total') or 0
-        children_codes = node.get('children', [])
+    current_node = st.session_state[f'{key}_current_node']
+    nav_stack = st.session_state[f'{key}_nav_stack']
 
-        # Display current node info
-        st.markdown(f"### 📍 {label} ({total:,.0f}€)")
+    # Get current node info
+    node = hierarchy.get(current_node, {})
+    children_codes = node.get('children', [])
 
-        # Afficher les métriques (comme cap8)
-        # On a besoin du nombre de transactions du nœud courant
-        tx_count = node.get('transactions', 0)
-        if tx_count > 0:
-            # Importer la fonction pour récupérer les transactions du nœud
-            from modules.services.fractal_service import get_transactions_for_node
-            from modules.database.repositories import TransactionRepository
+    # Render the triangle visualization (pure visual)
+    html_content = _build_fractal_html(hierarchy, current_node, children_codes, key)
+    components.html(html_content, height=650)
 
-            # Récupérer les transactions réelles pour ce nœud
-            df_node_transactions = get_transactions_for_node(current_node, data)
+    st.markdown("---")
 
-            # Calculer revenus et dépenses
-            total_revenus = 0
-            total_depenses = 0
+    # Navigation buttons
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if len(nav_stack) > 1:
+            nav_depth = '_'.join(nav_stack)
+            if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
+                nav_stack.pop()
+                st.session_state[f'{key}_current_node'] = nav_stack[-1]
+                st.session_state[f'{key}_nav_stack'] = nav_stack
+                st.rerun()
 
-            if not df_node_transactions.empty:
-                total_revenus = df_node_transactions[df_node_transactions['type'].str.lower() == 'revenu']['montant'].sum()
-                total_depenses = df_node_transactions[df_node_transactions['type'].str.lower() == 'dépense']['montant'].sum()
+    with col2:
+        if current_node != 'TR':
+            nav_depth = '_'.join(nav_stack)
+            if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
+                st.session_state[f'{key}_current_node'] = 'TR'
+                st.session_state[f'{key}_nav_stack'] = ['TR']
+                st.rerun()
 
-            # Solde = Revenus - Dépenses (dépenses sont négatives)
-            solde = total_revenus + total_depenses
+    st.markdown("---")
 
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Transactions", tx_count)
-            with col2:
-                st.metric("Revenus", f"{total_revenus:,.0f}€")
-            with col3:
-                st.metric("Dépenses", f"{abs(total_depenses):,.0f}€")
-            with col4:
-                st.metric("Solde", f"{solde:,.0f}€")
-            st.markdown("---")
+    # Selection buttons (visible, functional)
+    if children_codes:
+        st.markdown("**Sous-niveaux:**")
 
-        # Navigation buttons
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if len(nav_stack) > 1:
-                nav_depth = '_'.join(nav_stack)
-                if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
-                    nav_stack.pop()
-                    st.session_state[f'{key}_current_node'] = nav_stack[-1]
+        for idx, child_code in enumerate(children_codes):
+            child_node = hierarchy.get(child_code, {})
+            child_label = child_node.get('label', child_code)
+            child_total = child_node.get('amount') or child_node.get('total') or 0
+
+            child_level = child_node.get('level', 0)
+            sub_children = child_node.get('children', [])
+            has_children = len(sub_children) > 0
+
+            # Create button text
+            if has_children:
+                btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
+            else:
+                btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
+
+            # Create unique key
+            unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
+
+            # Button to navigate or select
+            if st.button(btn_text, key=unique_key, use_container_width=True):
+                if has_children:
+                    # Navigate deeper
+                    nav_stack.append(child_code)
+                    st.session_state[f'{key}_current_node'] = child_code
                     st.session_state[f'{key}_nav_stack'] = nav_stack
                     st.rerun()
-        with col2:
-            if current_node != 'TR':
-                nav_depth = '_'.join(nav_stack)
-                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
-                    st.session_state[f'{key}_current_node'] = 'TR'
-                    st.session_state[f'{key}_nav_stack'] = ['TR']
-                    st.rerun()
-
-        st.markdown("---")
-
-        # Display children
-        if children_codes:
-            st.markdown("**Sous-niveaux:**")
-
-            for idx, child_code in enumerate(children_codes):
-                child_node = data.get(child_code, {})
-                child_label = child_node.get('label', child_code)
-                # Pour les niveaux 1-2: 'total' ou 'amount', pour le niveau 3: 'amount'
-                child_total = child_node.get('amount') or child_node.get('total') or 0
-
-                child_level = child_node.get('level', 0)
-
-                # Get sub-children count
-                sub_children = child_node.get('children', [])
-                has_children = len(sub_children) > 0
-
-                # Create button text
-                if has_children:
-                    btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
                 else:
-                    btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
+                    # Leaf node: select for filtering
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
 
-                # Create unique key including navigation path
-                unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
-
-                # Button to navigate or select
-                if st.button(btn_text, key=unique_key, use_container_width=True):
-                    if has_children:
-                        # Navigate deeper
-                        nav_stack.append(child_code)
-                        st.session_state[f'{key}_current_node'] = child_code
-                        st.session_state[f'{key}_nav_stack'] = nav_stack
+                    if child_code in st.session_state.fractal_selections:
+                        st.session_state.fractal_selections.discard(child_code)
                         st.rerun()
                     else:
-                        # Leaf node: select for filtering
-                        if 'fractal_selections' not in st.session_state:
-                            st.session_state.fractal_selections = set()
-
-                        if child_code in st.session_state.fractal_selections:
-                            st.session_state.fractal_selections.discard(child_code)
-                            st.rerun()
-                        else:
-                            # Vérifier si c'est une sous-catégorie (niveau 3) et si son parent est déjà sélectionné
-                            child_level = child_node.get('level', 0)
-                            if child_level == 3:
-                                parent_code = child_node.get('parent', '')
-                                if parent_code in st.session_state.fractal_selections:
-                                    # Parent est déjà sélectionné, afficher un warning
-                                    toast_warning(f"{child_label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
-                                else:
-                                    st.session_state.fractal_selections.add(child_code)
-                                    st.rerun()
+                        if child_level == 3:
+                            parent_code = child_node.get('parent', '')
+                            if parent_code in st.session_state.fractal_selections:
+                                st.warning(f"{child_label} est déjà incluse dans {hierarchy.get(parent_code, {}).get('label', parent_code)}")
                             else:
                                 st.session_state.fractal_selections.add(child_code)
                                 st.rerun()
-
-                # Pour les niveaux 2 (catégories), ajouter aussi un bouton de sélection directe
-                child_level = child_node.get('level', 0)
-                if child_level == 2 and has_children:
-                    # Ajouter un bouton "Ajouter filtre" pour les catégories
-                    nav_depth = '_'.join(nav_stack)
-                    add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
-                    if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
-                        if 'fractal_selections' not in st.session_state:
-                            st.session_state.fractal_selections = set()
-
-                        # Vérifier si c'est déjà sélectionné
-                        if child_code in st.session_state.fractal_selections:
-                            toast_warning(f"{child_label} est déjà sélectionnée", duration=10000)
                         else:
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
 
-        else:
-            # Leaf node info
-            st.info("✅ Cliquez sur ce bouton pour sélectionner")
-            unique_key = f"{key}_select_{'_'.join(nav_stack)}"
-            if st.button(f"✓ Sélectionner {label}", key=unique_key, use_container_width=True):
-                if 'fractal_selections' not in st.session_state:
-                    st.session_state.fractal_selections = set()
+            # Add filter button for categories
+            child_level = child_node.get('level', 0)
+            if child_level == 2 and has_children:
+                nav_depth = '_'.join(nav_stack)
+                add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
+                if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
 
-                if current_node in st.session_state.fractal_selections:
-                    st.session_state.fractal_selections.discard(current_node)
-                    st.rerun()
-                else:
-                    # Vérifier si c'est une sous-catégorie et si son parent est déjà sélectionné
-                    current_level = node.get('level', 0)
-                    if current_level == 3:
-                        parent_code = node.get('parent', '')
-                        if parent_code in st.session_state.fractal_selections:
-                            toast_warning(f"{label} est déjà incluse dans {data.get(parent_code, {}).get('label', parent_code)}", duration=10000)
-                        else:
-                            st.session_state.fractal_selections.add(current_node)
-                            st.rerun()
+                    if child_code in st.session_state.fractal_selections:
+                        st.warning(f"{child_label} est déjà sélectionnée")
                     else:
-                        st.session_state.fractal_selections.add(current_node)
+                        st.session_state.fractal_selections.add(child_code)
                         st.rerun()
 
-    except Exception as e:
-        logger.error(f"Error in fractal_navigation component: {e}", exc_info=True)
-        st.error(f"Erreur dans la visualisation fractale: {str(e)}")
+
+def _build_fractal_html(
+    hierarchy: Dict[str, Any],
+    current_node: str,
+    children_codes: list,
+    component_key: str
+) -> str:
+    """Build HTML/CSS/JS for fractal visualization (visual only)."""
+
+    if not children_codes:
+        return "<p style='color: #94a3b8; text-align: center; padding: 20px;'>Aucune sous-catégorie</p>"
+
+    # Prepare children data
+    children_data = {}
+    for child_code in children_codes:
+        child_node = hierarchy.get(child_code, {})
+        children_data[child_code] = {
+            'label': child_node.get('label', child_code),
+            'amount': child_node.get('amount') or child_node.get('total') or 0,
+            'has_children': len(child_node.get('children', [])) > 0,
+        }
+
+    # Generate positions
+    num_children = len(children_codes)
+    positions = _get_triangle_positions(num_children, 400, 400)
+
+    # Generate button keys for reference
+    button_key_map = {}
+    nav_stack_str = '_'.join(['TR'] + [current_node]) if current_node != 'TR' else 'TR'
+    for idx, child_code in enumerate(children_codes):
+        button_key_map[child_code] = f"{component_key}_nav_{nav_stack_str}_{idx}_{child_code}"
+
+    return f"""
+    <style>
+        body, html {{ width: 100%; height: 100%; margin: 0; padding: 0; }}
+        #fractal-canvas-{component_key} {{ display: block; width: 100%; height: 100%; }}
+    </style>
+
+    <canvas id="fractal-canvas-{component_key}"></canvas>
+
+    <script>
+    (function() {{
+        const KEY = '{component_key}';
+        const CHILDREN_DATA = {json.dumps(children_data)};
+        const CHILDREN_CODES = {json.dumps(children_codes)};
+        const POSITIONS = {json.dumps(positions)};
+
+        const canvas = document.getElementById('fractal-canvas-' + KEY);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d', {{ antialias: 'true' }});
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        let hoveredIdx = null;
+        const triangles = [];
+
+        function drawTriangle(x, y, size, data, isHovered) {{
+            // Gradient principal avec direction verticale pour meilleur relief
+            const grad = ctx.createLinearGradient(x, y - size - 5, x, y + size + 5);
+
+            if (isHovered) {{
+                // Hover: magenta vibrant avec plus de couleur
+                grad.addColorStop(0, '#f472b6');
+                grad.addColorStop(0.5, '#ec4899');
+                grad.addColorStop(1, '#be185d');
+            }} else {{
+                // Normal: orange/gold avec profondeur
+                grad.addColorStop(0, '#fbbf24');
+                grad.addColorStop(0.5, '#f59e0b');
+                grad.addColorStop(1, '#d97706');
+            }}
+
+            // Draw triangle fill
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x - size, y + size);
+            ctx.lineTo(x + size, y + size);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw border avec effet plus prononcé
+            if (isHovered) {{
+                // Border glow effect on hover
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size, y + size);
+                ctx.lineTo(x + size, y + size);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Inner border
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+            }} else {{
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
+            }}
+
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x - size, y + size);
+            ctx.lineTo(x + size, y + size);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Draw label avec meilleure visibilité
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 12px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Shadow pour meilleure lisibilité
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillText(data.label.substring(0, 14), x + 0.5, y - 4.5);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(data.label.substring(0, 14), x, y - 5);
+
+            // Draw amount avec cyan vibrant
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.font = 'bold 11px Inter';
+            const amt = new Intl.NumberFormat('fr-FR', {{
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 2
+            }}).format(Math.abs(data.amount));
+            ctx.fillText(amt, x + 0.5, y + 10.5);
+            ctx.fillStyle = '#22d3ee';
+            ctx.fillText(amt, x, y + 10);
+        }}
+
+        function render() {{
+            // Background gradient
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            grad.addColorStop(0, '#0a0e27');
+            grad.addColorStop(1, '#1a1f3a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw triangles
+            CHILDREN_CODES.forEach((code, idx) => {{
+                const pos = POSITIONS[idx];
+                const x = centerX + pos.x;
+                const y = centerY + pos.y;
+                const size = pos.size;
+                const data = CHILDREN_DATA[code];
+                const isHovered = hoveredIdx === idx;
+
+                drawTriangle(x, y, size, data, isHovered);
+            }});
+        }}
+
+        function isInTriangle(px, py, x, y, size) {{
+            const p1 = {{ x: x, y: y - size }};
+            const p2 = {{ x: x - size, y: y + size }};
+            const p3 = {{ x: x + size, y: y + size }};
+
+            const denom = (p2.y - p3.y) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.y - p3.y);
+            if (denom === 0) return false;
+
+            const a = ((p2.y - p3.y) * (px - p3.x) + (p3.x - p2.x) * (py - p3.y)) / denom;
+            const b = ((p3.y - p1.y) * (px - p3.x) + (p1.x - p3.x) * (py - p3.y)) / denom;
+            const c = 1 - a - b;
+
+            return a >= 0 && b >= 0 && c >= 0;
+        }}
+
+        canvas.addEventListener('mousemove', (e) => {{
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            let found = -1;
+            CHILDREN_CODES.forEach((code, idx) => {{
+                const pos = POSITIONS[idx];
+                const tx = centerX + pos.x;
+                const ty = centerY + pos.y;
+                if (isInTriangle(x, y, tx, ty, pos.size)) {{
+                    found = idx;
+                }}
+            }});
+
+            if (found !== hoveredIdx) {{
+                hoveredIdx = found;
+                canvas.style.cursor = found >= 0 ? 'pointer' : 'default';
+                render();
+            }}
+        }});
+
+        canvas.addEventListener('mouseleave', () => {{
+            hoveredIdx = null;
+            canvas.style.cursor = 'default';
+            render();
+        }});
+
+        render();
+    }})();
+    </script>
+    """
+
+
+def _get_triangle_positions(num_children: int, canvas_width: int, canvas_height: int) -> list:
+    """Generate triangle positions based on number of children."""
+    import math
+
+    positions = []
+    base_size = 55
+
+    if num_children == 1:
+        positions.append({'x': 0, 'y': 0, 'size': base_size})
+    elif num_children == 2:
+        spacing = 100
+        positions.append({'x': -spacing, 'y': 0, 'size': base_size})
+        positions.append({'x': spacing, 'y': 0, 'size': base_size})
+    elif num_children == 3:
+        positions.append({'x': 0, 'y': -80, 'size': base_size})
+        positions.append({'x': -80, 'y': 60, 'size': base_size})
+        positions.append({'x': 80, 'y': 60, 'size': base_size})
+    elif num_children == 4:
+        spacing = 100
+        positions.append({'x': 0, 'y': -spacing, 'size': base_size})
+        positions.append({'x': spacing, 'y': 0, 'size': base_size})
+        positions.append({'x': 0, 'y': spacing, 'size': base_size})
+        positions.append({'x': -spacing, 'y': 0, 'size': base_size})
+    else:
+        radius = 130 if num_children <= 6 else 140
+        angle_step = 2 * math.pi / num_children
+        for i in range(num_children):
+            angle = (i * angle_step) - (math.pi / 2)
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+            positions.append({'x': x, 'y': y, 'size': base_size})
+
+    return positions

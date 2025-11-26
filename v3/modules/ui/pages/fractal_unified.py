@@ -144,7 +144,7 @@ def interface_fractal_unified():
 
     # TOP: FRACTAL NAVIGATION
     st.subheader("🔺 Navigation")
-    fractal_navigation(hierarchy, key='fractal_minimal', height=600)
+    fractal_navigation(hierarchy, key='fractal_minimal')
 
     st.markdown("---")
 
@@ -229,21 +229,21 @@ def interface_fractal_unified():
             df_filtered = pd.concat([df_filtered, df_code], ignore_index=True)
 
         if not df_filtered.empty:
-            # Statistiques
-            col1, col2, col3 = st.columns(3)
+            # Statistiques (4 colonnes comme cap8)
+            col1, col2, col3, col4 = st.columns(4)
             total_count = len(df_filtered)
             total_revenus = df_filtered[df_filtered['type'].str.lower() == 'revenu']['montant'].sum()
             total_depenses = df_filtered[df_filtered['type'].str.lower() == 'dépense']['montant'].sum()
+            solde = total_revenus - total_depenses
 
             with col1:
-                st.metric("📋 Transactions", total_count)
+                st.metric("Transactions", total_count)
             with col2:
-                st.metric("💹 Total", f"{total_revenus + total_depenses:,.0f}€")
+                st.metric("Revenus", f"{total_revenus:,.0f}€")
             with col3:
-                if total_revenus > 0:
-                    st.metric("💹 Revenus", f"{total_revenus:,.0f}€")
-                else:
-                    st.metric("💸 Dépenses", f"{abs(total_depenses):,.0f}€")
+                st.metric("Dépenses", f"{abs(total_depenses):,.0f}€")
+            with col4:
+                st.metric("Solde", f"{solde:,.0f}€")
 
             st.markdown("---")
 

@@ -5,82 +5,71 @@
  * Supports multi-level hierarchical exploration of financial data.
  *
  * @author djabi
- * @version 1.1 (Standalone - no Streamlit component lib)
- * @date 2025-11-23
+ * @version 1.0
+ * @date 2025-11-22
  */
 
 // ==============================
-// GLOBAL STATE - SINGLE DECLARATIONS
+// GLOBAL STATE
 // ==============================
 
 let hierarchyData = {};
 let currentNode = 'TR';
 let navigationStack = ['TR'];
-let selectedNodes = new Set();  // NOUVEAU: Nœuds sélectionnés
-let isSelectionMode = false;    // NOUVEAU: Mode sélection actif
 let hoveredTriangle = null;
 let animationInProgress = false;
-
 const ANIMATION_DURATION = 700; // ms
 const FRAME_RATE = 60;
 const FRAMES_PER_ANIMATION = Math.round(ANIMATION_DURATION / (1000 / FRAME_RATE));
 
 // Canvas setup
-let canvas = null;
-let ctx = null;
-let canvasWidth = 0;
-let canvasHeight = 0;
+let canvas, ctx, rect;
+let canvasWidth, canvasHeight;
 let triangles = [];
-let centerX = 0;
-let centerY = 0;
+let centerX, centerY;
 
 // ==============================
 // INITIALIZATION
 // ==============================
 
 /**
- * Initialize when page loads
+ * Initialize the component when Streamlit sends data
  */
+Streamlit.setComponentValue(null);
+
 window.addEventListener('load', () => {
-    console.log('[FRACTAL] ✅ Page loaded');
-
     canvas = document.getElementById('fractalCanvas');
-    if (!canvas) {
-        console.error('[FRACTAL] ❌ Canvas not found!');
-        return;
-    }
-
     ctx = canvas.getContext('2d');
-    console.log('[FRACTAL] ✅ Canvas and context ready');
 
     // Set canvas size
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Button handlers
-    const backBtn = document.getElementById('backBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    // Streamlit data handler
+    Streamlit.setFrameHeight(document.body.scrollHeight);
 
-    if (backBtn) backBtn.addEventListener('click', handleBack);
-    if (resetBtn) resetBtn.addEventListener('click', handleReset);
+    // Listen for data from Streamlit
+    window.parent.addEventListener('streamlit:render', () => {
+        const receivedData = Streamlit.getComponentValue();
+        if (receivedData && receivedData.data) {
+            hierarchyData = receivedData.data;
+            currentNode = 'TR';
+            navigationStack = ['TR'];
+            update();
+        }
+    });
+
+    // Button handlers
+    document.getElementById('backBtn').addEventListener('click', handleBack);
+    document.getElementById('resetBtn').addEventListener('click', handleReset);
 
     // Canvas interaction
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasMouseMove);
     canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
 
-    console.log('[FRACTAL] ✅ Event listeners attached');
-
-    // Initial render with injected data
-    if (typeof window.hierarchyDataInjected !== 'undefined') {
-        hierarchyData = window.hierarchyDataInjected;
-        console.log('[FRACTAL] ✅ Hierarchy data injected:', Object.keys(hierarchyData).length, 'nodes');
-        currentNode = 'TR';
-        navigationStack = ['TR'];
-        update();
-    } else {
-        console.warn('[FRACTAL] ⚠️  No hierarchy data injected yet');
-    }
+    // Initial render
+    update();
 });
 
 /**
@@ -88,65 +77,14 @@ window.addEventListener('load', () => {
  */
 function resizeCanvas() {
     const container = document.querySelector('.fractal-container');
-    if (!container) {
-        console.warn('[FRACTAL] Container not found for resize');
-        return;
-    }
+    canvasWidth = container.clientWidth || window.innerWidth;
+    canvasHeight = container.clientHeight || window.innerHeight;
 
-    canvasWidth = container.clientWidth || 800;
-    canvasHeight = container.clientHeight || 600;
-
-    if (canvas) {
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-    }
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
 
     centerX = canvasWidth / 2;
     centerY = canvasHeight / 2;
-
-    console.log('[FRACTAL] ✅ Canvas resized:', canvasWidth, 'x', canvasHeight);
-}
-
-// ==============================
-// UTILITY FUNCTIONS - LEVEL DETECTION
-// ==============================
-
-/**
- * Détecte si le nœud est au dernier niveau (mode sélection)
- *
- * HIÉRARCHIE:
- * - navigationStack[0] = 'TR' (Niveau 0 - Racine)
- * - navigationStack[1] = 'REVENUS'/'DEPENSES' (Niveau 1 - Types)
- * - navigationStack[2] = 'CAT_*' (Niveau 2 - Catégories) → SÉLECTION MODE
- * - navigationStack[3+] = 'SUBCAT_*' (Niveau 3+ - Sous-catégories) → SÉLECTION MODE
- *
- * currentLevel = navigationStack.length - 1
- * Donc : currentLevel >= 2 = Mode sélection ✓
- */
-function isLastLevel(node) {
-    const currentLevel = navigationStack.length - 1;
-    const nodeCode = currentNode;
-
-    console.log('[FRACTAL] ═══════════════════════════════════');
-    console.log('[FRACTAL] isLastLevel() Check:');
-    console.log('[FRACTAL]   navigationStack:', navigationStack);
-    console.log('[FRACTAL]   currentLevel:', currentLevel);
-    console.log('[FRACTAL]   currentNode:', nodeCode);
-    console.log('[FRACTAL]   node.children:', node?.children?.length || 0);
-
-    // Mode sélection au niveau 2+ (Catégories et Sous-catégories)
-    // Level 0 (TR) → Navigation
-    // Level 1 (REVENUS/DEPENSES) → Navigation
-    // Level 2+ (CAT_* and SUBCAT_*) → SÉLECTION
-    if (currentLevel >= 2) {
-        console.log('[FRACTAL] ✅ Niveau', currentLevel, '→ MODE SÉLECTION');
-        console.log('[FRACTAL] ═══════════════════════════════════');
-        return true;
-    }
-
-    console.log('[FRACTAL] ❌ Niveau', currentLevel, '→ MODE NAVIGATION');
-    console.log('[FRACTAL] ═══════════════════════════════════');
-    return false;
 }
 
 // ==============================
@@ -159,18 +97,11 @@ function isLastLevel(node) {
 function update() {
     if (animationInProgress) return;
 
-    console.log('[FRACTAL] 🔄 Update called for node:', currentNode);
-
     const node = hierarchyData[currentNode];
     if (!node) {
-        console.error('[FRACTAL] ❌ Node not found:', currentNode);
         renderErrorState();
         return;
     }
-
-    // Détecter si on est en mode sélection (dernier niveau)
-    isSelectionMode = isLastLevel(node);
-    console.log('[FRACTAL] Mode sélection:', isSelectionMode);
 
     // Update UI
     updateInfoPanel(node);
@@ -180,22 +111,12 @@ function update() {
 
     // Render triangles
     render(node);
-
-    // Envoyer l'état à Streamlit
-    sendSelectionToStreamlit();
 }
 
 /**
  * Render the current state
  */
 function render(node) {
-    if (!ctx || !canvas) {
-        console.error('[FRACTAL] ❌ Canvas context not available');
-        return;
-    }
-
-    console.log('[FRACTAL] 🎨 Rendering node:', node.code, 'with', (node.children || []).length, 'children');
-
     // Clear canvas
     ctx.fillStyle = 'rgba(15, 23, 42, 0.05)';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -203,7 +124,7 @@ function render(node) {
     // Get triangles for current level
     triangles = [];
 
-    const childCount = (node.children || []).length;
+    const childCount = node.children.length;
 
     if (childCount === 0) {
         // Leaf node - show message
@@ -228,8 +149,6 @@ function render(node) {
         triangles = getRenderManyTriangles(node);
     }
 
-    console.log('[FRACTAL] 🔺 Generated', triangles.length, 'triangles');
-
     // Draw all triangles
     triangles.forEach((tri, idx) => {
         const childCode = node.children[idx];
@@ -237,8 +156,6 @@ function render(node) {
 
         drawTriangle(tri, childNode, idx);
     });
-
-    console.log('[FRACTAL] ✅ Render complete');
 }
 
 // ==============================
@@ -464,10 +381,7 @@ function getRenderManyTriangles(node) {
 function drawTriangle(tri, nodeData, index) {
     const { p1, p2, p3 } = tri;
 
-    const isSelected = nodeData && selectedNodes.has(nodeData.code);
-    const isHovered = hoveredTriangle === index;
-
-    // Draw triangle
+    // Remplissage du triangle
     ctx.fillStyle = nodeData ? nodeData.color : '#6b7280';
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
@@ -476,52 +390,30 @@ function drawTriangle(tri, nodeData, index) {
     ctx.closePath();
     ctx.fill();
 
-    // Draw border (style différent si sélectionné)
-    if (isSelected) {
-        // Bordure brillante + glow pour sélection
-        ctx.strokeStyle = '#3b82f6';  // Bleu brillant
-        ctx.lineWidth = 4;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#3b82f6';
-    } else if (isHovered) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 0;
-    } else {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 1.5;
-        ctx.shadowBlur = 0;
-    }
+    // Bordure (fine et discrète)
+    ctx.strokeStyle = hoveredTriangle === index ?
+        'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = hoveredTriangle === index ? 3 : 2;
     ctx.stroke();
-    ctx.shadowBlur = 0;  // Reset shadow
 
-    // Draw label
+    // Contenu du triangle (emoji + label + montant)
     if (nodeData) {
         const centroidX = (p1.x + p2.x + p3.x) / 3;
         const centroidY = (p1.y + p2.y + p3.y) / 3;
 
-        // Checkmark si sélectionné
-        if (isSelected) {
-            ctx.fillStyle = '#3b82f6';
-            ctx.font = 'bold 20px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('✓', centroidX + 15, centroidY - 15);
-        }
-
-        // Emoji
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        // 1. Emoji (en haut)
         ctx.font = '24px sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(getCategoryEmoji(nodeData.label), centroidX, centroidY - 10);
+        ctx.fillText(getCategoryEmoji(nodeData.label), centroidX, centroidY - 15);
 
-        // Label
+        // 2. Label (au milieu)
         ctx.font = 'bold 12px sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.fillText(nodeData.label, centroidX, centroidY + 10);
 
-        // Amount
+        // 3. Montant (en bas)
         ctx.font = '11px monospace';
         ctx.fillStyle = 'rgba(16, 185, 129, 0.8)';
         const amount = nodeData.amount || nodeData.total;
@@ -534,7 +426,7 @@ function drawTriangle(tri, nodeData, index) {
 // ==============================
 
 /**
- * Handle canvas click - Navigation OU Sélection
+ * Handle canvas click
  */
 function handleCanvasClick(e) {
     if (animationInProgress) return;
@@ -543,59 +435,14 @@ function handleCanvasClick(e) {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    console.log('[FRACTAL] 🖱️ Click at:', clickX, clickY);
-
     // Find clicked triangle
     for (let i = 0; i < triangles.length; i++) {
         const tri = triangles[i];
         if (isPointInTriangle(clickX, clickY, tri)) {
-            const node = hierarchyData[currentNode];
-            const childCode = tri.code;
-            const childNode = hierarchyData[childCode];
-
-            console.log('[FRACTAL] ✅ Clicked triangle:', childCode);
-
-            if (!childNode) break;
-
-            // MODE SÉLECTION (dernier niveau)
-            if (isSelectionMode) {
-                console.log('[FRACTAL] Mode SÉLECTION - Toggle:', childCode);
-                toggleSelection(childCode);
-            }
-            // MODE NAVIGATION (niveaux supérieurs)
-            else if (childNode.children && childNode.children.length > 0) {
-                console.log('[FRACTAL] Mode NAVIGATION - Zoom:', childCode);
-                handleZoomIn(childCode);
-            } else {
-                console.log('[FRACTAL] Feuille sans enfants - Pas de navigation');
-            }
-
+            handleZoomIn(tri.code);
             return;
         }
     }
-
-    console.log('[FRACTAL] ⚠️  No triangle under click');
-}
-
-/**
- * Toggle selection d'un nœud
- */
-function toggleSelection(nodeCode) {
-    if (selectedNodes.has(nodeCode)) {
-        selectedNodes.delete(nodeCode);
-        console.log('[FRACTAL] 🔴 Désélectionné:', nodeCode);
-    } else {
-        selectedNodes.add(nodeCode);
-        console.log('[FRACTAL] 🟢 Sélectionné:', nodeCode);
-    }
-
-    console.log('[FRACTAL] Sélections actuelles:', Array.from(selectedNodes));
-
-    // Re-render pour afficher le changement
-    render(hierarchyData[currentNode]);
-
-    // Envoyer l'état à Streamlit
-    sendSelectionToStreamlit();
 }
 
 /**
@@ -624,7 +471,7 @@ function handleCanvasMouseMove(e) {
 
     // Show/hide tooltip
     const tooltip = document.getElementById('tooltip');
-    if (hoveredData && tooltip) {
+    if (hoveredData) {
         tooltip.style.display = 'block';
         tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
         tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
@@ -637,7 +484,7 @@ function handleCanvasMouseMove(e) {
             <div class="value">${formatCurrency(amount)}</div>
             <div class="percentage">${percentage.toFixed(1)}%</div>
         `;
-    } else if (tooltip) {
+    } else {
         tooltip.style.display = 'none';
     }
 
@@ -650,8 +497,7 @@ function handleCanvasMouseMove(e) {
  */
 function handleCanvasMouseLeave() {
     hoveredTriangle = null;
-    const tooltip = document.getElementById('tooltip');
-    if (tooltip) tooltip.style.display = 'none';
+    document.getElementById('tooltip').style.display = 'none';
     render(hierarchyData[currentNode]);
 }
 
@@ -660,8 +506,6 @@ function handleCanvasMouseLeave() {
  */
 async function handleZoomIn(targetCode) {
     if (!targetCode || animationInProgress) return;
-
-    console.log('[FRACTAL] 🔍 Zooming to:', targetCode);
 
     animationInProgress = true;
 
@@ -689,11 +533,6 @@ async function handleZoomIn(targetCode) {
     navigationStack.push(targetCode);
     currentNode = targetCode;
 
-    // ✅ NE PAS réinitialiser la sélection !
-    // Les filtres doivent rester actifs pour permettre le multi-filtrage
-    console.log('[FRACTAL] ✅ Navigation vers', targetCode);
-    console.log('[FRACTAL] 📌 Filtres conservés:', Array.from(selectedNodes));
-
     // Fade in new
     for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
         const progress = frame / FRAMES_PER_ANIMATION;
@@ -707,7 +546,15 @@ async function handleZoomIn(targetCode) {
 
     animationInProgress = false;
 
-    console.log('[FRACTAL] ✅ Zoom complete');
+    // Send event to Streamlit
+    Streamlit.setComponentValue({
+        action: 'zoom',
+        code: targetCode,
+        level: navigationStack.length,
+        timestamp: Date.now(),
+        current_node: targetNode
+    });
+
     update();
 }
 
@@ -717,14 +564,9 @@ async function handleZoomIn(targetCode) {
 function handleBack() {
     if (navigationStack.length <= 1 || animationInProgress) return;
 
-    console.log('[FRACTAL] ⏮️ Going back');
-
     animationInProgress = true;
     navigationStack.pop();
     currentNode = navigationStack[navigationStack.length - 1];
-
-    // ✅ CONSERVER LES SÉLECTIONS pour permettre le multi-filtrage
-    console.log('[FRACTAL] 📌 Filtres conservés:', Array.from(selectedNodes));
 
     // Simple fade effect
     const originalNode = hierarchyData[currentNode];
@@ -737,7 +579,15 @@ function handleBack() {
 
     animationInProgress = false;
 
-    console.log('[FRACTAL] ✅ Back complete');
+    // Send event
+    Streamlit.setComponentValue({
+        action: 'back',
+        code: currentNode,
+        level: navigationStack.length,
+        timestamp: Date.now(),
+        current_node: currentNode
+    });
+
     update();
 }
 
@@ -747,14 +597,8 @@ function handleBack() {
 function handleReset() {
     if (currentNode === 'TR' || animationInProgress) return;
 
-    console.log('[FRACTAL] 🏠 Resetting to root');
-
     navigationStack = ['TR'];
     currentNode = 'TR';
-
-    // Réinitialiser la sélection
-    selectedNodes.clear();
-    console.log('[FRACTAL] 🔄 Sélection réinitialisée');
 
     animationInProgress = true;
 
@@ -773,7 +617,14 @@ function handleReset() {
 
     animationInProgress = false;
 
-    console.log('[FRACTAL] ✅ Reset complete');
+    Streamlit.setComponentValue({
+        action: 'reset',
+        code: 'TR',
+        level: 0,
+        timestamp: Date.now(),
+        current_node: 'TR'
+    });
+
     update();
 }
 
@@ -804,8 +655,9 @@ function formatCurrency(amount) {
     return new Intl.NumberFormat('fr-FR', {
         style: 'currency',
         currency: 'EUR',
-        minimumFractionDigits: 0
-    }).format(amount);
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(Math.abs(amount));
 }
 
 /**
@@ -813,20 +665,46 @@ function formatCurrency(amount) {
  */
 function getCategoryEmoji(label) {
     const emojiMap = {
+        // Types principaux
         'Revenus': '💼',
         'Dépenses': '🛒',
+
+        // Catégories de revenus
         'Salaire': '💵',
         'Freelance': '🖥️',
         'Investissement': '📈',
+        'Autres revenus': '💰',
+
+        // Catégories de dépenses
         'Alimentation': '🍔',
+        'Supermarché': '🛒',
+        'Restaurant': '🍽️',
+        'Boulangerie': '🥖',
+
         'Transport': '🚗',
+        'Autoroute': '🛣️',
+        'Essence': '⛽',
+        'Stationnement': '🅿️',
+
         'Logement': '🏠',
+        'Loyer': '🏠',
+
         'Santé': '⚕️',
         'Loisirs': '🎮',
+
         'Factures': '📄',
+        'Abonnement': '📱',
+
         'Vêtements': '👕',
-        'Education': '📚'
+        'Education': '📚',
+        'Uca': '🎓',
+
+        'Banque': '🏦',
+        'Assurance': '🛡️',
+
+        'Divers': '📦'
     };
+
     return emojiMap[label] || '📁';
 }
 
@@ -846,21 +724,14 @@ function updateInfoPanel(node) {
     const categories = node.children ? node.children.length : 0;
     const zoom = (level / 3).toFixed(1);
 
-    const levelDisplay = document.getElementById('levelDisplay');
-    const totalDisplay = document.getElementById('totalDisplay');
-    const categoriesDisplay = document.getElementById('categoriesDisplay');
-    const zoomDisplay = document.getElementById('zoomDisplay');
-
-    if (levelDisplay) levelDisplay.textContent = level;
-    if (totalDisplay) totalDisplay.textContent = formatCurrency(total);
-    if (categoriesDisplay) categoriesDisplay.textContent = categories;
-    if (zoomDisplay) zoomDisplay.textContent = zoom + 'x';
+    document.getElementById('levelDisplay').textContent = level;
+    document.getElementById('totalDisplay').textContent = formatCurrency(total);
+    document.getElementById('categoriesDisplay').textContent = categories;
+    document.getElementById('zoomDisplay').textContent = zoom + 'x';
 
     // Update colors
-    if (levelDisplay) {
-        const levelColor = level === 1 ? '#10b981' : level === 2 ? '#f59e0b' : '#ef4444';
-        levelDisplay.style.color = levelColor;
-    }
+    const levelColor = level === 1 ? '#10b981' : level === 2 ? '#f59e0b' : '#ef4444';
+    document.getElementById('levelDisplay').style.color = levelColor;
 }
 
 /**
@@ -872,8 +743,7 @@ function updateBreadcrumb(node) {
         return n ? n.label : code;
     }).join(' → ');
 
-    const breadcrumbText = document.getElementById('breadcrumbText');
-    if (breadcrumbText) breadcrumbText.innerHTML = path;
+    document.getElementById('breadcrumbText').innerHTML = path;
 }
 
 /**
@@ -882,8 +752,7 @@ function updateBreadcrumb(node) {
 function updateZoomIndicator() {
     const level = navigationStack.length;
     const progress = (level / 3) * 100;
-    const zoomProgress = document.getElementById('zoomProgress');
-    if (zoomProgress) zoomProgress.style.width = progress + '%';
+    document.getElementById('zoomProgress').style.width = progress + '%';
 }
 
 /**
@@ -893,16 +762,14 @@ function updateControlButtons() {
     const backBtn = document.getElementById('backBtn');
     const resetBtn = document.getElementById('resetBtn');
 
-    if (backBtn) backBtn.disabled = navigationStack.length <= 1;
-    if (resetBtn) resetBtn.disabled = currentNode === 'TR';
+    backBtn.disabled = navigationStack.length <= 1;
+    resetBtn.disabled = currentNode === 'TR';
 }
 
 /**
  * Render error state
  */
 function renderErrorState() {
-    if (!ctx) return;
-
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -917,8 +784,6 @@ function renderErrorState() {
  * Render leaf node message
  */
 function renderLeafNodeMessage() {
-    if (!ctx) return;
-
     const node = hierarchyData[currentNode];
     const transactions = node.transactions || 0;
 
@@ -935,83 +800,4 @@ function renderLeafNodeMessage() {
     ctx.font = '16px sans-serif';
     ctx.fillText(`${transactions} transaction(s)`, centerX, centerY + 20);
     ctx.fillText(formatCurrency(node.amount || 0), centerX, centerY + 50);
-}
-
-/**
- * Synchroniser automatiquement l'URL quand on est au Niveau 3 avec sélections
- */
-function autoSyncURLAtLevel3() {
-    // Vérifier si on est au Niveau 3 (dernière profondeur)
-    if (navigationStack.length === 4 && selectedNodes.size > 0) {
-        console.log('[FRACTAL-AUTO-SYNC] ✅ Niveau 3 détecté avec sélections');
-        console.log('[FRACTAL-AUTO-SYNC] Sélections:', Array.from(selectedNodes));
-
-        try {
-            // Construire l'URL avec les sélections
-            const selections = Array.from(selectedNodes).join(',');
-            const newUrl = window.location.pathname + '?fractal_selections=' + encodeURIComponent(selections);
-
-            console.log('[FRACTAL-AUTO-SYNC] 🔄 Mise à jour automatique de l\'URL');
-            console.log('[FRACTAL-AUTO-SYNC] Nouvelle URL:', newUrl);
-
-            // Mettre à jour l'URL sans recharger la page
-            window.history.replaceState({}, '', newUrl);
-
-            console.log('[FRACTAL-AUTO-SYNC] ✅ URL synchronisée automatiquement');
-            console.log('[FRACTAL-AUTO-SYNC] Le tableau devrait maintenant être visible dans Streamlit');
-        } catch (e) {
-            console.log('[FRACTAL-AUTO-SYNC] ⚠️  Erreur lors de la sync URL:', e);
-        }
-    }
-}
-
-/**
- * Envoyer l'état de sélection à Streamlit
- */
-function sendSelectionToStreamlit() {
-    const state = {
-        action: isSelectionMode ? 'selection' : 'navigation',
-        currentNode: currentNode,
-        selectedNodes: Array.from(selectedNodes),
-        level: navigationStack.length,
-        isSelectionMode: isSelectionMode
-    };
-
-    console.log('[FRACTAL] 📤 Envoi à Streamlit:', state);
-
-    // Sauvegarder dans sessionStorage et localStorage pour que Streamlit puisse le lire
-    try {
-        window.sessionStorage.setItem('fractal_state_v6', JSON.stringify(state));
-        window.localStorage.setItem('fractal_state_v6', JSON.stringify(state));
-        console.log('[FRACTAL] ✅ État sauvegardé en storage');
-    } catch (e) {
-        console.log('[FRACTAL] ℹ️ Storage non disponible:', e);
-    }
-
-    // Essayer aussi postMessage pour communication avec parent
-    if (typeof window.parent !== 'undefined' && window.parent !== window) {
-        try {
-            window.parent.postMessage({
-                type: 'fractal_state',
-                data: state
-            }, '*');
-            console.log('[FRACTAL] 📨 postMessage envoyé');
-        } catch (e) {
-            console.log('[FRACTAL] ℹ️ postMessage non disponible');
-        }
-    }
-
-    // Trigger a custom event que Streamlit peut écouter
-    try {
-        const event = new CustomEvent('fractalStateChanged', {
-            detail: state
-        });
-        document.dispatchEvent(event);
-        console.log('[FRACTAL] 🔔 CustomEvent envoyé');
-    } catch (e) {
-        console.log('[FRACTAL] ℹ️ CustomEvent non disponible');
-    }
-
-    // AUTO-SYNC: Si on est au Niveau 3 avec sélections, synchroniser l'URL automatiquement
-    autoSyncURLAtLevel3();
 }
