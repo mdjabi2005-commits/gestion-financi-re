@@ -354,36 +354,48 @@ def _build_fractal_html(
             ctx.textBaseline = 'middle';
 
             // Positionnement adaptatif basé sur la taille du triangle
-            const emojiOffset = size * 0.4;
-            const labelOffset = size * 0.05;
-            const amountOffset = size * 0.5;
+            const emojiOffset = size * 0.35;
+            const labelOffset = size * 0.0;
+            const amountOffset = size * 0.45;
 
-            // 1. Emoji (en haut) - taille réduite pour petits triangles
-            const emojiFontSize = size > 50 ? 24 : 20;
+            // 1. Emoji (en haut) - taille augmentée
+            const emojiFontSize = size > 50 ? 32 : 28;
             ctx.font = emojiFontSize + 'px sans-serif';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
             ctx.fillText(data.emoji, x, y - emojiOffset);
 
-            // 2. Label (au milieu) - taille adaptée
-            const labelFontSize = size > 50 ? 12 : 10;
+            // 2. Label (au milieu) - taille plus grande et lisible
+            const labelFontSize = size > 50 ? 14 : 12;
             ctx.font = 'bold ' + labelFontSize + 'px Inter';
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fillText(data.label.substring(0, 12), x + 0.5, y + labelOffset + 2.5);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(data.label.substring(0, 12), x, y + labelOffset + 2);
 
-            // 3. Montant (en bas) avec cyan vibrant - taille adaptée
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            const amountFontSize = size > 50 ? 11 : 9;
+            // Shadow plus prononcé pour meilleur contraste
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillText(data.label.substring(0, 14), x + 1, y + labelOffset + 3.5);
+            ctx.fillText(data.label.substring(0, 14), x - 1, y + labelOffset + 3.5);
+            ctx.fillText(data.label.substring(0, 14), x, y + labelOffset + 4.5);
+
+            // Text principal blanc
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(data.label.substring(0, 14), x, y + labelOffset + 3);
+
+            // 3. Montant (en bas) avec cyan vibrant - taille augmentée
+            const amountFontSize = size > 50 ? 13 : 11;
             ctx.font = 'bold ' + amountFontSize + 'px Inter';
             const amt = new Intl.NumberFormat('fr-FR', {{
                 style: 'currency',
                 currency: 'EUR',
                 minimumFractionDigits: 0
             }}).format(Math.abs(data.amount));
-            ctx.fillText(amt, x + 0.5, y + amountOffset + 2.5);
+
+            // Shadow sombre pour le montant
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillText(amt, x + 1, y + amountOffset + 3.5);
+            ctx.fillText(amt, x - 1, y + amountOffset + 3.5);
+            ctx.fillText(amt, x, y + amountOffset + 4.5);
+
+            // Montant cyan vibrant
             ctx.fillStyle = '#22d3ee';
-            ctx.fillText(amt, x, y + amountOffset + 2);
+            ctx.fillText(amt, x, y + amountOffset + 3);
         }}
 
         function render() {{
