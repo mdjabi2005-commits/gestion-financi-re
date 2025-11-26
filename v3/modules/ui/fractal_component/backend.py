@@ -50,11 +50,16 @@ def fractal_navigation(
     node = hierarchy.get(current_node, {})
     children_codes = node.get('children', [])
 
+    # Get selected codes from session state
+    if 'fractal_selections' not in st.session_state:
+        st.session_state.fractal_selections = set()
+    selected_codes = st.session_state.fractal_selections
+
     # Créer un placeholder pour stocker les clics sur triangles
     triangle_click_placeholder = st.empty()
 
     # Render the triangle visualization (pure visual)
-    html_content = _build_fractal_html(hierarchy, current_node, children_codes, key)
+    html_content = _build_fractal_html(hierarchy, current_node, children_codes, key, selected_codes)
     component_response = components.html(html_content, height=650)
 
     st.markdown("---")
@@ -273,12 +278,16 @@ def _build_fractal_html(
     hierarchy: Dict[str, Any],
     current_node: str,
     children_codes: list,
-    component_key: str
+    component_key: str,
+    selected_codes: set = None
 ) -> str:
     """Build HTML/CSS/JS for fractal visualization (visual only)."""
 
     if not children_codes:
         return "<p style='color: #94a3b8; text-align: center; padding: 20px;'>Aucune sous-catégorie</p>"
+
+    if selected_codes is None:
+        selected_codes = set()
 
     # Prepare children data
     children_data = {}
@@ -303,6 +312,9 @@ def _build_fractal_html(
     for idx, child_code in enumerate(children_codes):
         button_key_map[child_code] = f"{component_key}_nav_{nav_stack_str}_{idx}_{child_code}"
 
+    # Convert selected_codes set to list for JSON serialization
+    selected_codes_list = list(selected_codes) if selected_codes else []
+
     return f"""
     <style>
         body, html {{ width: 100%; height: 100%; margin: 0; padding: 0; }}
@@ -317,6 +329,7 @@ def _build_fractal_html(
         const CHILDREN_DATA = {json.dumps(children_data)};
         const CHILDREN_CODES = {json.dumps(children_codes)};
         const POSITIONS = {json.dumps(positions)};
+        const SELECTED_CODES_FROM_PYTHON = {json.dumps(selected_codes_list)};
         const BUTTON_KEY_MAP = {json.dumps(button_key_map)};
 
         // Importer Streamlit pour communication - essayer plusieurs chemins
@@ -365,58 +378,9 @@ def _build_fractal_html(
         const longClickDuration = 1500; // 1.5 secondes
         const triangles = [];
 
-        // Fonction pour obtenir les codes des items sélectionnés depuis la page
-        function getSelectedCodes() {{
-            const selectedCodes = new Set();
-            try {{
-                const parentDoc = window.parent.document;
-
-                // Stratégie 1: Chercher les boutons avec X (suppression)
-                const allButtons = parentDoc.querySelectorAll('button');
-                for (let btn of allButtons) {{
-                    const text = (btn.innerText || btn.textContent || '').trim();
-                    // Si le bouton contient une croix X et du texte, c'est un élément sélectionné
-                    if (text.includes('×') || text.includes('X') || text.includes('⊗')) {{
-                        // Extraire le nom avant le X
-                        const parts = text.split(/[×X⊗]/);
-                        const selectedName = parts[0].trim();
-
-                        // Chercher le code correspondant
-                        for (const [code, data] of Object.entries(CHILDREN_DATA)) {{
-                            if (data.label === selectedName) {{
-                                selectedCodes.add(code);
-                            }}
-                        }}
-                    }}
-                }}
-
-                // Stratégie 2: Chercher dans tous les éléments du DOM pour les noms des filtres
-                if (selectedCodes.size === 0) {{
-                    const allElements = parentDoc.querySelectorAll('*');
-                    for (let elem of allElements) {{
-                        for (const [code, data] of Object.entries(CHILDREN_DATA)) {{
-                            // Chercher si le label apparaît dans le texte de cet élément
-                            if ((elem.textContent || '').includes(data.label)) {{
-                                // Vérifier que c'est dans la section "Filtres" (heuristique)
-                                const nearbyText = (elem.innerText || elem.textContent || '');
-                                if (nearbyText.includes(data.label) && nearbyText.length < 200) {{
-                                    selectedCodes.add(code);
-                                    break;
-                                }}
-                            }}
-                        }}
-                    }}
-                }}
-
-                console.log('Codes sélectionnés trouvés:', Array.from(selectedCodes));
-            }} catch (e) {{
-                console.warn('Erreur lecture filtres sélectionnés:', e.message);
-            }}
-            return selectedCodes;
-        }}
-
-        // Récupérer les items sélectionnés au démarrage
-        let selectedCodes = getSelectedCodes();
+        // Utiliser directement les codes sélectionnés passés par Python
+        let selectedCodes = new Set(SELECTED_CODES_FROM_PYTHON);
+        console.log('Codes sélectionnés depuis Python:', Array.from(selectedCodes));
 
         function drawTriangle(x, y, size, data, isHovered, isHeld, isSelected) {{
             // Gradient principal avec direction verticale - utiliser la couleur de la catégorie
@@ -567,9 +531,6 @@ def _build_fractal_html(
             grad.addColorStop(1, '#1a1f3a');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Rafraîchir la liste des codes sélectionnés
-            selectedCodes = getSelectedCodes();
 
             // Draw triangles
             CHILDREN_CODES.forEach((code, idx) => {{
