@@ -55,40 +55,65 @@ def fractal_navigation(
 
     # Render the triangle visualization (pure visual)
     html_content = _build_fractal_html(hierarchy, current_node, children_codes, key)
-    triangle_click = components.html(html_content, height=650)
+    component_response = components.html(html_content, height=650)
 
     st.markdown("---")
 
-    # Gérer les clics sur les triangles depuis le component HTML
-    if triangle_click:
-        if isinstance(triangle_click, dict) and triangle_click.get('type') == 'triangle_click':
-            clicked_code = triangle_click.get('code')
-            clicked_label = triangle_click.get('label')
+    # Initialize long-click storage in session state
+    if 'fractal_long_clicks' not in st.session_state:
+        st.session_state.fractal_long_clicks = []
 
-            if clicked_code:
-                print(f"📍 Triangle cliqué: {clicked_label} (Code: {clicked_code})")
+    # Gérer les réponses du component (clics normaux ou long-clicks)
+    if component_response:
+        if isinstance(component_response, dict):
+            if component_response.get('type') == 'FRACTAL_LONG_CLICK':
+                # Long-click handling
+                long_click_data = {
+                    'code': component_response.get('code'),
+                    'label': component_response.get('label'),
+                    'timestamp': component_response.get('timestamp')
+                }
 
-                # Trouver le nœud correspondant
-                clicked_node = hierarchy.get(clicked_code, {})
-                has_children = len(clicked_node.get('children', [])) > 0
+                # Avoid duplicates (same item clicked within 1 second)
+                is_duplicate = any(
+                    item['code'] == long_click_data['code'] and
+                    abs(item['timestamp'] - long_click_data['timestamp']) < 1000
+                    for item in st.session_state.fractal_long_clicks
+                )
 
-                if has_children:
-                    # Navigation : zoomer dans cette catégorie
-                    nav_stack.append(clicked_code)
-                    st.session_state[f'{key}_current_node'] = clicked_code
-                    st.session_state[f'{key}_nav_stack'] = nav_stack
-                    st.rerun()
-                else:
-                    # Sélection au dernier niveau : ajouter aux filtres
-                    if 'fractal_selections' not in st.session_state:
-                        st.session_state.fractal_selections = set()
+                if not is_duplicate:
+                    st.session_state.fractal_long_clicks.append(long_click_data)
+                    print(f"📋 Long-click ajouté: {long_click_data['label']}")
 
-                    if clicked_code in st.session_state.fractal_selections:
-                        st.session_state.fractal_selections.discard(clicked_code)
+            elif component_response.get('type') == 'triangle_click':
+                # Normal click handling (from old code)
+                clicked_code = component_response.get('code')
+                clicked_label = component_response.get('label')
+
+                if clicked_code:
+                    print(f"📍 Triangle cliqué: {clicked_label} (Code: {clicked_code})")
+
+                    # Trouver le nœud correspondant
+                    clicked_node = hierarchy.get(clicked_code, {})
+                    has_children = len(clicked_node.get('children', [])) > 0
+
+                    if has_children:
+                        # Navigation : zoomer dans cette catégorie
+                        nav_stack.append(clicked_code)
+                        st.session_state[f'{key}_current_node'] = clicked_code
+                        st.session_state[f'{key}_nav_stack'] = nav_stack
+                        st.rerun()
                     else:
-                        st.session_state.fractal_selections.add(clicked_code)
+                        # Sélection au dernier niveau : ajouter aux filtres
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
 
-                    st.rerun()
+                        if clicked_code in st.session_state.fractal_selections:
+                            st.session_state.fractal_selections.discard(clicked_code)
+                        else:
+                            st.session_state.fractal_selections.add(clicked_code)
+
+                        st.rerun()
 
     # Navigation buttons
     col1, col2 = st.columns([1, 1])
@@ -108,6 +133,33 @@ def fractal_navigation(
                 st.session_state[f'{key}_current_node'] = 'TR'
                 st.session_state[f'{key}_nav_stack'] = ['TR']
                 st.rerun()
+
+    st.markdown("---")
+
+    # Display long-click table
+    st.markdown("**Catégories ajoutées (long-click):**")
+
+    # Create a container for long-click display
+    long_click_container = st.container()
+
+    with long_click_container:
+        if st.session_state.fractal_long_clicks:
+            import pandas as pd
+            df_selections = pd.DataFrame([
+                {
+                    'Catégorie': item['label'],
+                    'Temps': pd.Timestamp(item['timestamp'], unit='ms').strftime('%H:%M:%S'),
+                    'Code': item['code']
+                }
+                for item in st.session_state.fractal_long_clicks
+            ])
+            st.dataframe(df_selections, use_container_width=True)
+
+            if st.button("🗑️ Effacer la table", key=f"{key}_clear_long_clicks"):
+                st.session_state.fractal_long_clicks = []
+                st.rerun()
+        else:
+            st.info("⏱️ Appuyez 3 secondes sur une catégorie pour l'ajouter ici")
 
     st.markdown("---")
 
@@ -357,13 +409,22 @@ def _build_fractal_html(
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
         let hoveredIdx = null;
+        let heldTriangleIdx = null;
+        let longClickTimer = null;
+        let mouseDownTime = null;
+        const longClickDuration = 3000; // 3 secondes
         const triangles = [];
 
-        function drawTriangle(x, y, size, data, isHovered) {{
+        function drawTriangle(x, y, size, data, isHovered, isHeld) {{
             // Gradient principal avec direction verticale - utiliser la couleur de la catégorie
             const grad = ctx.createLinearGradient(x, y - size - 5, x, y + size + 5);
 
-            if (isHovered) {{
+            if (isHeld) {{
+                // Long-click held: version brillante et saturée (cyan/turquoise)
+                grad.addColorStop(0, '#06b6d4');
+                grad.addColorStop(0.5, '#0891b2');
+                grad.addColorStop(1, '#0d9488');
+            }} else if (isHovered) {{
                 // Hover: version plus claire et saturée de la couleur
                 const baseColor = data.color || '#fbbf24';
                 grad.addColorStop(0, baseColor);
@@ -388,7 +449,21 @@ def _build_fractal_html(
             ctx.fill();
 
             // Draw border avec effet plus prononcé
-            if (isHovered) {{
+            if (isHeld) {{
+                // Border glow effect on long-click held
+                ctx.strokeStyle = 'rgba(6, 182, 212, 0.9)';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size, y + size);
+                ctx.lineTo(x + size, y + size);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Inner border - cyan bright
+                ctx.strokeStyle = '#22d3ee';
+                ctx.lineWidth = 2;
+            }} else if (isHovered) {{
                 // Border glow effect on hover
                 ctx.strokeStyle = 'rgba(244, 63, 94, 0.8)';
                 ctx.lineWidth = 4;
@@ -479,8 +554,9 @@ def _build_fractal_html(
                 const size = pos.size;
                 const data = CHILDREN_DATA[code];
                 const isHovered = hoveredIdx === idx;
+                const isHeld = heldTriangleIdx === idx;
 
-                drawTriangle(x, y, size, data, isHovered);
+                drawTriangle(x, y, size, data, isHovered, isHeld);
             }});
         }}
 
@@ -523,64 +599,118 @@ def _build_fractal_html(
 
         canvas.addEventListener('mouseleave', () => {{
             hoveredIdx = null;
+            if (heldTriangleIdx !== null) {{
+                // Annuler le long-click si la souris quitte le canvas
+                clearTimeout(longClickTimer);
+                heldTriangleIdx = null;
+            }}
             canvas.style.cursor = 'default';
             render();
         }});
 
-        canvas.addEventListener('click', (e) => {{
+        // Long-click detection: mousedown starts the timer
+        canvas.addEventListener('mousedown', (e) => {{
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            let clickedIdx = -1;
+            let pressedIdx = -1;
             CHILDREN_CODES.forEach((code, idx) => {{
                 const pos = POSITIONS[idx];
                 const tx = centerX + pos.x;
                 const ty = centerY + pos.y;
                 if (isInTriangle(x, y, tx, ty, pos.size)) {{
-                    clickedIdx = idx;
+                    pressedIdx = idx;
                 }}
             }});
 
-            // Si un triangle a été cliqué, chercher et cliquer le bouton correspondant
-            if (clickedIdx >= 0) {{
-                const clickedCode = CHILDREN_CODES[clickedIdx];
-                const clickedLabel = CHILDREN_DATA[clickedCode].label;
+            // Si on appuie sur un triangle, démarrer le timer de 3 secondes
+            if (pressedIdx >= 0) {{
+                mouseDownTime = Date.now();
+                heldTriangleIdx = pressedIdx;
 
-                console.log('✅ Triangle cliqué:', clickedLabel, '(Code:', clickedCode, ')');
+                longClickTimer = setTimeout(() => {{
+                    // 3 secondes écoulées: long-click activé
+                    const heldCode = CHILDREN_CODES[heldTriangleIdx];
+                    const heldLabel = CHILDREN_DATA[heldCode].label;
 
-                // Chercher le bouton dans le parent document (Streamlit)
-                try {{
-                    let button = null;
-                    let parentDoc = window.parent.document;
+                    console.log('⏱️ Long-click détecté (3s):', heldLabel);
+                    console.log('📋 Ajout à la table:', heldLabel);
 
-                    // Stratégie 1: Chercher par le texte visible dans les boutons du parent
-                    const allButtons = parentDoc.querySelectorAll('button');
-                    console.log('🔍 Boutons trouvés dans parent:', allButtons.length);
-
-                    for (let btn of allButtons) {{
-                        const btnText = (btn.innerText || btn.textContent || '').trim();
-                        console.log('  → Bouton: ' + btnText);
-
-                        // Chercher une correspondance du label (avec ou sans le montant)
-                        if (btnText.includes(clickedLabel)) {{
-                            button = btn;
-                            console.log('✅ Bouton trouvé:', btnText);
-                            break;
+                    // Envoyer le long-click via Streamlit setComponentValue
+                    if (Streamlit) {{
+                        try {{
+                            Streamlit.setComponentValue({{
+                                type: 'FRACTAL_LONG_CLICK',
+                                code: heldCode,
+                                label: heldLabel,
+                                timestamp: Date.now()
+                            }});
+                            console.log('✅ Long-click envoyé via Streamlit');
+                        }} catch (e) {{
+                            console.error('❌ Erreur Streamlit:', e.message);
+                        }}
+                    }} else {{
+                        // Fallback: utiliser postMessage
+                        try {{
+                            window.parent.postMessage({{
+                                type: 'FRACTAL_LONG_CLICK',
+                                code: heldCode,
+                                label: heldLabel,
+                                timestamp: Date.now()
+                            }}, '*');
+                            console.log('✅ Message long-click envoyé via postMessage');
+                        }} catch (e) {{
+                            console.error('❌ Erreur postMessage:', e.message);
                         }}
                     }}
+                }}, longClickDuration);
 
-                    // Si trouvé, cliquer le bouton
-                    if (button) {{
-                        console.log('🖱️ Clic sur le bouton: ' + clickedLabel);
-                        button.click();
-                    }} else {{
-                        console.error('❌ Bouton NON trouvé pour:', clickedLabel);
+                render();
+            }}
+        }});
+
+        // Mouseup: cancel long-click if released before 3 seconds (normal click)
+        canvas.addEventListener('mouseup', (e) => {{
+            if (longClickTimer) {{
+                clearTimeout(longClickTimer);
+                longClickTimer = null;
+
+                // Si le long-click n'a pas complété (< 3 secondes), faire un clic normal
+                const elapsedTime = Date.now() - mouseDownTime;
+                if (elapsedTime < longClickDuration && heldTriangleIdx >= 0) {{
+                    // Clic normal: cliquer le bouton Streamlit
+                    const clickedIdx = heldTriangleIdx;
+                    const clickedCode = CHILDREN_CODES[clickedIdx];
+                    const clickedLabel = CHILDREN_DATA[clickedCode].label;
+
+                    console.log('✅ Triangle cliqué (clic normal):', clickedLabel, '(Code:', clickedCode, ')');
+
+                    try {{
+                        let button = null;
+                        let parentDoc = window.parent.document;
+                        const allButtons = parentDoc.querySelectorAll('button');
+
+                        for (let btn of allButtons) {{
+                            const btnText = (btn.innerText || btn.textContent || '').trim();
+                            if (btnText.includes(clickedLabel)) {{
+                                button = btn;
+                                break;
+                            }}
+                        }}
+
+                        if (button) {{
+                            console.log('🖱️ Clic sur le bouton:', clickedLabel);
+                            button.click();
+                        }}
+                    }} catch (e) {{
+                        console.error('❌ Erreur lors du clic:', e.message);
                     }}
-                }} catch (e) {{
-                    console.error('❌ Erreur lors du clic:', e.message);
                 }}
             }}
+
+            heldTriangleIdx = null;
+            render();
         }});
 
         render();
