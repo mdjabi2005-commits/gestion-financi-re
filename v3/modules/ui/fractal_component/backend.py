@@ -499,9 +499,12 @@ def _get_triangle_positions(num_children: int, canvas_width: int, canvas_height:
         # Taille réduite adaptée au nombre de catégories
         base_size = max(35, 60 - (num_children * 1.5))
 
-        # Rayon adaptatif : plus grand rayon pour plus de catégories
-        # Pour 11 catégories : radius = 180-200
-        radius = min(200, 120 + (num_children * 5))
+        # Rayon adaptatif : AUGMENTÉ pour utiliser plus d'espace
+        # Formule: radius = 140 + (num_children * 8)
+        # Pour 11 catégories : radius = 140 + 88 = 228px (remplissage meilleur)
+        # Pour 7 catégories : radius = 140 + 56 = 196px
+        # Pour 5 catégories : radius = 140 + 40 = 180px
+        radius = 140 + (num_children * 8)
 
         angle_step = 2 * math.pi / num_children
         for i in range(num_children):
