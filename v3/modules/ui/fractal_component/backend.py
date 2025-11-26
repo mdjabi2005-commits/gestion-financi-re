@@ -140,7 +140,11 @@ def fractal_navigation(
             # Create unique key
             unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
 
-            # Button to navigate or select
+            # Button to navigate or select (HIDDEN - only for JavaScript to find)
+            st.markdown(
+                "<div style='display: none;' data-testid='hidden-nav-button'>",
+                unsafe_allow_html=True
+            )
             if st.button(btn_text, key=unique_key, use_container_width=True):
                 if has_children:
                     # Navigate deeper
@@ -167,6 +171,7 @@ def fractal_navigation(
                         else:
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # Add hidden filter button for long-click (not displayed, just for JavaScript to find)
             child_level = child_node.get('level', 0)
