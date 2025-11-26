@@ -370,9 +370,9 @@ def _build_fractal_html(
             const selectedCodes = new Set();
             try {{
                 const parentDoc = window.parent.document;
-                // Chercher tous les éléments avec un X de suppression (items sélectionnés)
-                const allButtons = parentDoc.querySelectorAll('button');
 
+                // Stratégie 1: Chercher les boutons avec X (suppression)
+                const allButtons = parentDoc.querySelectorAll('button');
                 for (let btn of allButtons) {{
                     const text = (btn.innerText || btn.textContent || '').trim();
                     // Si le bouton contient une croix X et du texte, c'est un élément sélectionné
@@ -381,11 +381,28 @@ def _build_fractal_html(
                         const parts = text.split(/[×X⊗]/);
                         const selectedName = parts[0].trim();
 
-                        // Chercher tous les codes des enfants qui correspondent à ce nom
-                        // On parcourt CHILDREN_DATA pour trouver quel code a ce label
+                        // Chercher le code correspondant
                         for (const [code, data] of Object.entries(CHILDREN_DATA)) {{
                             if (data.label === selectedName) {{
                                 selectedCodes.add(code);
+                            }}
+                        }}
+                    }}
+                }}
+
+                // Stratégie 2: Chercher dans tous les éléments du DOM pour les noms des filtres
+                if (selectedCodes.size === 0) {{
+                    const allElements = parentDoc.querySelectorAll('*');
+                    for (let elem of allElements) {{
+                        for (const [code, data] of Object.entries(CHILDREN_DATA)) {{
+                            // Chercher si le label apparaît dans le texte de cet élément
+                            if ((elem.textContent || '').includes(data.label)) {{
+                                // Vérifier que c'est dans la section "Filtres" (heuristique)
+                                const nearbyText = (elem.innerText || elem.textContent || '');
+                                if (nearbyText.includes(data.label) && nearbyText.length < 200) {{
+                                    selectedCodes.add(code);
+                                    break;
+                                }}
                             }}
                         }}
                     }}
