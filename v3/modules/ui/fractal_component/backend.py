@@ -305,29 +305,37 @@ def _build_fractal_html(
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // 1. Emoji (en haut)
-            ctx.font = '24px sans-serif';
+            // Positionnement adaptatif basé sur la taille du triangle
+            const emojiOffset = size * 0.4;
+            const labelOffset = size * 0.05;
+            const amountOffset = size * 0.5;
+
+            // 1. Emoji (en haut) - taille réduite pour petits triangles
+            const emojiFontSize = size > 50 ? 24 : 20;
+            ctx.font = emojiFontSize + 'px sans-serif';
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.fillText(data.emoji, x, y - 12);
+            ctx.fillText(data.emoji, x, y - emojiOffset);
 
-            // 2. Label (au milieu)
-            ctx.font = 'bold 12px Inter';
+            // 2. Label (au milieu) - taille adaptée
+            const labelFontSize = size > 50 ? 12 : 10;
+            ctx.font = 'bold ' + labelFontSize + 'px Inter';
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fillText(data.label.substring(0, 14), x + 0.5, y + 2.5);
+            ctx.fillText(data.label.substring(0, 12), x + 0.5, y + labelOffset + 2.5);
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(data.label.substring(0, 14), x, y + 2);
+            ctx.fillText(data.label.substring(0, 12), x, y + labelOffset + 2);
 
-            // 3. Montant (en bas) avec cyan vibrant
+            // 3. Montant (en bas) avec cyan vibrant - taille adaptée
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.font = 'bold 11px Inter';
+            const amountFontSize = size > 50 ? 11 : 9;
+            ctx.font = 'bold ' + amountFontSize + 'px Inter';
             const amt = new Intl.NumberFormat('fr-FR', {{
                 style: 'currency',
                 currency: 'EUR',
                 minimumFractionDigits: 0
             }}).format(Math.abs(data.amount));
-            ctx.fillText(amt, x + 0.5, y + 13.5);
+            ctx.fillText(amt, x + 0.5, y + amountOffset + 2.5);
             ctx.fillStyle = '#22d3ee';
-            ctx.fillText(amt, x, y + 13);
+            ctx.fillText(amt, x, y + amountOffset + 2);
         }}
 
         function render() {{
@@ -405,26 +413,36 @@ def _get_triangle_positions(num_children: int, canvas_width: int, canvas_height:
     import math
 
     positions = []
-    base_size = 55
 
     if num_children == 1:
+        base_size = 55
         positions.append({'x': 0, 'y': 0, 'size': base_size})
     elif num_children == 2:
+        base_size = 55
         spacing = 100
         positions.append({'x': -spacing, 'y': 0, 'size': base_size})
         positions.append({'x': spacing, 'y': 0, 'size': base_size})
     elif num_children == 3:
+        base_size = 55
         positions.append({'x': 0, 'y': -80, 'size': base_size})
         positions.append({'x': -80, 'y': 60, 'size': base_size})
         positions.append({'x': 80, 'y': 60, 'size': base_size})
     elif num_children == 4:
+        base_size = 55
         spacing = 100
         positions.append({'x': 0, 'y': -spacing, 'size': base_size})
         positions.append({'x': spacing, 'y': 0, 'size': base_size})
         positions.append({'x': 0, 'y': spacing, 'size': base_size})
         positions.append({'x': -spacing, 'y': 0, 'size': base_size})
     else:
-        radius = 130 if num_children <= 6 else 140
+        # Pour 5+ catégories, adapter taille et rayon
+        # Taille réduite adaptée au nombre de catégories
+        base_size = max(35, 60 - (num_children * 1.5))
+
+        # Rayon adaptatif : plus grand rayon pour plus de catégories
+        # Pour 11 catégories : radius = 180-200
+        radius = min(200, 120 + (num_children * 5))
+
         angle_step = 2 * math.pi / num_children
         for i in range(num_children):
             angle = (i * angle_step) - (math.pi / 2)
