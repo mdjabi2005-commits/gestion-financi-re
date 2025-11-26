@@ -168,20 +168,6 @@ def fractal_navigation(
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
 
-            # Add filter button for categories
-            child_level = child_node.get('level', 0)
-            if child_level == 2 and has_children:
-                nav_depth = '_'.join(nav_stack)
-                add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
-                if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
-                    if 'fractal_selections' not in st.session_state:
-                        st.session_state.fractal_selections = set()
-
-                    if child_code in st.session_state.fractal_selections:
-                        st.warning(f"{child_label} est déjà sélectionnée")
-                    else:
-                        st.session_state.fractal_selections.add(child_code)
-                        st.rerun()
 
 
 def _get_category_emoji(label: str) -> str:
