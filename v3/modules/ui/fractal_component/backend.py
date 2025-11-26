@@ -143,6 +143,52 @@ def fractal_navigation(
                         st.rerun()
 
 
+def _get_category_emoji(label: str) -> str:
+    """Get emoji for category label."""
+    emoji_map = {
+        # Types principaux
+        'Revenus': '💼',
+        'Dépenses': '🛒',
+
+        # Catégories de revenus
+        'Salaire': '💵',
+        'Freelance': '🖥️',
+        'Investissement': '📈',
+        'Autres revenus': '💰',
+
+        # Catégories de dépenses
+        'Alimentation': '🍔',
+        'Supermarché': '🛒',
+        'Restaurant': '🍽️',
+        'Boulangerie': '🥖',
+
+        'Transport': '🚗',
+        'Autoroute': '🛣️',
+        'Essence': '⛽',
+        'Stationnement': '🅿️',
+
+        'Logement': '🏠',
+        'Loyer': '🏠',
+
+        'Santé': '⚕️',
+        'Loisirs': '🎮',
+
+        'Factures': '📄',
+        'Abonnement': '📱',
+
+        'Vêtements': '👕',
+        'Education': '📚',
+        'Uca': '🎓',
+
+        'Banque': '🏦',
+        'Assurance': '🛡️',
+
+        'Divers': '📦'
+    }
+
+    return emoji_map.get(label, '📁')
+
+
 def _build_fractal_html(
     hierarchy: Dict[str, Any],
     current_node: str,
@@ -158,8 +204,10 @@ def _build_fractal_html(
     children_data = {}
     for child_code in children_codes:
         child_node = hierarchy.get(child_code, {})
+        label = child_node.get('label', child_code)
         children_data[child_code] = {
-            'label': child_node.get('label', child_code),
+            'label': label,
+            'emoji': _get_category_emoji(label),
             'amount': child_node.get('amount') or child_node.get('total') or 0,
             'has_children': len(child_node.get('children', [])) > 0,
         }
@@ -253,29 +301,33 @@ def _build_fractal_html(
             ctx.closePath();
             ctx.stroke();
 
-            // Draw label avec meilleure visibilité
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 12px Inter';
+            // Text setup
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Shadow pour meilleure lisibilité
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.fillText(data.label.substring(0, 14), x + 0.5, y - 4.5);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(data.label.substring(0, 14), x, y - 5);
+            // 1. Emoji (en haut)
+            ctx.font = '24px sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillText(data.emoji, x, y - 12);
 
-            // Draw amount avec cyan vibrant
+            // 2. Label (au milieu)
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillText(data.label.substring(0, 14), x + 0.5, y + 2.5);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(data.label.substring(0, 14), x, y + 2);
+
+            // 3. Montant (en bas) avec cyan vibrant
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
             ctx.font = 'bold 11px Inter';
             const amt = new Intl.NumberFormat('fr-FR', {{
                 style: 'currency',
                 currency: 'EUR',
-                minimumFractionDigits: 2
+                minimumFractionDigits: 0
             }}).format(Math.abs(data.amount));
-            ctx.fillText(amt, x + 0.5, y + 10.5);
+            ctx.fillText(amt, x + 0.5, y + 13.5);
             ctx.fillStyle = '#22d3ee';
-            ctx.fillText(amt, x, y + 10);
+            ctx.fillText(amt, x, y + 13);
         }}
 
         function render() {{
