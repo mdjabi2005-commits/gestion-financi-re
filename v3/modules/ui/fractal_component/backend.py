@@ -59,33 +59,10 @@ def fractal_navigation(
 
     st.markdown("---")
 
-    # Initialize long-click storage in session state
-    if 'fractal_long_clicks' not in st.session_state:
-        st.session_state.fractal_long_clicks = []
-
-    # Gérer les réponses du component (clics normaux ou long-clicks)
+    # Gérer les réponses du component (clics normaux)
     if component_response:
         if isinstance(component_response, dict):
-            if component_response.get('type') == 'FRACTAL_LONG_CLICK':
-                # Long-click handling
-                long_click_data = {
-                    'code': component_response.get('code'),
-                    'label': component_response.get('label'),
-                    'timestamp': component_response.get('timestamp')
-                }
-
-                # Avoid duplicates (same item clicked within 1 second)
-                is_duplicate = any(
-                    item['code'] == long_click_data['code'] and
-                    abs(item['timestamp'] - long_click_data['timestamp']) < 1000
-                    for item in st.session_state.fractal_long_clicks
-                )
-
-                if not is_duplicate:
-                    st.session_state.fractal_long_clicks.append(long_click_data)
-                    print(f"📋 Long-click ajouté: {long_click_data['label']}")
-
-            elif component_response.get('type') == 'triangle_click':
+            if component_response.get('type') == 'triangle_click':
                 # Normal click handling (from old code)
                 clicked_code = component_response.get('code')
                 clicked_label = component_response.get('label')
@@ -133,33 +110,6 @@ def fractal_navigation(
                 st.session_state[f'{key}_current_node'] = 'TR'
                 st.session_state[f'{key}_nav_stack'] = ['TR']
                 st.rerun()
-
-    st.markdown("---")
-
-    # Display long-click table
-    st.markdown("**Catégories ajoutées (long-click):**")
-
-    # Create a container for long-click display
-    long_click_container = st.container()
-
-    with long_click_container:
-        if st.session_state.fractal_long_clicks:
-            import pandas as pd
-            df_selections = pd.DataFrame([
-                {
-                    'Catégorie': item['label'],
-                    'Temps': pd.Timestamp(item['timestamp'], unit='ms').strftime('%H:%M:%S'),
-                    'Code': item['code']
-                }
-                for item in st.session_state.fractal_long_clicks
-            ])
-            st.dataframe(df_selections, use_container_width=True)
-
-            if st.button("🗑️ Effacer la table", key=f"{key}_clear_long_clicks"):
-                st.session_state.fractal_long_clicks = []
-                st.rerun()
-        else:
-            st.info("⏱️ Appuyez 3 secondes sur une catégorie pour l'ajouter ici")
 
     st.markdown("---")
 
@@ -635,34 +585,31 @@ def _build_fractal_html(
                     const heldLabel = CHILDREN_DATA[heldCode].label;
 
                     console.log('⏱️ Long-click détecté (3s):', heldLabel);
-                    console.log('📋 Ajout à la table:', heldLabel);
+                    console.log('📋 Clic long-click sur bouton:', heldLabel);
 
-                    // Envoyer le long-click via Streamlit setComponentValue
-                    if (Streamlit) {{
-                        try {{
-                            Streamlit.setComponentValue({{
-                                type: 'FRACTAL_LONG_CLICK',
-                                code: heldCode,
-                                label: heldLabel,
-                                timestamp: Date.now()
-                            }});
-                            console.log('✅ Long-click envoyé via Streamlit');
-                        }} catch (e) {{
-                            console.error('❌ Erreur Streamlit:', e.message);
+                    // Chercher le bouton "Ajouter le filtre" pour ce label
+                    try {{
+                        let button = null;
+                        let parentDoc = window.parent.document;
+                        const allButtons = parentDoc.querySelectorAll('button');
+
+                        for (let btn of allButtons) {{
+                            const btnText = (btn.innerText || btn.textContent || '').trim();
+                            // Chercher le bouton "Ajouter le filtre" avec ce label
+                            if (btnText.includes('Ajouter le filtre') && btnText.includes(heldLabel)) {{
+                                button = btn;
+                                break;
+                            }}
                         }}
-                    }} else {{
-                        // Fallback: utiliser postMessage
-                        try {{
-                            window.parent.postMessage({{
-                                type: 'FRACTAL_LONG_CLICK',
-                                code: heldCode,
-                                label: heldLabel,
-                                timestamp: Date.now()
-                            }}, '*');
-                            console.log('✅ Message long-click envoyé via postMessage');
-                        }} catch (e) {{
-                            console.error('❌ Erreur postMessage:', e.message);
+
+                        if (button) {{
+                            console.log('✅ Bouton "Ajouter le filtre" trouvé pour:', heldLabel);
+                            button.click();
+                        }} else {{
+                            console.warn('⚠️ Bouton "Ajouter le filtre" NON trouvé pour:', heldLabel);
                         }}
+                    }} catch (e) {{
+                        console.error('❌ Erreur lors du long-click:', e.message);
                     }}
                 }}, longClickDuration);
 
