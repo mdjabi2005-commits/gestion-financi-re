@@ -52,9 +52,40 @@ def fractal_navigation(
 
     # Render the triangle visualization (pure visual)
     html_content = _build_fractal_html(hierarchy, current_node, children_codes, key)
-    components.html(html_content, height=650)
+    triangle_click = components.html(html_content, height=650)
 
     st.markdown("---")
+
+    # Gérer les clics sur les triangles depuis le component HTML
+    if triangle_click:
+        if isinstance(triangle_click, dict) and triangle_click.get('type') == 'triangle_click':
+            clicked_code = triangle_click.get('code')
+            clicked_label = triangle_click.get('label')
+
+            if clicked_code:
+                print(f"📍 Triangle cliqué: {clicked_label} (Code: {clicked_code})")
+
+                # Trouver le nœud correspondant
+                clicked_node = hierarchy.get(clicked_code, {})
+                has_children = len(clicked_node.get('children', [])) > 0
+
+                if has_children:
+                    # Navigation : zoomer dans cette catégorie
+                    nav_stack.append(clicked_code)
+                    st.session_state[f'{key}_current_node'] = clicked_code
+                    st.session_state[f'{key}_nav_stack'] = nav_stack
+                    st.rerun()
+                else:
+                    # Sélection au dernier niveau : ajouter aux filtres
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
+
+                    if clicked_code in st.session_state.fractal_selections:
+                        st.session_state.fractal_selections.discard(clicked_code)
+                    else:
+                        st.session_state.fractal_selections.add(clicked_code)
+
+                    st.rerun()
 
     # Navigation buttons
     col1, col2 = st.columns([1, 1])
@@ -486,59 +517,28 @@ def _build_fractal_html(
                 }}
             }});
 
-            // Si un triangle a été cliqué, chercher et cliquer le bouton correspondant
+            // Si un triangle a été cliqué, envoyer l'information à Streamlit
             if (clickedIdx >= 0) {{
                 const clickedCode = CHILDREN_CODES[clickedIdx];
                 const clickedLabel = CHILDREN_DATA[clickedCode].label;
-                const clickedData = CHILDREN_DATA[clickedCode];
 
-                console.log('Triangle cliqué:', clickedLabel, '| Index:', clickedIdx);
+                console.log('✅ Triangle cliqué:', clickedLabel, '(Code:', clickedCode, ')');
 
-                // Attendre un peu pour laisser le DOM se stabiliser
-                setTimeout(() => {{
-                    // Chercher le bouton par son texte visible (approche 1)
-                    let button = null;
-                    const allButtons = document.querySelectorAll('button');
+                // Envoyer le clic à Streamlit via setComponentValue
+                if (Streamlit) {{
+                    // Envoyer un message spécial "triangle_click"
+                    Streamlit.setComponentValue({{
+                        type: 'triangle_click',
+                        code: clickedCode,
+                        label: clickedLabel,
+                        index: clickedIdx,
+                        timestamp: Date.now()
+                    }});
 
-                    for (let btn of allButtons) {{
-                        const btnText = (btn.innerText || btn.textContent || '').trim();
-                        // Chercher une correspondance partielle du label
-                        if (btnText.includes(clickedLabel)) {{
-                            button = btn;
-                            console.log('Bouton trouvé par texte:', btnText);
-                            break;
-                        }}
-                    }}
-
-                    // Approche 2: Si pas trouvé, chercher par position (le clickedIdx-ème bouton)
-                    if (!button && allButtons.length > clickedIdx) {{
-                        button = allButtons[clickedIdx + 6]; // +6 car les premiers boutons sont Back/Reset
-                        console.log('Bouton trouvé par index alternatif');
-                    }}
-
-                    // Approche 3: chercher le premier bouton après la canvas (logique Streamlit)
-                    if (!button) {{
-                        const canvasContainer = canvas.closest('[data-testid="stVerticalBlock"]') || canvas.parentElement;
-                        if (canvasContainer) {{
-                            const buttons = canvasContainer.parentElement.querySelectorAll('button');
-                            if (buttons.length > clickedIdx) {{
-                                button = buttons[clickedIdx];
-                                console.log('Bouton trouvé dans conteneur parent');
-                            }}
-                        }}
-                    }}
-
-                    // Cliquer le bouton si trouvé
-                    if (button) {{
-                        console.log('✅ Clic sur le bouton pour:', clickedLabel);
-                        button.click();
-                        // Force un petit délai pour Streamlit
-                        setTimeout(() => {{}}, 100);
-                    }} else {{
-                        console.error('❌ Bouton NON trouvé pour:', clickedLabel);
-                        console.log('Total boutons dans la page:', allButtons.length);
-                    }}
-                }}, 50);
+                    console.log('📤 Message envoyé à Streamlit');
+                }} else {{
+                    console.error('❌ Streamlit non disponible');
+                }}
             }}
         }});
 
