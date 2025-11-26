@@ -542,41 +542,43 @@ def _build_fractal_html(
                 }}
             }});
 
-            // Si un triangle a été cliqué, envoyer l'information à Streamlit
+            // Si un triangle a été cliqué, chercher et cliquer le bouton correspondant
             if (clickedIdx >= 0) {{
                 const clickedCode = CHILDREN_CODES[clickedIdx];
                 const clickedLabel = CHILDREN_DATA[clickedCode].label;
 
                 console.log('✅ Triangle cliqué:', clickedLabel, '(Code:', clickedCode, ')');
 
-                const messageData = {{
-                    type: 'triangle_click',
-                    code: clickedCode,
-                    label: clickedLabel,
-                    index: clickedIdx,
-                    timestamp: Date.now()
-                }};
+                // Chercher le bouton dans le parent document (Streamlit)
+                try {{
+                    let button = null;
+                    let parentDoc = window.parent.document;
 
-                // Stratégie 1: Envoyer via Streamlit.setComponentValue si disponible
-                if (Streamlit && typeof Streamlit.setComponentValue === 'function') {{
-                    try {{
-                        Streamlit.setComponentValue(messageData);
-                        console.log('📤 Message envoyé via Streamlit.setComponentValue');
-                    }} catch (e) {{
-                        console.error('Erreur setComponentValue:', e);
+                    // Stratégie 1: Chercher par le texte visible dans les boutons du parent
+                    const allButtons = parentDoc.querySelectorAll('button');
+                    console.log('🔍 Boutons trouvés dans parent:', allButtons.length);
+
+                    for (let btn of allButtons) {{
+                        const btnText = (btn.innerText || btn.textContent || '').trim();
+                        console.log('  → Bouton: ' + btnText);
+
+                        // Chercher une correspondance du label (avec ou sans le montant)
+                        if (btnText.includes(clickedLabel)) {{
+                            button = btn;
+                            console.log('✅ Bouton trouvé:', btnText);
+                            break;
+                        }}
                     }}
-                }}
-                // Stratégie 2: Envoyer via postMessage au parent
-                else {{
-                    try {{
-                        window.parent.postMessage({{
-                            type: 'streamlit:setComponentValue',
-                            data: messageData
-                        }}, '*');
-                        console.log('📤 Message envoyé via postMessage');
-                    }} catch (e) {{
-                        console.error('Erreur postMessage:', e);
+
+                    // Si trouvé, cliquer le bouton
+                    if (button) {{
+                        console.log('🖱️ Clic sur le bouton: ' + clickedLabel);
+                        button.click();
+                    }} else {{
+                        console.error('❌ Bouton NON trouvé pour:', clickedLabel);
                     }}
+                }} catch (e) {{
+                    console.error('❌ Erreur lors du clic:', e.message);
                 }}
             }}
         }});
