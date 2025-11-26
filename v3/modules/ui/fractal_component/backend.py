@@ -281,6 +281,7 @@ def _build_fractal_html(
         const CHILDREN_DATA = {json.dumps(children_data)};
         const CHILDREN_CODES = {json.dumps(children_codes)};
         const POSITIONS = {json.dumps(positions)};
+        const BUTTON_KEY_MAP = {json.dumps(button_key_map)};
 
         const canvas = document.getElementById('fractal-canvas-' + KEY);
         if (!canvas) return;
@@ -460,6 +461,38 @@ def _build_fractal_html(
             hoveredIdx = null;
             canvas.style.cursor = 'default';
             render();
+        }});
+
+        canvas.addEventListener('click', (e) => {{
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            let clickedIdx = -1;
+            CHILDREN_CODES.forEach((code, idx) => {{
+                const pos = POSITIONS[idx];
+                const tx = centerX + pos.x;
+                const ty = centerY + pos.y;
+                if (isInTriangle(x, y, tx, ty, pos.size)) {{
+                    clickedIdx = idx;
+                }}
+            }});
+
+            // Si un triangle a été cliqué, simuler le clic sur le bouton correspondant
+            if (clickedIdx >= 0) {{
+                const clickedCode = CHILDREN_CODES[clickedIdx];
+                const buttonKey = BUTTON_KEY_MAP[clickedCode];
+                if (buttonKey) {{
+                    const button = document.querySelector(`[data-testid="stButton"][key="${{buttonKey}}"]`) ||
+                                   document.querySelector(`button[id*="${{buttonKey}}"]`) ||
+                                   Array.from(document.querySelectorAll('button')).find(btn =>
+                                       btn.textContent.includes(CHILDREN_DATA[clickedCode].label)
+                                   );
+                    if (button) {{
+                        button.click();
+                    }}
+                }}
+            }}
         }});
 
         render();
