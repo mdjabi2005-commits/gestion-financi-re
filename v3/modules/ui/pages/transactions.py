@@ -439,34 +439,52 @@ def interface_voir_transactions_v3() -> None:
 
         /* Réduire l'espace entre les dividers */
         hr {
-            margin: 0.3rem 0 !important;
+            margin: 0.2rem 0 !important;
+            padding: 0 !important;
         }
 
         /* Compacter les subheaders */
         [data-testid="stHeading"] {
-            margin-bottom: 0.3rem !important;
-            padding-bottom: 0.1rem !important;
+            margin-bottom: 0.2rem !important;
+            padding-bottom: 0rem !important;
+            margin-top: 0.2rem !important;
         }
 
         /* Réduire l'espace des expanders */
         [data-testid="stExpander"] {
-            margin-bottom: 0.3rem !important;
+            margin-bottom: 0.2rem !important;
+            margin-top: 0rem !important;
         }
 
         /* Compacter les colonnes */
         [data-testid="stHorizontalBlock"] {
-            gap: 0.5rem !important;
+            gap: 0.3rem !important;
         }
 
         /* Réduire l'espace des dataframes */
         [data-testid="stDataFrame"] {
-            margin-bottom: 0.5rem !important;
+            margin-bottom: 0.3rem !important;
+            margin-top: 0rem !important;
         }
 
         /* Réduire l'espace des info/warning boxes */
         [data-testid="stAlert"] {
+            margin-bottom: 0.3rem !important;
+            margin-top: 0rem !important;
+            padding: 0.5rem 1rem !important;
+        }
+
+        /* Compacter le selectbox et inputs */
+        [data-testid="stSelectbox"],
+        [data-testid="stTextInput"],
+        [data-testid="stNumberInput"],
+        [data-testid="stDateInput"] {
+            margin-bottom: 0rem !important;
+        }
+
+        /* Réduire l'espace après le title */
+        [data-testid="stHeading"] h1 {
             margin-bottom: 0.5rem !important;
-            padding: 0.75rem !important;
         }
     </style>
     """, unsafe_allow_html=True)

@@ -65,7 +65,7 @@ def fractal_navigation(
         # Créer un composant_key unique qui change avec le nœud courant pour éviter le cache
         unique_component_key = f"{key}_{current_node}"
         html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
-        component_response = components.html(html_content, height=400)
+        component_response = components.html(html_content, height=650)
 
         st.markdown("---")
 
