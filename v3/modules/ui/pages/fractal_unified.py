@@ -148,7 +148,54 @@ def interface_fractal_unified():
 
     st.markdown("---")
 
-    # MIDDLE: TABLEAU ET RÉSULTATS
+    # MIDDLE: FILTRES SÉLECTIONNÉS
+    st.subheader("🔍 Filtres sélectionnés")
+
+    if st.session_state.fractal_selections:
+        # Éliminer les redondances pour l'affichage aussi
+        selected_codes = list(st.session_state.fractal_selections)
+        display_selections = set()
+
+        for code in selected_codes:
+            node = hierarchy.get(code, {})
+            level = node.get('level', 0)
+
+            if level == 2:
+                display_selections.add(code)
+            elif level == 3:
+                parent_code = node.get('parent', '')
+                if parent_code not in selected_codes:
+                    display_selections.add(code)
+            else:
+                display_selections.add(code)
+
+        # Afficher les badges des filtres actifs (non-redondants)
+        cols = st.columns(4)
+        for idx, code in enumerate(sorted(display_selections)):
+            node = hierarchy.get(code, {})
+            label = node.get('label', code)
+            col_idx = idx % 4
+
+            with cols[col_idx]:
+                col_badge, col_remove = st.columns([4, 1])
+                with col_badge:
+                    st.write(f"📌 {label}")
+                with col_remove:
+                    if st.button("✕", key=f"remove_{code}", use_container_width=True):
+                        # Enlever le code et toutes ses sous-catégories dépendantes
+                        st.session_state.fractal_selections = remove_filter_and_children(code, hierarchy, st.session_state.fractal_selections)
+                        st.rerun()
+
+        # Bouton pour effacer toutes les sélections
+        if st.button("❌ Effacer tous les filtres", use_container_width=True):
+            st.session_state.fractal_selections.clear()
+            st.rerun()
+    else:
+        st.info("👇 Cliquez sur une catégorie ou sous-catégorie pour ajouter un filtre")
+
+    st.markdown("---")
+
+    # BOTTOM: TABLEAU ET RÉSULTATS
     st.subheader("📊 Transactions")
 
     if st.session_state.fractal_selections:
@@ -218,53 +265,6 @@ def interface_fractal_unified():
             st.metric("💸 Dépenses Totales", f"{abs(depenses_total):,.0f}€")
         with col3:
             st.metric("💵 Solde Total", f"{solde_total:,.0f}€")
-
-    st.markdown("---")
-
-    # BOTTOM: FILTRES SÉLECTIONNÉS
-    st.subheader("🔍 Filtres sélectionnés")
-
-    if st.session_state.fractal_selections:
-        # Éliminer les redondances pour l'affichage aussi
-        selected_codes = list(st.session_state.fractal_selections)
-        display_selections = set()
-
-        for code in selected_codes:
-            node = hierarchy.get(code, {})
-            level = node.get('level', 0)
-
-            if level == 2:
-                display_selections.add(code)
-            elif level == 3:
-                parent_code = node.get('parent', '')
-                if parent_code not in selected_codes:
-                    display_selections.add(code)
-            else:
-                display_selections.add(code)
-
-        # Afficher les badges des filtres actifs (non-redondants)
-        cols = st.columns(4)
-        for idx, code in enumerate(sorted(display_selections)):
-            node = hierarchy.get(code, {})
-            label = node.get('label', code)
-            col_idx = idx % 4
-
-            with cols[col_idx]:
-                col_badge, col_remove = st.columns([4, 1])
-                with col_badge:
-                    st.write(f"📌 {label}")
-                with col_remove:
-                    if st.button("✕", key=f"remove_{code}", use_container_width=True):
-                        # Enlever le code et toutes ses sous-catégories dépendantes
-                        st.session_state.fractal_selections = remove_filter_and_children(code, hierarchy, st.session_state.fractal_selections)
-                        st.rerun()
-
-        # Bouton pour effacer toutes les sélections
-        if st.button("❌ Effacer tous les filtres", use_container_width=True):
-            st.session_state.fractal_selections.clear()
-            st.rerun()
-    else:
-        st.info("👇 Cliquez sur une catégorie ou sous-catégorie pour ajouter un filtre")
 
 
 if __name__ == "__main__":
