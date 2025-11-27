@@ -128,8 +128,8 @@ def fractal_navigation(
 
         st.markdown("---")
 
-    # Filter buttons (invisible to user, only for JavaScript automation) - only show if canvas is visible
-    if show_canvas and current_node == 'TR':
+    # Filter buttons (invisible to user, only for JavaScript automation) - only show if canvas is NOT visible
+    if not show_canvas and current_node == 'TR':
         # Hide filter buttons in expanders with minimal size
         with st.expander("", expanded=False):
             col1, col2 = st.columns(2)
@@ -156,8 +156,8 @@ def fractal_navigation(
                 if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
                     pass
 
-    # Navigation buttons (invisible to user, only for JavaScript automation) - only show if canvas is visible
-    if show_canvas and children_codes:
+    # Navigation buttons (invisible to user, only for JavaScript automation) - only show if canvas is NOT visible
+    if not show_canvas and children_codes:
         # Hide navigation buttons in expanders with minimal size
         with st.expander("", expanded=False):
             for idx, child_code in enumerate(children_codes):

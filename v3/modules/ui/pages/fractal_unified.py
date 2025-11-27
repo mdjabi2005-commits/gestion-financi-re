@@ -266,5 +266,13 @@ def interface_fractal_unified():
         with col3:
             st.metric("💵 Solde Total", f"{solde_total:,.0f}€")
 
+    st.markdown("---")
+
+    # BOTTOM: HIDDEN BUTTONS (for JavaScript automation)
+    st.subheader("🔧 Boutons cachés")
+    # Show only the hidden buttons at the bottom (no canvas)
+    fractal_navigation(hierarchy, key='fractal_minimal_buttons', show_canvas=False)
+
+
 if __name__ == "__main__":
     interface_fractal_unified()
