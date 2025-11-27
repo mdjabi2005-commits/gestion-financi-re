@@ -97,7 +97,8 @@ def interface_transaction_recurrente(type_transaction: str = "dépense") -> None
                 "montant": montant,
                 "date": d.isoformat(),
                 "source": "récurrente_auto",
-                "recurrence": recurrence
+                "recurrence": recurrence,
+                "date_fin": date_fin.isoformat() if date_fin else ""
             } for d in occurrences
         ]
 
@@ -199,7 +200,14 @@ def interface_gerer_recurrences() -> None:
 
                 with col2:
                     date_debut = safe_date_convert(row['date'])
-                    date_fin = safe_date_convert(row['date_fin']) if row['date_fin'] else None
+                    # Check if date_fin is empty/null/None - if so, it's indeterminate
+                    has_date_fin = (
+                        pd.notna(row['date_fin']) and
+                        str(row['date_fin']).strip() != "" and
+                        row['date_fin'] is not None
+                    )
+                    date_fin = safe_date_convert(row['date_fin']) if has_date_fin else None
+
                     st.caption(f"📅 Début : {date_debut.strftime('%d/%m/%Y')}")
                     if date_fin:
                         st.caption(f"📅 Fin : {date_fin.strftime('%d/%m/%Y')}")
