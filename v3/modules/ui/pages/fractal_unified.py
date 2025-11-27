@@ -54,17 +54,37 @@ def remove_filter_and_children(code_to_remove: str, hierarchy: Dict, selections:
 
 
 def get_transactions_for_code(code: str, hierarchy: Dict, df: pd.DataFrame) -> pd.DataFrame:
-    """Get transactions for a specific code (category or subcategory)."""
+    """
+    Get transactions for a specific code (category or subcategory).
+
+    For subcategories (level 3), also filter by parent category to avoid getting
+    transactions from other categories that might have the same subcategory name.
+    """
     if not code or code not in hierarchy:
         return pd.DataFrame()
 
     node = hierarchy[code]
     level = node.get('level', 0)
 
-    # Niveau 3 (sous-catégories)
+    # Niveau 3 (sous-catégories) - IMPORTANT: filtrer aussi par catégorie parente
     if level == 3:
         subcategory_name = node.get('label', '')
-        return df[df['sous_categorie'].str.lower() == subcategory_name.lower()]
+        parent_code = node.get('parent', '')
+
+        # Récupérer la catégorie parente
+        if parent_code and parent_code in hierarchy:
+            parent_node = hierarchy[parent_code]
+            category_name = parent_node.get('label', '')
+
+            # Filtrer à la fois par catégorie ET sous-catégorie pour éviter les conflits
+            df_filtered = df[
+                (df['categorie'].str.lower() == category_name.lower()) &
+                (df['sous_categorie'].str.lower() == subcategory_name.lower())
+            ]
+            return df_filtered
+        else:
+            # Fallback si pas de parent (ne devrait pas arriver)
+            return df[df['sous_categorie'].str.lower() == subcategory_name.lower()]
 
     # Niveau 2 (catégories) - afficher toutes les sous-catégories de cette catégorie
     elif level == 2:
