@@ -60,8 +60,9 @@ def interface_transaction_recurrente(type_transaction: str = "dépense") -> None
             toast_error("Veuillez entrer une catégorie et un montant valide.")
             return
 
-        safe_categorie = re.sub(r'[<>:"/\\|?*]', "_", categorie.strip())
-        safe_sous_categorie = re.sub(r'[<>:"/\\|?*]', "_", sous_categorie.strip()) if sous_categorie else ""
+        # Normalize categories (Title Case) to match database convention
+        safe_categorie = normalize_category(categorie.strip())
+        safe_sous_categorie = normalize_subcategory(sous_categorie.strip()) if sous_categorie else ""
 
         today = date.today()
         occurrences = []
