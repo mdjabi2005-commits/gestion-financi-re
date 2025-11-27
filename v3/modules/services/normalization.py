@@ -19,6 +19,7 @@ def normalize_category(category: Optional[str]) -> Optional[str]:
 
     Rules:
     - Convert to Title Case (first letter of each word capitalized)
+    - Replace underscores with spaces
     - Remove extra whitespace
     - Strip leading/trailing whitespace
     - Handle None values
@@ -49,6 +50,9 @@ def normalize_category(category: Optional[str]) -> Optional[str]:
 
     if not category_str:
         return None
+
+    # Replace underscores with spaces
+    category_str = category_str.replace('_', ' ')
 
     # Remove extra spaces between words
     category_str = ' '.join(category_str.split())

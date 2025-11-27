@@ -20,6 +20,7 @@ from modules.ui.helpers import insert_transaction_batch
 from modules.ui.components import toast_success, toast_error, toast_warning
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
+from modules.services.normalization import normalize_category, normalize_subcategory
 from modules.ocr.parsers import parse_uber_pdf, parse_fiche_paie
 from modules.utils.formatters import numero_to_mois
 from modules.ocr.logging import log_ocr_scan, determine_success_level
@@ -175,8 +176,8 @@ def interface_process_all_revenues_in_folder() -> None:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     "revenu",
-                    transaction_data["categorie"],
-                    transaction_data["sous_categorie"],
+                    normalize_category(transaction_data["categorie"]),
+                    normalize_subcategory(transaction_data["sous_categorie"]),
                     transaction_data["montant"],
                     transaction_data["date"],
                     transaction_data["source"]

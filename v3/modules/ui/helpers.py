@@ -14,6 +14,7 @@ from config import DB_PATH
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.utils.validators import validate_transaction_data
 from modules.services.revenue_service import process_uber_revenue
+from modules.services.normalization import normalize_category, normalize_subcategory
 from modules.database.connection import get_db_connection
 from .components import toast_success, toast_error
 
@@ -203,8 +204,8 @@ def insert_transaction_batch(transactions: List[Dict[str, Any]]) -> None:
             # Clean data
             clean_t = {
                 "type": str(t["type"]).strip().lower(),
-                "categorie": str(t.get("categorie", "")).strip(),
-                "sous_categorie": str(t.get("sous_categorie", "")).strip(),
+                "categorie": normalize_category(str(t.get("categorie", "")).strip()),
+                "sous_categorie": normalize_subcategory(str(t.get("sous_categorie", "")).strip()),
                 "description": str(t.get("description", "")).strip(),
                 "montant": safe_convert(t["montant"]),
                 "date": safe_date_convert(t["date"]).isoformat(),

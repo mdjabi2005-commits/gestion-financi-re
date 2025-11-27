@@ -24,6 +24,7 @@ from modules.ui.helpers import (
 from modules.ui.components import toast_success, toast_error
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.file_service import supprimer_fichiers_associes
+from modules.services.normalization import normalize_category, normalize_subcategory
 
 
 def interface_transaction_recurrente(type_transaction: str = "dépense") -> None:
@@ -314,8 +315,8 @@ def interface_gerer_recurrences() -> None:
                             VALUES (?, ?, ?, ?, ?, 'récurrente_auto', ?, ?, ?)
                         """, (
                             row['type'],
-                            row['categorie'],
-                            row['sous_categorie'],
+                            normalize_category(row['categorie']),
+                            normalize_subcategory(row['sous_categorie']),
                             new_montant,
                             date_application.isoformat(),
                             new_recurrence,
