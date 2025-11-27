@@ -111,8 +111,8 @@ def fractal_navigation(
         col1, col2 = st.columns([1, 1])
         with col1:
             if len(nav_stack) > 1:
-                nav_depth = '_'.join(nav_stack)
-                if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
+                # Use stable key independent of nav_stack to avoid recreation
+                if st.button("← Retour", key=f"{key}_back", use_container_width=True):
                     nav_stack.pop()
                     st.session_state[f'{key}_current_node'] = nav_stack[-1]
                     st.session_state[f'{key}_nav_stack'] = nav_stack
@@ -120,8 +120,8 @@ def fractal_navigation(
 
         with col2:
             if current_node != 'TR':
-                nav_depth = '_'.join(nav_stack)
-                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
+                # Use stable key independent of nav_stack to avoid recreation
+                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset", use_container_width=True):
                     st.session_state[f'{key}_current_node'] = 'TR'
                     st.session_state[f'{key}_nav_stack'] = ['TR']
                     st.rerun()
