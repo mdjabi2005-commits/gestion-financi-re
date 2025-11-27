@@ -18,7 +18,8 @@ from typing import Dict, Any, Optional
 def fractal_navigation(
     hierarchy: Dict[str, Any],
     key: Optional[str] = None,
-    default: Optional[Dict[str, Any]] = None
+    default: Optional[Dict[str, Any]] = None,
+    show_canvas: bool = True
 ) -> None:
     """
     Render interactive Sierpinski triangle navigation.
@@ -30,6 +31,7 @@ def fractal_navigation(
         hierarchy: Complete fractal hierarchy from build_fractal_hierarchy()
         key: Unique key for this component instance
         default: Unused (kept for compatibility)
+        show_canvas: Whether to display the canvas (default: True). Set to False to only show hidden buttons.
     """
     if not isinstance(hierarchy, dict):
         raise ValueError("hierarchy doit être un dictionnaire")
@@ -55,18 +57,23 @@ def fractal_navigation(
         st.session_state.fractal_selections = set()
     selected_codes = st.session_state.fractal_selections
 
-    # Créer un placeholder pour stocker les clics sur triangles
-    triangle_click_placeholder = st.empty()
+    # Render the triangle visualization (pure visual) - only if show_canvas is True
+    if show_canvas:
+        # Créer un placeholder pour stocker les clics sur triangles
+        triangle_click_placeholder = st.empty()
 
-    # Render the triangle visualization (pure visual)
-    # Créer un composant_key unique qui change avec le nœud courant pour éviter le cache
-    unique_component_key = f"{key}_{current_node}"
-    html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
-    component_response = components.html(html_content, height=650)
+        # Créer un composant_key unique qui change avec le nœud courant pour éviter le cache
+        unique_component_key = f"{key}_{current_node}"
+        html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
+        component_response = components.html(html_content, height=650)
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # Gérer les réponses du component (clics normaux)
+        # Gérer les réponses du component (clics normaux)
+    else:
+        component_response = None
+
+    # Gérer les réponses du component (clics normaux) - seulement si show_canvas
     if component_response:
         if isinstance(component_response, dict):
             if component_response.get('type') == 'triangle_click':
@@ -99,26 +106,27 @@ def fractal_navigation(
 
                         st.rerun()
 
-    # Navigation buttons
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if len(nav_stack) > 1:
-            nav_depth = '_'.join(nav_stack)
-            if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
-                nav_stack.pop()
-                st.session_state[f'{key}_current_node'] = nav_stack[-1]
-                st.session_state[f'{key}_nav_stack'] = nav_stack
-                st.rerun()
+    # Navigation buttons - only show if canvas is visible
+    if show_canvas:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if len(nav_stack) > 1:
+                nav_depth = '_'.join(nav_stack)
+                if st.button("← Retour", key=f"{key}_back_{nav_depth}", use_container_width=True):
+                    nav_stack.pop()
+                    st.session_state[f'{key}_current_node'] = nav_stack[-1]
+                    st.session_state[f'{key}_nav_stack'] = nav_stack
+                    st.rerun()
 
-    with col2:
-        if current_node != 'TR':
-            nav_depth = '_'.join(nav_stack)
-            if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
-                st.session_state[f'{key}_current_node'] = 'TR'
-                st.session_state[f'{key}_nav_stack'] = ['TR']
-                st.rerun()
+        with col2:
+            if current_node != 'TR':
+                nav_depth = '_'.join(nav_stack)
+                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset_{nav_depth}", use_container_width=True):
+                    st.session_state[f'{key}_current_node'] = 'TR'
+                    st.session_state[f'{key}_nav_stack'] = ['TR']
+                    st.rerun()
 
-    st.markdown("---")
+        st.markdown("---")
 
     # Filter buttons (invisible to user, only for JavaScript automation)
     if current_node == 'TR':

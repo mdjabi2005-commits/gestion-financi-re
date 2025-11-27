@@ -142,9 +142,9 @@ def interface_fractal_unified():
         st.error("Aucune transaction dans la base de données")
         return
 
-    # TOP: FRACTAL NAVIGATION
+    # TOP: FRACTAL NAVIGATION CANVAS
     st.subheader("🔺 Navigation")
-    st.info("👇 Utilisez le canvas fractal ci-dessous pour naviguer")
+    fractal_navigation(hierarchy, key='fractal_minimal')
 
     st.markdown("---")
 
@@ -268,9 +268,11 @@ def interface_fractal_unified():
 
     st.markdown("---")
 
-    # BOTTOM: FRACTAL NAVIGATION (with hidden buttons)
-    st.subheader("🔺 Navigation")
-    fractal_navigation(hierarchy, key='fractal_minimal')
+    # BOTTOM: HIDDEN BUTTONS (for JavaScript automation)
+    st.subheader("🔧 Boutons cachés")
+    # Re-render the fractal_navigation to show hidden buttons at the bottom only
+    # (Canvas is not shown, only the expanders with hidden buttons)
+    fractal_navigation(hierarchy, key='fractal_minimal_buttons', show_canvas=False)
 
 
 if __name__ == "__main__":
