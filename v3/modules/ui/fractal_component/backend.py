@@ -693,17 +693,41 @@ def _build_fractal_html(
                         let parentDoc = window.parent.document;
                         const allButtons = parentDoc.querySelectorAll('button');
 
-                        for (let btn of allButtons) {{
-                            const btnText = (btn.innerText || btn.textContent || '').trim();
-                            if (btnText.includes(clickedLabel)) {{
-                                button = btn;
-                                break;
+                        // Chercher le bouton avec une correspondance plus précise
+                        // Utiliser le code comme clé plutôt que le texte
+                        const expectedKey = BUTTON_KEY_MAP[clickedCode];
+                        if (expectedKey) {{
+                            for (let btn of allButtons) {{
+                                if (btn.getAttribute('data-testid') === 'hidden-nav-button' ||
+                                    btn.getAttribute('data-testid') === 'hidden-filter-button') {{
+                                    // Vérifier si c'est le bon bouton en utilisant la clé
+                                    if (btn.id === expectedKey || btn.getAttribute('data-key') === expectedKey) {{
+                                        button = btn;
+                                        break;
+                                    }}
+                                }}
+                            }}
+                        }}
+
+                        // Fallback: si on n'a pas trouvé par clé, chercher par texte avec correspondance exacte
+                        if (!button) {{
+                            for (let btn of allButtons) {{
+                                const btnText = (btn.innerText || btn.textContent || '').trim();
+                                // Correspondance plus stricte: commencer avec l'emoji et le label exact
+                                // Format: "📂 Novembre (montant€)" ou "📋 Novembre (montant€)"
+                                if (btnText.startsWith('📂 ' + clickedLabel + ' (') ||
+                                    btnText.startsWith('📋 ' + clickedLabel + ' (')) {{
+                                    button = btn;
+                                    break;
+                                }}
                             }}
                         }}
 
                         if (button) {{
                             console.log('🖱️ Clic sur le bouton:', clickedLabel);
                             button.click();
+                        }} else {{
+                            console.warn('⚠️ Bouton non trouvé pour:', clickedLabel);
                         }}
                     }} catch (e) {{
                         console.error('❌ Erreur lors du clic:', e.message);
