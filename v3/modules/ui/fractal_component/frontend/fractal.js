@@ -18,9 +18,13 @@ let currentNode = 'TR';
 let navigationStack = ['TR'];
 let hoveredTriangle = null;
 let animationInProgress = false;
-const ANIMATION_DURATION = 700; // ms
+const ANIMATION_DURATION = 350; // ms - réduit de 700ms pour plus de réactivité
 const FRAME_RATE = 60;
 const FRAMES_PER_ANIMATION = Math.round(ANIMATION_DURATION / (1000 / FRAME_RATE));
+
+// Throttle mousemove to prevent excessive redraws
+let lastMouseMoveTime = 0;
+const MOUSEMOVE_THROTTLE = 16; // ~60fps = 16ms between redraws
 
 // Canvas setup
 let canvas, ctx, rect;
@@ -446,9 +450,17 @@ function handleCanvasClick(e) {
 }
 
 /**
- * Handle canvas mouse move (hover)
+ * Handle canvas mouse move (hover) - Throttled for performance
  */
 function handleCanvasMouseMove(e) {
+    const now = Date.now();
+
+    // Throttle mousemove events to prevent excessive redraws
+    if (now - lastMouseMoveTime < MOUSEMOVE_THROTTLE) {
+        return;
+    }
+    lastMouseMoveTime = now;
+
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -466,8 +478,12 @@ function handleCanvasMouseMove(e) {
         }
     }
 
-    hoveredTriangle = hoveredIndex;
-    canvas.style.cursor = hoveredIndex !== null ? 'pointer' : 'default';
+    // Only redraw if hover state changed
+    if (hoveredIndex !== hoveredTriangle) {
+        hoveredTriangle = hoveredIndex;
+        canvas.style.cursor = hoveredIndex !== null ? 'pointer' : 'default';
+        render(hierarchyData[currentNode]);
+    }
 
     // Show/hide tooltip
     const tooltip = document.getElementById('tooltip');
@@ -487,9 +503,6 @@ function handleCanvasMouseMove(e) {
     } else {
         tooltip.style.display = 'none';
     }
-
-    // Redraw
-    render(hierarchyData[currentNode]);
 }
 
 /**
@@ -502,45 +515,24 @@ function handleCanvasMouseLeave() {
 }
 
 /**
- * Handle zoom in
+ * Handle zoom in - Optimized animation
  */
 async function handleZoomIn(targetCode) {
     if (!targetCode || animationInProgress) return;
 
     animationInProgress = true;
 
-    // Animation: fade out current, fade in new
-    for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
-        const progress = frame / FRAMES_PER_ANIMATION;
-
-        ctx.fillStyle = `rgba(15, 23, 42, ${0.05 + progress * 0.15})`;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        // Scale effect
-        const scale = 1 + progress * 0.2;
-        ctx.save();
-        ctx.globalAlpha = 1 - progress;
-        ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-        ctx.translate(-centerX, -centerY);
-        render(hierarchyData[currentNode]);
-        ctx.restore();
-
-        await delay(1000 / FRAME_RATE);
-    }
-
-    // Update state
+    // Update state immediately (don't wait for animation)
     navigationStack.push(targetCode);
     currentNode = targetCode;
 
-    // Fade in new
-    for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
-        const progress = frame / FRAMES_PER_ANIMATION;
-
+    // Shorter, simpler fade animation
+    const FAST_ANIMATION_FRAMES = Math.max(6, Math.floor(FRAMES_PER_ANIMATION / 2));
+    for (let frame = 0; frame < FAST_ANIMATION_FRAMES; frame++) {
+        const progress = frame / FAST_ANIMATION_FRAMES;
         ctx.globalAlpha = progress;
         render(hierarchyData[currentNode]);
         ctx.globalAlpha = 1;
-
         await delay(1000 / FRAME_RATE);
     }
 
@@ -552,29 +544,32 @@ async function handleZoomIn(targetCode) {
         code: targetCode,
         level: navigationStack.length,
         timestamp: Date.now(),
-        current_node: targetNode
+        current_node: currentNode
     });
 
     update();
 }
 
 /**
- * Handle back button
+ * Handle back button - Optimized for speed
  */
-function handleBack() {
+async function handleBack() {
     if (navigationStack.length <= 1 || animationInProgress) return;
 
     animationInProgress = true;
+
+    // Update state immediately
     navigationStack.pop();
     currentNode = navigationStack[navigationStack.length - 1];
 
-    // Simple fade effect
-    const originalNode = hierarchyData[currentNode];
-    for (let frame = 0; frame < Math.floor(FRAMES_PER_ANIMATION / 2); frame++) {
-        const progress = frame / (FRAMES_PER_ANIMATION / 2);
+    // Quick fade effect
+    const FAST_ANIMATION_FRAMES = Math.max(6, Math.floor(FRAMES_PER_ANIMATION / 2));
+    for (let frame = 0; frame < FAST_ANIMATION_FRAMES; frame++) {
+        const progress = frame / FAST_ANIMATION_FRAMES;
         ctx.globalAlpha = progress;
-        render(originalNode);
+        render(hierarchyData[currentNode]);
         ctx.globalAlpha = 1;
+        await delay(1000 / FRAME_RATE);
     }
 
     animationInProgress = false;
@@ -592,27 +587,25 @@ function handleBack() {
 }
 
 /**
- * Handle reset button
+ * Handle reset button - Optimized for speed
  */
-function handleReset() {
+async function handleReset() {
     if (currentNode === 'TR' || animationInProgress) return;
-
-    navigationStack = ['TR'];
-    currentNode = 'TR';
 
     animationInProgress = true;
 
-    for (let frame = 0; frame < FRAMES_PER_ANIMATION; frame++) {
-        const progress = frame / FRAMES_PER_ANIMATION;
-        const scale = 1 + progress * 0.3;
+    // Update state immediately
+    navigationStack = ['TR'];
+    currentNode = 'TR';
 
-        ctx.save();
+    // Quick fade animation
+    const FAST_ANIMATION_FRAMES = Math.max(6, Math.floor(FRAMES_PER_ANIMATION / 2));
+    for (let frame = 0; frame < FAST_ANIMATION_FRAMES; frame++) {
+        const progress = frame / FAST_ANIMATION_FRAMES;
         ctx.globalAlpha = 1 - progress;
-        ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-        ctx.translate(-centerX, -centerY);
         render(hierarchyData[currentNode]);
-        ctx.restore();
+        ctx.globalAlpha = 1;
+        await delay(1000 / FRAME_RATE);
     }
 
     animationInProgress = false;
