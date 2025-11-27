@@ -428,6 +428,49 @@ def interface_voir_transactions_v3() -> None:
     Returns:
         None
     """
+    # Ajouter du CSS pour compacter verticalement la page
+    st.markdown("""
+    <style>
+        /* Réduire le padding/margin des sections */
+        .stMetric {
+            margin-bottom: 0rem !important;
+            gap: 0 !important;
+        }
+
+        /* Réduire l'espace entre les dividers */
+        hr {
+            margin: 0.3rem 0 !important;
+        }
+
+        /* Compacter les subheaders */
+        [data-testid="stHeading"] {
+            margin-bottom: 0.3rem !important;
+            padding-bottom: 0.1rem !important;
+        }
+
+        /* Réduire l'espace des expanders */
+        [data-testid="stExpander"] {
+            margin-bottom: 0.3rem !important;
+        }
+
+        /* Compacter les colonnes */
+        [data-testid="stHorizontalBlock"] {
+            gap: 0.5rem !important;
+        }
+
+        /* Réduire l'espace des dataframes */
+        [data-testid="stDataFrame"] {
+            margin-bottom: 0.5rem !important;
+        }
+
+        /* Réduire l'espace des info/warning boxes */
+        [data-testid="stAlert"] {
+            margin-bottom: 0.5rem !important;
+            padding: 0.75rem !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.title("📊 Mes Transactions")
 
     backfill_recurrences_to_today(DB_PATH)
