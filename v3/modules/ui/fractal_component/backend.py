@@ -153,86 +153,73 @@ def fractal_navigation(
 
         st.markdown("---")
 
-    # Selection buttons (HIDDEN - only for JavaScript to find and click)
+    # Navigation buttons (invisible to user, only for JavaScript automation)
     if children_codes:
-        # Hide "Sous-niveaux:" section - triangles are visible navigation instead
-        st.markdown("<div style='display: none;'>", unsafe_allow_html=True)
-        st.markdown("**Sous-niveaux:**")
+        # Create invisible buttons needed by JavaScript for long-click automation
+        # Using CSS to completely hide the entire section
+        with st.expander("", expanded=False):
+            for idx, child_code in enumerate(children_codes):
+                child_node = hierarchy.get(child_code, {})
+                child_label = child_node.get('label', child_code)
+                child_total = child_node.get('amount') or child_node.get('total') or 0
 
-        for idx, child_code in enumerate(children_codes):
-            child_node = hierarchy.get(child_code, {})
-            child_label = child_node.get('label', child_code)
-            child_total = child_node.get('amount') or child_node.get('total') or 0
+                child_level = child_node.get('level', 0)
+                sub_children = child_node.get('children', [])
+                has_children = len(sub_children) > 0
 
-            child_level = child_node.get('level', 0)
-            sub_children = child_node.get('children', [])
-            has_children = len(sub_children) > 0
-
-            # Create button text
-            if has_children:
-                btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
-            else:
-                btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
-
-            # Create unique key
-            unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
-
-            # Button to navigate or select (HIDDEN - only for JavaScript to find)
-            st.markdown(
-                "<div style='display: none;' data-testid='hidden-nav-button'>",
-                unsafe_allow_html=True
-            )
-            if st.button(btn_text, key=unique_key, use_container_width=True):
+                # Create button text
                 if has_children:
-                    # Navigate deeper
-                    nav_stack.append(child_code)
-                    st.session_state[f'{key}_current_node'] = child_code
-                    st.session_state[f'{key}_nav_stack'] = nav_stack
-                    st.rerun()
+                    btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
                 else:
-                    # Leaf node: select for filtering
-                    if 'fractal_selections' not in st.session_state:
-                        st.session_state.fractal_selections = set()
+                    btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
 
-                    if child_code in st.session_state.fractal_selections:
-                        st.session_state.fractal_selections.discard(child_code)
+                # Create unique key
+                unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
+
+                # Invisible button for JavaScript to find and click
+                if st.button(btn_text, key=unique_key, use_container_width=True):
+                    if has_children:
+                        # Navigate deeper
+                        nav_stack.append(child_code)
+                        st.session_state[f'{key}_current_node'] = child_code
+                        st.session_state[f'{key}_nav_stack'] = nav_stack
                         st.rerun()
                     else:
-                        if child_level == 3:
-                            parent_code = child_node.get('parent', '')
-                            if parent_code in st.session_state.fractal_selections:
-                                st.warning(f"{child_label} est déjà incluse dans {hierarchy.get(parent_code, {}).get('label', parent_code)}")
+                        # Leaf node: select for filtering
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
+
+                        if child_code in st.session_state.fractal_selections:
+                            st.session_state.fractal_selections.discard(child_code)
+                            st.rerun()
+                        else:
+                            if child_level == 3:
+                                parent_code = child_node.get('parent', '')
+                                if parent_code in st.session_state.fractal_selections:
+                                    st.warning(f"{child_label} est déjà incluse dans {hierarchy.get(parent_code, {}).get('label', parent_code)}")
+                                else:
+                                    st.session_state.fractal_selections.add(child_code)
+                                    st.rerun()
                             else:
                                 st.session_state.fractal_selections.add(child_code)
                                 st.rerun()
+
+                # Add invisible filter button for long-click
+                child_level = child_node.get('level', 0)
+                if child_level == 2 and has_children:
+                    nav_depth = '_'.join(nav_stack)
+                    add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
+
+                    # Invisible button for long-click
+                    if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
+
+                        if child_code in st.session_state.fractal_selections:
+                            st.warning(f"{child_label} est déjà sélectionnée")
                         else:
                             st.session_state.fractal_selections.add(child_code)
                             st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Add hidden filter button for long-click (not displayed, just for JavaScript to find)
-            child_level = child_node.get('level', 0)
-            if child_level == 2 and has_children:
-                nav_depth = '_'.join(nav_stack)
-                add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
-
-                # Create hidden button that can be found by JavaScript but not visible to user
-                st.markdown(
-                    "<div style='display: none;' data-testid='hidden-filter-button'>",
-                    unsafe_allow_html=True
-                )
-                if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
-                    if 'fractal_selections' not in st.session_state:
-                        st.session_state.fractal_selections = set()
-
-                    if child_code in st.session_state.fractal_selections:
-                        st.warning(f"{child_label} est déjà sélectionnée")
-                    else:
-                        st.session_state.fractal_selections.add(child_code)
-                        st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _get_category_emoji(label: str) -> str:
