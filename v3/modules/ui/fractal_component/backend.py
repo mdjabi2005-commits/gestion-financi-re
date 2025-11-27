@@ -160,10 +160,24 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
     node = hierarchy.get(current_node, {})
     children_codes = node.get('children', [])
 
-    # Render buttons in invisible columns (don't display to user but exist in DOM for JavaScript)
-    with st.columns([1])[0]:
-        # Filter buttons (invisible to user, only for JavaScript automation)
-        if current_node == 'TR':
+    # Add compact CSS for expanders to reduce their height
+    st.markdown("""
+    <style>
+        /* Réduire la hauteur des expanders vides pour les boutons cachés */
+        [data-testid="stExpander"] details > summary {
+            padding: 0.5rem 1rem !important;
+            min-height: auto !important;
+        }
+        [data-testid="stExpander"] details > div {
+            padding: 0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Filter buttons (invisible to user, only for JavaScript automation)
+    if current_node == 'TR':
+        # Hide filter buttons in expanders with minimal size
+        with st.expander("", expanded=False):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -188,8 +202,10 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                 if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
                     pass
 
-        # Navigation buttons (invisible to user, only for JavaScript automation)
-        if children_codes:
+    # Navigation buttons (invisible to user, only for JavaScript automation)
+    if children_codes:
+        # Hide navigation buttons in expanders with minimal size
+        with st.expander("", expanded=False):
             for idx, child_code in enumerate(children_codes):
                 child_node = hierarchy.get(child_code, {})
                 child_label = child_node.get('label', child_code)
