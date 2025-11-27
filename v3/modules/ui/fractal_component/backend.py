@@ -120,6 +120,37 @@ def fractal_navigation(
 
     st.markdown("---")
 
+    # Boutons spéciaux pour filtrer par type (Revenu/Dépense) - Niveau 1
+    if current_node == 'TR':
+        st.markdown("**Filtrer par type:**")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("<div style='display: none;' data-testid='hidden-filter-type-button'>", unsafe_allow_html=True)
+            if st.button("💹 Revenus", key=f"{key}_filter_revenus", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'REVENUS' in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.discard('REVENUS')
+                else:
+                    st.session_state.fractal_selections.add('REVENUS')
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("<div style='display: none;' data-testid='hidden-filter-type-button'>", unsafe_allow_html=True)
+            if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'DEPENSES' in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.discard('DEPENSES')
+                else:
+                    st.session_state.fractal_selections.add('DEPENSES')
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+
     # Selection buttons (visible, functional)
     if children_codes:
         st.markdown("**Sous-niveaux:**")
@@ -642,33 +673,47 @@ def _build_fractal_html(
                     const heldLabel = CHILDREN_DATA[heldCode].label;
                     const heldLevel = CHILDREN_DATA[heldCode].level;
 
-                    console.log('⏱️ Long-click détecté (3s):', heldLabel);
+                    const durMsg = (heldLevel === 1) ? '1s' : '3s';
+                    console.log('⏱️ Long-click détecté (' + durMsg + '):', heldLabel);
                     console.log('📋 Clic long-click sur bouton:', heldLabel);
 
-                    // Chercher le bouton "Ajouter le filtre" pour ce label
+                    // Chercher le bouton approprié selon le niveau
                     try {{
                         let button = null;
                         let parentDoc = window.parent.document;
                         const allButtons = parentDoc.querySelectorAll('button');
 
-                        for (let btn of allButtons) {{
-                            const btnText = (btn.innerText || btn.textContent || '').trim();
-                            // Chercher le bouton "Ajouter le filtre" avec ce label
-                            if (btnText.includes('Ajouter le filtre') && btnText.includes(heldLabel)) {{
-                                button = btn;
-                                break;
+                        // Niveau 1: Chercher bouton de type (Revenus ou Dépenses)
+                        if (heldLevel === 1) {{
+                            for (let btn of allButtons) {{
+                                const btnText = (btn.innerText || btn.textContent || '').trim();
+                                // Format: "💹 Revenus" ou "💸 Dépenses"
+                                if ((heldLabel === 'Revenus' && btnText.startsWith('💹 Revenus')) ||
+                                    (heldLabel === 'Dépenses' && btnText.startsWith('💸 Dépenses'))) {{
+                                    button = btn;
+                                    break;
+                                }}
+                            }}
+                        }} else {{
+                            // Niveau 2+: Chercher bouton "Ajouter le filtre" avec ce label
+                            for (let btn of allButtons) {{
+                                const btnText = (btn.innerText || btn.textContent || '').trim();
+                                if (btnText.includes('Ajouter le filtre') && btnText.includes(heldLabel)) {{
+                                    button = btn;
+                                    break;
+                                }}
                             }}
                         }}
 
                         if (button) {{
-                            console.log('✅ Bouton "Ajouter le filtre" trouvé pour:', heldLabel);
+                            console.log('✅ Bouton trouvé pour:', heldLabel);
                             button.click();
                             // Rafraîchir pour afficher la couleur verte
                             setTimeout(() => {{
                                 render();
                             }}, 100);
                         }} else {{
-                            console.warn('⚠️ Bouton "Ajouter le filtre" NON trouvé pour:', heldLabel);
+                            console.warn('⚠️ Bouton NON trouvé pour:', heldLabel, '(niveau', heldLevel + ')');
                         }}
                     }} catch (e) {{
                         console.error('❌ Erreur lors du long-click:', e.message);
