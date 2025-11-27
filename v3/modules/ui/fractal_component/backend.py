@@ -151,6 +151,28 @@ def fractal_navigation(
 
         st.markdown("---")
 
+        # Boutons visibles "Ajouter le filtre" pour Revenus et Dépenses
+        st.markdown("**Ajouter un filtre:**")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("➕ Ajouter le filtre Revenus", key=f"{key}_add_filter_revenus", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'REVENUS' not in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.add('REVENUS')
+                st.rerun()
+
+        with col2:
+            if st.button("➕ Ajouter le filtre Dépenses", key=f"{key}_add_filter_depenses", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'DEPENSES' not in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.add('DEPENSES')
+                st.rerun()
+
+        st.markdown("---")
+
     # Selection buttons (visible, functional)
     if children_codes:
         st.markdown("**Sous-niveaux:**")
@@ -683,13 +705,13 @@ def _build_fractal_html(
                         let parentDoc = window.parent.document;
                         const allButtons = parentDoc.querySelectorAll('button');
 
-                        // Niveau 1: Chercher bouton de type (Revenus ou Dépenses)
+                        // Niveau 1: Chercher bouton "Ajouter le filtre" pour le type
                         if (heldLevel === 1) {{
                             for (let btn of allButtons) {{
                                 const btnText = (btn.innerText || btn.textContent || '').trim();
-                                // Format: "💹 Revenus" ou "💸 Dépenses"
-                                if ((heldLabel === 'Revenus' && btnText.startsWith('💹 Revenus')) ||
-                                    (heldLabel === 'Dépenses' && btnText.startsWith('💸 Dépenses'))) {{
+                                // Format: "➕ Ajouter le filtre Revenus" ou "➕ Ajouter le filtre Dépenses"
+                                if ((heldLabel === 'Revenus' && btnText.includes('Ajouter le filtre Revenus')) ||
+                                    (heldLabel === 'Dépenses' && btnText.includes('Ajouter le filtre Dépenses'))) {{
                                     button = btn;
                                     break;
                                 }}
