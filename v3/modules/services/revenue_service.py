@@ -147,8 +147,8 @@ def process_uber_revenue(
 
     transaction['montant'] = montant_final
 
-    # Ensure proper categorization
-    if 'uber' not in categorie.lower():
-        transaction['categorie'] = 'Uber'
+    # Note: Do NOT rename the category automatically
+    # Only apply tax if user explicitly checked the Uber tax box
+    # The category name is set by the user and should be respected
 
     return transaction, tax_message
