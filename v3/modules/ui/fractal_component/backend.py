@@ -153,8 +153,10 @@ def fractal_navigation(
 
         st.markdown("---")
 
-    # Selection buttons (visible, functional)
+    # Selection buttons (HIDDEN - only for JavaScript to find and click)
     if children_codes:
+        # Hide "Sous-niveaux:" section - triangles are visible navigation instead
+        st.markdown("<div style='display: none;'>", unsafe_allow_html=True)
         st.markdown("**Sous-niveaux:**")
 
         for idx, child_code in enumerate(children_codes):
@@ -229,6 +231,8 @@ def fractal_navigation(
                         st.session_state.fractal_selections.add(child_code)
                         st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _get_category_emoji(label: str) -> str:
