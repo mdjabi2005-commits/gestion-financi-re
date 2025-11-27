@@ -15,7 +15,9 @@
       "Bash(npm run build:*)",
       "Bash(claude doctor)",
       "Bash(find:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(xargs basename:*)"
     ],
     "deny": [],
     "ask": []
