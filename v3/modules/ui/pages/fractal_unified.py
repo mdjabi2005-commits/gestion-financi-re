@@ -142,13 +142,7 @@ def interface_fractal_unified():
         st.error("Aucune transaction dans la base de données")
         return
 
-    # TOP: FRACTAL NAVIGATION
-    st.subheader("🔺 Navigation")
-    fractal_navigation(hierarchy, key='fractal_minimal')
-
-    st.markdown("---")
-
-    # MIDDLE: FILTRES SÉLECTIONNÉS
+    # TOP: FILTRES SÉLECTIONNÉS
     st.subheader("🔍 Filtres sélectionnés")
 
     if st.session_state.fractal_selections:
@@ -265,6 +259,12 @@ def interface_fractal_unified():
             st.metric("💸 Dépenses Totales", f"{abs(depenses_total):,.0f}€")
         with col3:
             st.metric("💵 Solde Total", f"{solde_total:,.0f}€")
+
+    st.markdown("---")
+
+    # BOTTOM: FRACTAL NAVIGATION
+    st.subheader("🔺 Navigation")
+    fractal_navigation(hierarchy, key='fractal_minimal')
 
 
 if __name__ == "__main__":
