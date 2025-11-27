@@ -9,6 +9,6 @@ Utilise des triangles Sierpinski adaptatifs pour explorer les hiérarchies de do
 @date: 2025-11-25
 """
 
-from .backend import fractal_navigation
+from .backend import fractal_navigation, render_hidden_buttons
 
-__all__ = ['fractal_navigation']
+__all__ = ['fractal_navigation', 'render_hidden_buttons']

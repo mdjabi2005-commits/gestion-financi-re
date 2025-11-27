@@ -128,8 +128,132 @@ def fractal_navigation(
 
         st.markdown("---")
 
-    # Note: Hidden buttons are now rendered separately in fractal_unified.py at the bottom
-    # This keeps the component clean and allows precise control over button placement
+    # Note: Buttons are now rendered at the bottom via render_hidden_buttons()
+    # This keeps them out of the canvas section
+
+
+def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) -> None:
+    """
+    Render hidden buttons for JavaScript automation at the bottom of the page.
+
+    These buttons must be in the DOM for JavaScript to discover and click them.
+    They are placed at the bottom (after transactions) to match the desired layout.
+
+    Args:
+        hierarchy: Complete fractal hierarchy
+        key: Unique key for this component instance (must match fractal_navigation key)
+    """
+    if not key:
+        return
+
+    # Get current state
+    if f'{key}_current_node' not in st.session_state:
+        current_node = 'TR'
+    else:
+        current_node = st.session_state[f'{key}_current_node']
+
+    if f'{key}_nav_stack' not in st.session_state:
+        nav_stack = ['TR']
+    else:
+        nav_stack = st.session_state[f'{key}_nav_stack']
+
+    node = hierarchy.get(current_node, {})
+    children_codes = node.get('children', [])
+
+    # Filter buttons (invisible to user, only for JavaScript automation)
+    if current_node == 'TR':
+        # Hide filter buttons in expanders with minimal size
+        with st.expander("", expanded=False):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("➕ Ajouter le filtre Revenus", key=f"{key}_add_filter_revenus", use_container_width=True):
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
+                    if 'REVENUS' not in st.session_state.fractal_selections:
+                        st.session_state.fractal_selections.add('REVENUS')
+                    st.rerun()
+                # Hidden button for JavaScript to find and click
+                if st.button("💹 Revenus", key=f"{key}_filter_revenus", use_container_width=True):
+                    pass
+
+            with col2:
+                if st.button("➕ Ajouter le filtre Dépenses", key=f"{key}_add_filter_depenses", use_container_width=True):
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
+                    if 'DEPENSES' not in st.session_state.fractal_selections:
+                        st.session_state.fractal_selections.add('DEPENSES')
+                    st.rerun()
+                # Hidden button for JavaScript to find and click
+                if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
+                    pass
+
+    # Navigation buttons (invisible to user, only for JavaScript automation)
+    if children_codes:
+        # Hide navigation buttons in expanders with minimal size
+        with st.expander("", expanded=False):
+            for idx, child_code in enumerate(children_codes):
+                child_node = hierarchy.get(child_code, {})
+                child_label = child_node.get('label', child_code)
+                child_total = child_node.get('amount') or child_node.get('total') or 0
+
+                child_level = child_node.get('level', 0)
+                sub_children = child_node.get('children', [])
+                has_children = len(sub_children) > 0
+
+                # Create button text
+                if has_children:
+                    btn_text = f"📂 {child_label} ({child_total:,.0f}€)"
+                else:
+                    btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
+
+                # Create unique key
+                unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
+
+                # Invisible button for JavaScript to find and click
+                if st.button(btn_text, key=unique_key, use_container_width=True):
+                    if has_children:
+                        # Navigate deeper
+                        nav_stack.append(child_code)
+                        st.session_state[f'{key}_current_node'] = child_code
+                        st.session_state[f'{key}_nav_stack'] = nav_stack
+                        st.rerun()
+                    else:
+                        # Leaf node: select for filtering
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
+
+                        if child_code in st.session_state.fractal_selections:
+                            st.session_state.fractal_selections.discard(child_code)
+                            st.rerun()
+                        else:
+                            if child_level == 3:
+                                parent_code = child_node.get('parent', '')
+                                if parent_code in st.session_state.fractal_selections:
+                                    st.warning(f"{child_label} est déjà incluse dans {hierarchy.get(parent_code, {}).get('label', parent_code)}")
+                                else:
+                                    st.session_state.fractal_selections.add(child_code)
+                                    st.rerun()
+                            else:
+                                st.session_state.fractal_selections.add(child_code)
+                                st.rerun()
+
+                # Add invisible filter button for long-click
+                child_level = child_node.get('level', 0)
+                if child_level == 2 and has_children:
+                    nav_depth = '_'.join(nav_stack)
+                    add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
+
+                    # Invisible button for long-click
+                    if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                        if 'fractal_selections' not in st.session_state:
+                            st.session_state.fractal_selections = set()
+
+                        if child_code in st.session_state.fractal_selections:
+                            st.warning(f"{child_label} est déjà sélectionnée")
+                        else:
+                            st.session_state.fractal_selections.add(child_code)
+                            st.rerun()
 
 
 def _get_category_emoji(label: str) -> str:

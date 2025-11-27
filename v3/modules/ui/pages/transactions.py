@@ -12,7 +12,7 @@ import pandas as pd
 import io
 import sqlite3
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Optional, Dict
 import logger
 from config import DB_PATH, TO_SCAN_DIR , REVENUS_A_TRAITER
 from modules.database.connection import get_db_connection
@@ -35,6 +35,38 @@ from modules.services.file_service import (
     deplacer_fichiers_associes,
     supprimer_fichiers_associes
 )
+from modules.services.fractal_service import build_fractal_hierarchy
+from modules.ui.fractal_component import fractal_navigation, render_hidden_buttons
+
+
+def get_transactions_for_fractal_code(code: str, hierarchy: Dict, df: pd.DataFrame) -> pd.DataFrame:
+    """Get transactions for a specific fractal code (category or subcategory)."""
+    if not code or code not in hierarchy:
+        return pd.DataFrame()
+
+    node = hierarchy[code]
+    level = node.get('level', 0)
+
+    # Niveau 3 (sous-catégories)
+    if level == 3:
+        subcategory_name = node.get('label', '')
+        return df[df['sous_categorie'].str.lower() == subcategory_name.lower()]
+
+    # Niveau 2 (catégories) - afficher toutes les sous-catégories de cette catégorie
+    elif level == 2:
+        category_name = node.get('label', '')
+        return df[df['categorie'].str.lower() == category_name.lower()]
+
+    # Niveau 1 (type: Revenus/Dépenses) - afficher toutes les transactions du type
+    elif level == 1:
+        transaction_type = 'revenu' if code == 'REVENUS' else 'dépense'
+        return df[df['type'].str.lower() == transaction_type.lower()]
+
+    # Niveau 0 (root) - afficher tout
+    elif level == 0:
+        return df
+
+    return pd.DataFrame()
 
 
 def interface_transactions_simplifiee() -> None:
@@ -449,12 +481,15 @@ def interface_voir_transactions_v3() -> None:
 
     st.markdown("---")
 
-    # === FILTRE PAR CATÉGORIES (Navigation par bulles V3) ===
-    df_filtered = render_category_management(df)
+    # === INTERFACE FRACTALE POUR FILTRAGE PAR CATÉGORIES ===
+    st.subheader("🔺 Navigation Fractale")
+    hierarchy = build_fractal_hierarchy()
+    fractal_navigation(hierarchy, key='fractal_transactions')
 
     st.markdown("---")
 
-    # === APPLIQUER LES FILTRES ADDITIONNELS ===
+    # === APPLIQUER LES FILTRES FRACTALS ET ADDITIONNELS ===
+    df_filtered = df.copy()
     df_filtered["date"] = pd.to_datetime(df_filtered["date"])
 
     # Filtre période
@@ -469,6 +504,19 @@ def interface_voir_transactions_v3() -> None:
         df_filtered = df_filtered[df_filtered["type"] == "dépense"]
     elif type_filter == "Revenu":
         df_filtered = df_filtered[df_filtered["type"] == "revenu"]
+
+    # Filtre fractal (si des sélections sont faites)
+    if 'fractal_selections' in st.session_state and st.session_state.fractal_selections:
+        selected_codes = list(st.session_state.fractal_selections)
+        df_fractal_filtered = pd.DataFrame()
+
+        for code in selected_codes:
+            df_code = get_transactions_for_fractal_code(code, hierarchy, df_filtered)
+            df_fractal_filtered = pd.concat([df_fractal_filtered, df_code], ignore_index=True)
+
+        # Éliminer les doublons (si une catégorie et ses sous-catégories sont sélectionnées)
+        if not df_fractal_filtered.empty:
+            df_filtered = df_fractal_filtered.drop_duplicates(subset=['id'], keep='first')
 
     # TRI PAR DATE (plus récentes en premier) - PAR DÉFAUT
     df_filtered = df_filtered.sort_values("date", ascending=False).reset_index(drop=True)
@@ -689,6 +737,11 @@ def interface_voir_transactions_v3() -> None:
                         message += f" ({fichiers_supprimes} fichier(s) supprimé(s))"
                     toast_success(message)
                     refresh_and_rerun()
+
+    # === BOUTONS CACHÉS POUR JAVASCRIPT AUTOMATION ===
+    st.markdown("---")
+    st.subheader("🔳 Boutons cachés")
+    render_hidden_buttons(hierarchy, key='fractal_transactions')
 
     # === GÉRER LES RÉCURRENCES (EN EXPANDER) ===
     st.markdown("---")
