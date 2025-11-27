@@ -177,6 +177,19 @@ def interface_gerer_recurrences() -> None:
             st.info("Aucune transaction récurrente trouvée.")
             return
 
+        # Load the master transactions (source='récurrente') to get date_fin values
+        # since date_fin is stored in the master transaction, not in the auto ones
+        try:
+            conn = get_db_connection()
+            df_master = pd.read_sql_query(
+                "SELECT categorie, sous_categorie, date_fin FROM transactions WHERE source='récurrente'",
+                conn
+            )
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error loading master recurrence transactions: {e}")
+            df_master = pd.DataFrame()
+
         # Grouper par catégorie/sous-catégorie pour avoir une vue unique par récurrence
         df_grouped = df.groupby(['categorie', 'sous_categorie']).agg({
             'id': 'first',
@@ -186,6 +199,21 @@ def interface_gerer_recurrences() -> None:
             'date': 'first',
             'date_fin': 'first'
         }).reset_index()
+
+        # Merge with master transactions to get correct date_fin values
+        if not df_master.empty:
+            df_master_grouped = df_master.groupby(['categorie', 'sous_categorie']).agg({
+                'date_fin': 'first'
+            }).reset_index()
+            df_grouped = df_grouped.merge(
+                df_master_grouped,
+                on=['categorie', 'sous_categorie'],
+                how='left',
+                suffixes=('_auto', '_master')
+            )
+            # Use date_fin from master (récurrente) instead of auto
+            df_grouped['date_fin'] = df_grouped['date_fin_master'].fillna(df_grouped['date_fin_auto'])
+            df_grouped = df_grouped.drop(columns=['date_fin_auto', 'date_fin_master'])
 
         st.markdown("### 📋 Liste des récurrences actives")
 
