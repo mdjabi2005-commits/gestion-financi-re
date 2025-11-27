@@ -221,8 +221,8 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                 else:
                     btn_text = f"📋 {child_label} ({child_total:,.0f}€)"
 
-                # Create unique key
-                unique_key = f"{key}_nav_{'_'.join(nav_stack)}_{idx}_{child_code}"
+                # Create unique key - use stable key independent of nav_stack for performance
+                unique_key = f"{key}_nav_{child_code}_{idx}"
 
                 # Invisible button for JavaScript to find and click
                 if st.button(btn_text, key=unique_key, use_container_width=True):
