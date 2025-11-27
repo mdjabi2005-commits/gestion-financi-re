@@ -314,6 +314,7 @@ def _build_fractal_html(
             'color': _get_category_color(label),
             'amount': child_node.get('amount') or child_node.get('total') or 0,
             'has_children': len(child_node.get('children', [])) > 0,
+            'level': child_node.get('level', 0),  # Ajouter le niveau pour adapter le long-click
         }
 
     # Generate positions
@@ -625,15 +626,21 @@ def _build_fractal_html(
                 }}
             }});
 
-            // Si on appuie sur un triangle, démarrer le timer de 3 secondes
+            // Si on appuie sur un triangle, démarrer le timer
             if (pressedIdx >= 0) {{
                 mouseDownTime = Date.now();
                 heldTriangleIdx = pressedIdx;
 
+                // Déterminer la durée selon le niveau
+                const heldCode = CHILDREN_CODES[pressedIdx];
+                const heldLevel = CHILDREN_DATA[heldCode].level;
+                const clickDuration = (heldLevel === 1) ? 1000 : 3000; // 1s pour niveau 1, 3s sinon
+
                 longClickTimer = setTimeout(() => {{
-                    // 3 secondes écoulées: long-click activé
+                    // Timer écoulé: long-click activé
                     const heldCode = CHILDREN_CODES[heldTriangleIdx];
                     const heldLabel = CHILDREN_DATA[heldCode].label;
+                    const heldLevel = CHILDREN_DATA[heldCode].level;
 
                     console.log('⏱️ Long-click détecté (3s):', heldLabel);
                     console.log('📋 Clic long-click sur bouton:', heldLabel);
@@ -666,21 +673,21 @@ def _build_fractal_html(
                     }} catch (e) {{
                         console.error('❌ Erreur lors du long-click:', e.message);
                     }}
-                }}, longClickDuration);
+                }}, clickDuration);
 
                 render();
             }}
         }});
 
-        // Mouseup: cancel long-click if released before 3 seconds (normal click)
+        // Mouseup: cancel long-click if released before timer completes (normal click)
         canvas.addEventListener('mouseup', (e) => {{
             if (longClickTimer) {{
                 clearTimeout(longClickTimer);
                 longClickTimer = null;
 
-                // Si le long-click n'a pas complété (< 3 secondes), faire un clic normal
+                // Si le long-click n'a pas complété, faire un clic normal
                 const elapsedTime = Date.now() - mouseDownTime;
-                if (elapsedTime < longClickDuration && heldTriangleIdx >= 0) {{
+                if (heldTriangleIdx >= 0) {{
                     // Clic normal: cliquer le bouton Streamlit
                     const clickedIdx = heldTriangleIdx;
                     const clickedCode = CHILDREN_CODES[clickedIdx];
