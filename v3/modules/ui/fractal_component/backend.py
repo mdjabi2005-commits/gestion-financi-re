@@ -706,7 +706,7 @@ def _build_fractal_html(
                 // Déterminer la durée selon le niveau
                 const heldCode = CHILDREN_CODES[pressedIdx];
                 const heldLevel = CHILDREN_DATA[heldCode].level;
-                const clickDuration = (heldLevel === 1) ? 1000 : 3000; // 1s pour niveau 1, 3s sinon
+                const clickDuration = 1000; // 1s pour tous les niveaux
 
                 longClickTimer = setTimeout(() => {{
                     // Timer écoulé: long-click activé
@@ -714,7 +714,7 @@ def _build_fractal_html(
                     const heldLabel = CHILDREN_DATA[heldCode].label;
                     const heldLevel = CHILDREN_DATA[heldCode].level;
 
-                    const durMsg = (heldLevel === 1) ? '1s' : '3s';
+                    const durMsg = '1s';
                     console.log('⏱️ Long-click détecté (' + durMsg + '):', heldLabel);
                     console.log('📋 Clic long-click sur bouton:', heldLabel);
 
