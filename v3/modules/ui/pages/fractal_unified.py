@@ -144,7 +144,7 @@ def interface_fractal_unified():
 
     # TOP: FRACTAL NAVIGATION
     st.subheader("🔺 Navigation")
-    fractal_navigation(hierarchy, key='fractal_minimal')
+    st.info("👇 Utilisez le canvas fractal ci-dessous pour naviguer")
 
     st.markdown("---")
 
@@ -265,6 +265,12 @@ def interface_fractal_unified():
             st.metric("💸 Dépenses Totales", f"{abs(depenses_total):,.0f}€")
         with col3:
             st.metric("💵 Solde Total", f"{solde_total:,.0f}€")
+
+    st.markdown("---")
+
+    # BOTTOM: FRACTAL NAVIGATION (with hidden buttons)
+    st.subheader("🔺 Navigation")
+    fractal_navigation(hierarchy, key='fractal_minimal')
 
 
 if __name__ == "__main__":
