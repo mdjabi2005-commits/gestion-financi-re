@@ -137,7 +137,7 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
     Render hidden buttons for JavaScript automation at the bottom of the page.
 
     These buttons must be in the DOM for JavaScript to discover and click them.
-    They are placed at the bottom (after transactions) to match the desired layout.
+    They are rendered invisibly (hidden columns) to avoid taking up visual space.
 
     Args:
         hierarchy: Complete fractal hierarchy
@@ -160,10 +160,10 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
     node = hierarchy.get(current_node, {})
     children_codes = node.get('children', [])
 
-    # Filter buttons (invisible to user, only for JavaScript automation)
-    if current_node == 'TR':
-        # Hide filter buttons in expanders with minimal size
-        with st.expander("", expanded=False):
+    # Render buttons in invisible columns (don't display to user but exist in DOM for JavaScript)
+    with st.columns([1])[0]:
+        # Filter buttons (invisible to user, only for JavaScript automation)
+        if current_node == 'TR':
             col1, col2 = st.columns(2)
 
             with col1:
@@ -188,10 +188,8 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                 if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
                     pass
 
-    # Navigation buttons (invisible to user, only for JavaScript automation)
-    if children_codes:
-        # Hide navigation buttons in expanders with minimal size
-        with st.expander("", expanded=False):
+        # Navigation buttons (invisible to user, only for JavaScript automation)
+        if children_codes:
             for idx, child_code in enumerate(children_codes):
                 child_node = hierarchy.get(child_code, {})
                 child_label = child_node.get('label', child_code)

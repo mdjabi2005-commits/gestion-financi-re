@@ -738,13 +738,12 @@ def interface_voir_transactions_v3() -> None:
                     toast_success(message)
                     refresh_and_rerun()
 
-    # === BOUTONS CACHÉS POUR JAVASCRIPT AUTOMATION ===
-    st.markdown("---")
-    st.subheader("🔳 Boutons cachés")
-    render_hidden_buttons(hierarchy, key='fractal_transactions')
-
     # === GÉRER LES RÉCURRENCES (EN EXPANDER) ===
     st.markdown("---")
     with st.expander("🔁 Gérer les récurrences"):
         from .recurrences import interface_gerer_recurrences
         interface_gerer_recurrences()
+
+    # === BOUTONS CACHÉS POUR JAVASCRIPT AUTOMATION ===
+    # (Rendered invisibly - buttons exist in DOM for JavaScript but take no visual space)
+    render_hidden_buttons(hierarchy, key='fractal_transactions')

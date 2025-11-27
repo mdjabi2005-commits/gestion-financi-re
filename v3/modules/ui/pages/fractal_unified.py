@@ -269,7 +269,7 @@ def interface_fractal_unified():
     st.markdown("---")
 
     # BOTTOM: HIDDEN BUTTONS (for JavaScript automation)
-    st.subheader("🔳 Boutons cachés")
+    # (Rendered invisibly - buttons exist in DOM for JavaScript but take no visual space)
     render_hidden_buttons(hierarchy, key='fractal_minimal')
 
 if __name__ == "__main__":
