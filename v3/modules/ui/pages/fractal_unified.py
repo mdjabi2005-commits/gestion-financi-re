@@ -270,8 +270,48 @@ def interface_fractal_unified():
 
     # BOTTOM: HIDDEN BUTTONS (for JavaScript automation)
     st.subheader("🔧 Boutons cachés")
-    # Show only the hidden buttons at the bottom (no canvas)
-    fractal_navigation(hierarchy, key='fractal_minimal_buttons', show_canvas=False)
+
+    # Re-render fractal_navigation WITHOUT canvas to get the hidden buttons
+    # This will only show the expanders with hidden buttons
+    with st.expander("", expanded=False):
+        # This section contains the filter buttons for level 1 (Revenus/Dépenses)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("➕ Ajouter le filtre Revenus", key=f"bottom_add_filter_revenus", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'REVENUS' not in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.add('REVENUS')
+                st.rerun()
+            if st.button("💹 Revenus", key=f"bottom_filter_revenus", use_container_width=True):
+                pass
+        with col2:
+            if st.button("➕ Ajouter le filtre Dépenses", key=f"bottom_add_filter_depenses", use_container_width=True):
+                if 'fractal_selections' not in st.session_state:
+                    st.session_state.fractal_selections = set()
+                if 'DEPENSES' not in st.session_state.fractal_selections:
+                    st.session_state.fractal_selections.add('DEPENSES')
+                st.rerun()
+            if st.button("💸 Dépenses", key=f"bottom_filter_depenses", use_container_width=True):
+                pass
+
+    # Navigation buttons expander
+    current_node = st.session_state.get(f'fractal_minimal_current_node', 'TR')
+    nav_stack = st.session_state.get(f'fractal_minimal_nav_stack', ['TR'])
+    children_codes = hierarchy.get(current_node, {}).get('children', [])
+
+    if children_codes:
+        with st.expander("", expanded=False):
+            for idx, child_code in enumerate(children_codes):
+                child_node = hierarchy.get(child_code, {})
+                child_label = child_node.get('label', child_code)
+                child_total = child_node.get('amount') or child_node.get('total') or 0
+                has_children = len(child_node.get('children', [])) > 0
+
+                btn_text = f"📂 {child_label} ({child_total:,.0f}€)" if has_children else f"📋 {child_label} ({child_total:,.0f}€)"
+
+                if st.button(btn_text, key=f"bottom_nav_{idx}_{child_code}", use_container_width=True):
+                    pass
 
 
 if __name__ == "__main__":
