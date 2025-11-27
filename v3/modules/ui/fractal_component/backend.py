@@ -122,36 +122,6 @@ def fractal_navigation(
 
     # Boutons spéciaux pour filtrer par type (Revenu/Dépense) - Niveau 1
     if current_node == 'TR':
-        st.markdown("**Filtrer par type:**")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("<div style='display: none;' data-testid='hidden-filter-type-button'>", unsafe_allow_html=True)
-            if st.button("💹 Revenus", key=f"{key}_filter_revenus", use_container_width=True):
-                if 'fractal_selections' not in st.session_state:
-                    st.session_state.fractal_selections = set()
-                if 'REVENUS' in st.session_state.fractal_selections:
-                    st.session_state.fractal_selections.discard('REVENUS')
-                else:
-                    st.session_state.fractal_selections.add('REVENUS')
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("<div style='display: none;' data-testid='hidden-filter-type-button'>", unsafe_allow_html=True)
-            if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
-                if 'fractal_selections' not in st.session_state:
-                    st.session_state.fractal_selections = set()
-                if 'DEPENSES' in st.session_state.fractal_selections:
-                    st.session_state.fractal_selections.discard('DEPENSES')
-                else:
-                    st.session_state.fractal_selections.add('DEPENSES')
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Boutons visibles "Ajouter le filtre" pour Revenus et Dépenses
         st.markdown("**Ajouter un filtre:**")
         col1, col2 = st.columns(2)
 
@@ -162,6 +132,11 @@ def fractal_navigation(
                 if 'REVENUS' not in st.session_state.fractal_selections:
                     st.session_state.fractal_selections.add('REVENUS')
                 st.rerun()
+            # Hidden button for JavaScript to find and click
+            st.markdown("<div style='display: none;' data-testid='hidden-revenus-button'>", unsafe_allow_html=True)
+            if st.button("💹 Revenus", key=f"{key}_filter_revenus", use_container_width=True):
+                pass
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
             if st.button("➕ Ajouter le filtre Dépenses", key=f"{key}_add_filter_depenses", use_container_width=True):
@@ -170,6 +145,11 @@ def fractal_navigation(
                 if 'DEPENSES' not in st.session_state.fractal_selections:
                     st.session_state.fractal_selections.add('DEPENSES')
                 st.rerun()
+            # Hidden button for JavaScript to find and click
+            st.markdown("<div style='display: none;' data-testid='hidden-depenses-button'>", unsafe_allow_html=True)
+            if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
+                pass
+            st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("---")
 
