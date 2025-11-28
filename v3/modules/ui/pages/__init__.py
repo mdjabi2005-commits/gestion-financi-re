@@ -17,7 +17,7 @@ Available Pages:
 from .home import interface_accueil
 from .transactions import (
     interface_transactions_simplifiee,
-    interface_voir_transactions_v3,
+    interface_voir_transactions,
     interface_ajouter_depenses_fusionnee
 )
 from .revenues import interface_process_all_revenues_in_folder
@@ -37,7 +37,7 @@ __all__ = [
 
     # Transaction pages
     'interface_transactions_simplifiee',
-    'interface_voir_transactions_v3',
+    'interface_voir_transactions',
     'interface_ajouter_depenses_fusionnee',
 
     # Revenue pages

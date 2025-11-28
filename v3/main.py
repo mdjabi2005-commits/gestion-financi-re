@@ -52,16 +52,11 @@ from modules.ui.components import toast_success
 from modules.ui.pages import (
     interface_accueil,
     interface_transactions_simplifiee,
-    interface_voir_transactions_v3,
+    interface_voir_transactions,
     interface_portefeuille,
     interface_ocr_analysis_complete,
     render_problematic_tickets_page
 )
-
-# ==============================
-# IMPORTS - Triangle & Table Pages
-# ==============================
-from modules.ui.pages.fractal_unified import interface_fractal_unified
 
 # ==============================
 # LOGGING CONFIGURATION
@@ -111,9 +106,7 @@ def main():
                 "📊 Voir Transactions",
                 "💼 Portefeuille",
                 "🔍 Analyse OCR",
-                "🔧 Tickets Problématiques",
-                "---",
-                "🔺 Navigation Fractale"
+                "🔧 Tickets Problématiques"
             ]
         )
 
@@ -144,7 +137,7 @@ def main():
             interface_transactions_simplifiee()
 
         elif page == "📊 Voir Transactions":
-            interface_voir_transactions_v3()
+            interface_voir_transactions()
 
         elif page == "💼 Portefeuille":
             interface_portefeuille()
@@ -154,9 +147,6 @@ def main():
 
         elif page == "🔧 Tickets Problématiques":
             render_problematic_tickets_page()
-
-        elif page == "🔺 Navigation Fractale":
-            interface_fractal_unified()
 
     except Exception as e:
         logger.critical(f"Application V4 failed: {e}", exc_info=True)

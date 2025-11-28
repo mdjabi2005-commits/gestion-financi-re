@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional
-import logger
+import logging
 from config import DB_PATH
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
@@ -25,6 +25,8 @@ from modules.ui.components import toast_success, toast_error
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.file_service import supprimer_fichiers_associes
 from modules.services.normalization import normalize_category, normalize_subcategory
+
+logger = logging.getLogger(__name__)
 
 
 def interface_transaction_recurrente(type_transaction: str = "dépense") -> None:

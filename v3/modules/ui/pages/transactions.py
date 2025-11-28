@@ -10,23 +10,19 @@ This module contains all transaction-related interface functions including:
 import streamlit as st
 import pandas as pd
 import io
-import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict
-import logger
 from config import DB_PATH, TO_SCAN_DIR , REVENUS_A_TRAITER
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import (
     load_transactions,
-    load_recurrent_transactions,
     insert_transaction_batch,
     refresh_and_rerun
 )
 
 from modules.ui.components import (
     toast_success, toast_error, toast_warning,
-    afficher_documents_associes, get_badge_icon,
-    render_category_management
+    afficher_documents_associes, get_badge_icon
 )
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
@@ -52,7 +48,7 @@ def get_transactions_for_fractal_code(code: str, hierarchy: Dict, df: pd.DataFra
     node = hierarchy[code]
     level = node.get('level', 0)
 
-    # Niveau 3 (sous-catégories) - IMPORTANT: filtrer aussi par catégorie parente
+    # Niveau 3 (sous-catégories) - IMPORTANT: filtrer aussi par catégorie parente ET par type
     if level == 3:
         subcategory_name = node.get('label', '')
         parent_code = node.get('parent', '')
@@ -61,9 +57,14 @@ def get_transactions_for_fractal_code(code: str, hierarchy: Dict, df: pd.DataFra
         if parent_code and parent_code in hierarchy:
             parent_node = hierarchy[parent_code]
             category_name = parent_node.get('label', '')
+            parent_parent_code = parent_node.get('parent', '')
 
-            # Filtrer à la fois par catégorie ET sous-catégorie pour éviter les conflits
+            # Déterminer le type (revenu/dépense) à partir du grand-parent
+            transaction_type = 'revenu' if parent_parent_code == 'REVENUS' else 'dépense'
+
+            # Filtrer par type ET catégorie ET sous-catégorie pour éviter tout conflit
             df_filtered = df[
+                (df['type'].str.lower() == transaction_type.lower()) &
                 (df['categorie'].str.lower() == category_name.lower()) &
                 (df['sous_categorie'].str.lower() == subcategory_name.lower())
             ]
@@ -75,7 +76,16 @@ def get_transactions_for_fractal_code(code: str, hierarchy: Dict, df: pd.DataFra
     # Niveau 2 (catégories) - afficher toutes les sous-catégories de cette catégorie
     elif level == 2:
         category_name = node.get('label', '')
-        return df[df['categorie'].str.lower() == category_name.lower()]
+        parent_code = node.get('parent', '')  # This is REVENUS or DEPENSES (level 1)
+
+        # Déterminer le type (revenu/dépense) directement depuis le parent
+        transaction_type = 'revenu' if parent_code == 'REVENUS' else 'dépense'
+
+        # Filtrer par catégorie ET type pour éviter les doublons si une catégorie existe dans les deux
+        return df[
+            (df['categorie'].str.lower() == category_name.lower()) &
+            (df['type'].str.lower() == transaction_type.lower())
+        ]
 
     # Niveau 1 (type: Revenus/Dépenses) - afficher toutes les transactions du type
     elif level == 1:
@@ -413,7 +423,7 @@ revenu,2024-01-15,freelance,mission,450.00,Projet X"""
 
 
 
-def interface_voir_transactions_v3() -> None:
+def interface_voir_transactions() -> None:
     """
     View and edit transactions interface with filters and data editor.
 

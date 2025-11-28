@@ -59,6 +59,31 @@ def fractal_navigation(
 
     # Render the triangle visualization (pure visual) - only if show_canvas is True
     if show_canvas:
+        # Afficher le breadcrumb/chemin en haut avec navigation cliquable
+        breadcrumb_cols = st.columns(len(nav_stack) * 2 - 1, gap="small")
+
+        for idx, code in enumerate(nav_stack):
+            breadcrumb_node = hierarchy.get(code, {})
+            label = breadcrumb_node.get('label', code)
+
+            # Afficher le label
+            col_idx = idx * 2
+            if col_idx < len(breadcrumb_cols):
+                with breadcrumb_cols[col_idx]:
+                    if st.button(label, key=f"{key}_breadcrumb_{idx}_{code}", use_container_width=True):
+                        # Naviguer au niveau cliqué
+                        new_nav_stack = nav_stack[:idx+1]
+                        st.session_state[f'{key}_current_node'] = code
+                        st.session_state[f'{key}_nav_stack'] = new_nav_stack
+                        st.rerun()
+
+            # Afficher le séparateur (sauf pour le dernier)
+            if idx < len(nav_stack) - 1:
+                sep_idx = idx * 2 + 1
+                if sep_idx < len(breadcrumb_cols):
+                    with breadcrumb_cols[sep_idx]:
+                        st.write("→")
+
         # Créer un placeholder pour stocker les clics sur triangles
         triangle_click_placeholder = st.empty()
 
@@ -252,22 +277,29 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                                 st.session_state.fractal_selections.add(child_code)
                                 st.rerun()
 
-                # Add invisible filter button for long-click
+                # Add invisible filter button for long-click (toggle: add or remove)
                 child_level = child_node.get('level', 0)
                 if child_level == 2 and has_children:
                     nav_depth = '_'.join(nav_stack)
                     add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
 
-                    # Invisible button for long-click
-                    if st.button(f"➕ Ajouter le filtre '{child_label}'", key=add_filter_key, use_container_width=True):
+                    # Invisible button for long-click (always available, works as toggle)
+                    # If not selected, the button text shows "Ajouter", otherwise "Retirer"
+                    if 'fractal_selections' not in st.session_state:
+                        st.session_state.fractal_selections = set()
+
+                    is_selected = child_code in st.session_state.fractal_selections
+                    button_text = f"✕ Retirer le filtre '{child_label}'" if is_selected else f"➕ Ajouter le filtre '{child_label}'"
+
+                    if st.button(button_text, key=add_filter_key, use_container_width=True):
                         if 'fractal_selections' not in st.session_state:
                             st.session_state.fractal_selections = set()
 
                         if child_code in st.session_state.fractal_selections:
-                            st.warning(f"{child_label} est déjà sélectionnée")
+                            st.session_state.fractal_selections.discard(child_code)
                         else:
                             st.session_state.fractal_selections.add(child_code)
-                            st.rerun()
+                        st.rerun()
 
 
 def _get_category_emoji(label: str) -> str:
@@ -736,10 +768,10 @@ def _build_fractal_html(
                                 }}
                             }}
                         }} else {{
-                            // Niveau 2+: Chercher bouton "Ajouter le filtre" avec ce label
+                            // Niveau 2+: Chercher bouton "Ajouter le filtre" OU "Retirer le filtre" avec ce label
                             for (let btn of allButtons) {{
                                 const btnText = (btn.innerText || btn.textContent || '').trim();
-                                if (btnText.includes('Ajouter le filtre') && btnText.includes(heldLabel)) {{
+                                if ((btnText.includes('Ajouter le filtre') || btnText.includes('Retirer le filtre')) && btnText.includes(heldLabel)) {{
                                     button = btn;
                                     break;
                                 }}

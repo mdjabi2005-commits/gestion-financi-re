@@ -12,11 +12,12 @@ import matplotlib.pyplot as plt
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from typing import Optional
-
-import logger
+import logging
 from modules.ui.helpers import load_transactions
 from modules.ui.components import toast_error, toast_warning
 from modules.ui.helpers import refresh_and_rerun
+
+logger = logging.getLogger(__name__)
 
 
 def interface_accueil() -> None:

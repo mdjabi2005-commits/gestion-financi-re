@@ -212,7 +212,8 @@ def build_fractal_hierarchy(
                 cat_name = cat_row['categorie']
                 cat_amount = float(cat_row['montant'])
                 cat_count = int(cat_row['count'])
-                cat_code = f"CAT_{cat_name.upper().replace(' ', '_').replace('-', '_')}"
+                # Include type_code in category code to make it unique (avoid collisions if same category exists in REVENUS and DEPENSES)
+                cat_code = f"CAT_{type_code}_{cat_name.upper().replace(' ', '_').replace('-', '_')}"
                 cat_color = get_category_color(cat_name, tx_type)
 
                 cat_percentage = (cat_amount / type_total * 100) if type_total > 0 else 0
@@ -246,7 +247,8 @@ def build_fractal_hierarchy(
                     subcat_name = subcat_row['sous_categorie']
                     subcat_amount = float(subcat_row['montant'])
                     subcat_count = int(subcat_row['count'])
-                    subcat_code = f"SUBCAT_{cat_name.upper().replace(' ', '_').replace('-', '_')}_" \
+                    # Include type_code in subcategory code to make it unique (avoid collisions)
+                    subcat_code = f"SUBCAT_{type_code}_{cat_name.upper().replace(' ', '_').replace('-', '_')}_" \
                                  f"{subcat_name.upper().replace(' ', '_').replace('-', '_')}"
 
                     # Use slightly darker shade of category color

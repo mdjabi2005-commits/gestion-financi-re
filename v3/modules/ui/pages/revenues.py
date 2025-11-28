@@ -13,7 +13,7 @@ import re
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional, Dict, Any
-import logger
+import logging
 from config import REVENUS_A_TRAITER, REVENUS_TRAITES
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
@@ -25,6 +25,7 @@ from modules.ocr.parsers import parse_uber_pdf, parse_fiche_paie
 from modules.utils.formatters import numero_to_mois
 from modules.ocr.logging import log_ocr_scan, determine_success_level
 
+logger = logging.getLogger(__name__)
 
 
 def interface_process_all_revenues_in_folder() -> None:

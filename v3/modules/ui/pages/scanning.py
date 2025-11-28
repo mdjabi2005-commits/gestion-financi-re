@@ -8,7 +8,7 @@ import os
 import streamlit as st
 from datetime import datetime
 from typing import Optional
-import logger
+import logging
 from config import TO_SCAN_DIR
 from modules.database.connection import get_db_connection
 from modules.ui.helpers import insert_transaction_batch
@@ -20,6 +20,8 @@ from modules.ocr.parsers import (
     move_ticket_to_sorted, move_ticket_to_problematic
 )
 from modules.ocr.logging import log_ocr_scan, determine_success_level, log_potential_patterns
+
+logger = logging.getLogger(__name__)
 
 
 def process_all_tickets_in_folder() -> None:
