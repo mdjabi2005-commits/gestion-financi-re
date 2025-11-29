@@ -202,24 +202,24 @@ def render_forecasts_tab(conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> No
 
             df_prev["solde_previsionnel"] = solde_cum[1:]
 
-            # Afficher le tableau
-            st.markdown("##### 📋 Prévisions futures (Récurrentes + Échéances)")
-            df_prev_display = df_prev.copy()
-            df_prev_display["date"] = df_prev_display["date"].dt.strftime("%d/%m/%Y")
-            df_prev_display["Type"] = df_prev_display["type"].apply(lambda x: "💹 Revenu" if x == "revenu" else "💸 Dépense")
+            # Afficher le tableau dans un expander
+            with st.expander("📋 Voir le détail des prévisions futures (Récurrentes + Échéances)", expanded=False):
+                df_prev_display = df_prev.copy()
+                df_prev_display["date"] = df_prev_display["date"].dt.strftime("%d/%m/%Y")
+                df_prev_display["Type"] = df_prev_display["type"].apply(lambda x: "💹 Revenu" if x == "revenu" else "💸 Dépense")
 
-            st.dataframe(
-                df_prev_display[["date", "Type", "categorie", "montant", "solde_previsionnel", "source", "description"]].rename(columns={
-                    "date": "Date",
-                    "categorie": "Catégorie",
-                    "montant": "Montant (€)",
-                    "solde_previsionnel": "Solde prév. (€)",
-                    "source": "Origine",
-                    "description": "Description"
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
+                st.dataframe(
+                    df_prev_display[["date", "Type", "categorie", "montant", "solde_previsionnel", "source", "description"]].rename(columns={
+                        "date": "Date",
+                        "categorie": "Catégorie",
+                        "montant": "Montant (€)",
+                        "solde_previsionnel": "Solde prév. (€)",
+                        "source": "Origine",
+                        "description": "Description"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
             # Métriques
             col1, col2, col3 = st.columns(3)

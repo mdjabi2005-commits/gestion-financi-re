@@ -22,9 +22,8 @@ from config import DB_PATH
 from modules.database.connection import get_db_connection
 from modules.services.recurrence_service import backfill_recurrences_to_today
 from modules.ui.pages.portfolio.helpers import normalize_recurrence_column
-from modules.ui.pages.portfolio.budgets import render_budgets_tab
+from modules.ui.pages.portfolio.overview_budgets import render_overview_budgets_tab
 from modules.ui.pages.portfolio.objectives import render_objectives_tab
-from modules.ui.pages.portfolio.overview import render_overview_tab
 from modules.ui.pages.portfolio.forecasts import render_forecasts_tab
 
 
@@ -39,10 +38,9 @@ def interface_portefeuille() -> None:
     - Forecasts and predictions
 
     Structure:
-    - Tab 1: Budgets par catégorie
+    - Tab 1: Vue d'ensemble & Budgets (combined)
     - Tab 2: Objectifs financiers
-    - Tab 3: Vue d'ensemble
-    - Tab 4: Prévisions
+    - Tab 3: Prévisions
 
     Returns:
         None
@@ -119,19 +117,16 @@ def interface_portefeuille() -> None:
     backfill_recurrences_to_today(DB_PATH)
 
     # Onglets principaux
-    tab1, tab2, tab3, tab4 = st.tabs(["💰 Budgets par catégorie", "🎯 Objectifs", "📊 Vue d'ensemble", "📅 Prévisions"])
+    tab1, tab2, tab3 = st.tabs(["📊 Vue d'ensemble & Budgets", "🎯 Objectifs", "📅 Prévisions"])
 
     # Route to tab functions
     with tab1:
-        render_budgets_tab(conn, cursor)
+        render_overview_budgets_tab(conn, cursor)
 
     with tab2:
         render_objectives_tab(conn, cursor)
 
     with tab3:
-        render_overview_tab(conn, cursor)
-
-    with tab4:
         render_forecasts_tab(conn, cursor)
 
     conn.close()

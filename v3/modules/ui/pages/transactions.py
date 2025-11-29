@@ -27,6 +27,7 @@ from modules.ui.components import (
 from modules.utils.converters import safe_convert, safe_date_convert
 from modules.services.revenue_service import is_uber_transaction, process_uber_revenue
 from modules.services.recurrence_service import backfill_recurrences_to_today
+from modules.services.normalization import normalize_category, normalize_subcategory
 from modules.services.file_service import (
     deplacer_fichiers_associes,
     supprimer_fichiers_associes
@@ -253,8 +254,8 @@ def interface_ajouter_depenses_fusionnee() -> None:
             else:
                 transaction_data = {
                     "type": type_tr,
-                    "categorie": cat.strip().lower(),
-                    "sous_categorie": sous_cat.strip().lower(),
+                    "categorie": normalize_category(cat.strip()),
+                    "sous_categorie": normalize_subcategory(sous_cat.strip()),
                     "description": desc.strip(),
                     "montant": float(montant),
                     "date": date_tr.isoformat(),
@@ -769,8 +770,8 @@ def interface_voir_transactions() -> None:
                             WHERE id = ?
                         """, (
                             str(row["type"]).strip().lower(),
-                            str(row["categorie"]).strip().lower(),
-                            str(row["sous_categorie"]).strip().lower(),
+                            normalize_category(str(row["categorie"]).strip()),
+                            normalize_subcategory(str(row["sous_categorie"]).strip()),
                             safe_convert(row["montant"], float, 0.0),
                             safe_date_convert(row["date"]).isoformat(),
                             str(row.get("description", "")).strip(),
