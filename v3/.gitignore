@@ -61,3 +61,10 @@ screenshots/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Claude Code
+.claude/settings.local.json
+
+# Distribution folders
+../v4/
+v4/
