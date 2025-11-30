@@ -86,7 +86,10 @@ def fractal_navigation(
 
         # Create unique component key to avoid caching issues
         unique_component_key = f"{key}_{current_node}"
-        html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
+        # Convert to tuples for caching (hashable types)
+        children_codes_tuple = tuple(children_codes)
+        selected_codes_tuple = tuple(selected_codes) if selected_codes else None
+        html_content = _build_fractal_html(hierarchy, current_node, children_codes_tuple, unique_component_key, selected_codes_tuple)
         component_response = components.html(html_content, height=900)
 
         st.markdown("---")
@@ -128,9 +131,13 @@ def fractal_navigation(
 
 
 
+@st.fragment
 def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) -> None:
     """
     Render hidden buttons for JavaScript automation at the bottom of the page.
+    
+    Uses @st.fragment to isolate button rendering from main page updates,
+    improving animation performance.
 
     These buttons must be in the DOM for JavaScript to discover and click them.
     They are rendered invisibly (hidden columns) to avoid taking up visual space.
@@ -349,20 +356,27 @@ def _get_category_color(label: str) -> str:
     return color_map.get(label, '#fbbf24')
 
 
+@st.cache_data(show_spinner=False)
 def _build_fractal_html(
     hierarchy: Dict[str, Any],
     current_node: str,
-    children_codes: list,
+    children_codes: tuple,  # Changed from list to tuple for hashability
     component_key: str,
-    selected_codes: set = None
+    selected_codes: tuple = None  # Changed from set to tuple for hashability
 ) -> str:
-    """Build HTML/CSS/JS for fractal visualization (visual only)."""
+    """Build HTML/CSS/JS for fractal visualization (visual only).
+    
+    Cached to avoid regenerating HTML on every render, improving performance.
+    """
 
     if not children_codes:
         return "<p style='color: #94a3b8; text-align: center; padding: 20px;'>Aucune sous-catégorie</p>"
 
+    # Convert tuple back to set for processing
     if selected_codes is None:
         selected_codes = set()
+    else:
+        selected_codes = set(selected_codes)
 
     # Prepare children data
     children_data = {}
