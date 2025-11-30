@@ -25,6 +25,29 @@ logger = logging.getLogger(__name__)
 # 📊 DATA LOADING FUNCTIONS
 # ==============================
 
+def get_transaction_count() -> int:
+    """
+    Get the current number of transactions in database.
+
+    Used for intelligent cache invalidation - recalculates only when
+    transaction count changes, not based on arbitrary time limits.
+
+    Returns:
+        Count of transactions (uncached)
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM transactions")
+        count = cur.fetchone()[0]
+        conn.close()
+        return count
+    except Exception as e:
+        logger.error(f"Error counting transactions: {e}")
+        return 0
+
+
+@st.cache_data
 def load_transactions(sort_by: str = "date", ascending: bool = False) -> pd.DataFrame:
     """
     Load all transactions from the database with safe conversions.

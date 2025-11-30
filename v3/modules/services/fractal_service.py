@@ -15,7 +15,9 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import pandas as pd
+import streamlit as st
 from modules.database.repositories import TransactionRepository
+from modules.ui.helpers import get_transaction_count
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,15 @@ def get_type_color(transaction_type: str) -> str:
         return '#f59e0b'  # Orange
 
 
+@st.cache_data
+def _build_fractal_hierarchy_cached(
+    date_debut: Optional[str] = None,
+    date_fin: Optional[str] = None
+) -> Dict[str, Any]:
+    """Internal cached version of build_fractal_hierarchy."""
+    return _build_fractal_hierarchy_impl(date_debut, date_fin)
+
+
 def build_fractal_hierarchy(
     date_debut: Optional[str] = None,
     date_fin: Optional[str] = None
@@ -144,6 +155,28 @@ def build_fractal_hierarchy(
                 'level': 3
             }
         }
+    """
+    # Smart cache invalidation: only rebuild if transaction count changes
+    if 'last_transaction_count' not in st.session_state:
+        st.session_state.last_transaction_count = get_transaction_count()
+
+    current_count = get_transaction_count()
+
+    if current_count != st.session_state.last_transaction_count:
+        st.cache_data.clear()
+        st.session_state.last_transaction_count = current_count
+
+    # Use cached implementation
+    return _build_fractal_hierarchy_cached(date_debut, date_fin)
+
+
+def _build_fractal_hierarchy_impl(
+    date_debut: Optional[str] = None,
+    date_fin: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Internal implementation of build_fractal_hierarchy.
+    This is called by the cached version.
     """
     logger.info(f"Building fractal hierarchy (date_debut={date_debut}, date_fin={date_fin})")
 

@@ -90,7 +90,7 @@ def fractal_navigation(
         # Créer un composant_key unique qui change avec le nœud courant pour éviter le cache
         unique_component_key = f"{key}_{current_node}"
         html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
-        component_response = components.html(html_content, height=650)
+        component_response = components.html(html_content, height=900)
 
         st.markdown("---")
 
@@ -131,27 +131,7 @@ def fractal_navigation(
 
                         st.rerun()
 
-    # Navigation buttons - only show if canvas is visible
-    if show_canvas:
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if len(nav_stack) > 1:
-                # Use stable key independent of nav_stack to avoid recreation
-                if st.button("← Retour", key=f"{key}_back", use_container_width=True):
-                    nav_stack.pop()
-                    st.session_state[f'{key}_current_node'] = nav_stack[-1]
-                    st.session_state[f'{key}_nav_stack'] = nav_stack
-                    st.rerun()
-
-        with col2:
-            if current_node != 'TR':
-                # Use stable key independent of nav_stack to avoid recreation
-                if st.button("🏠 Vue d'ensemble", key=f"{key}_reset", use_container_width=True):
-                    st.session_state[f'{key}_current_node'] = 'TR'
-                    st.session_state[f'{key}_nav_stack'] = ['TR']
-                    st.rerun()
-
-        st.markdown("---")
+    # Navigation via breadcrumb only (removed separate buttons to avoid layout shifts)
 
     # Note: Buttons are now rendered at the bottom via render_hidden_buttons()
     # This keeps them out of the canvas section
@@ -423,7 +403,7 @@ def _build_fractal_html(
 
     # Generate positions
     num_children = len(children_codes)
-    positions = _get_triangle_positions(num_children, 400, 400)
+    positions = _get_triangle_positions(num_children, 550, 550)
 
     # Generate button keys for reference
     button_key_map = {}
@@ -877,21 +857,21 @@ def _get_triangle_positions(num_children: int, canvas_width: int, canvas_height:
     positions = []
 
     if num_children == 1:
-        base_size = 55
+        base_size = 75
         positions.append({'x': 0, 'y': 0, 'size': base_size})
     elif num_children == 2:
-        base_size = 55
-        spacing = 100
+        base_size = 75
+        spacing = 130
         positions.append({'x': -spacing, 'y': 0, 'size': base_size})
         positions.append({'x': spacing, 'y': 0, 'size': base_size})
     elif num_children == 3:
-        base_size = 55
-        positions.append({'x': 0, 'y': -80, 'size': base_size})
-        positions.append({'x': -80, 'y': 60, 'size': base_size})
-        positions.append({'x': 80, 'y': 60, 'size': base_size})
+        base_size = 75
+        positions.append({'x': 0, 'y': -100, 'size': base_size})
+        positions.append({'x': -100, 'y': 80, 'size': base_size})
+        positions.append({'x': 100, 'y': 80, 'size': base_size})
     elif num_children == 4:
-        base_size = 55
-        spacing = 100
+        base_size = 75
+        spacing = 130
         positions.append({'x': 0, 'y': -spacing, 'size': base_size})
         positions.append({'x': spacing, 'y': 0, 'size': base_size})
         positions.append({'x': 0, 'y': spacing, 'size': base_size})
@@ -899,14 +879,14 @@ def _get_triangle_positions(num_children: int, canvas_width: int, canvas_height:
     else:
         # Pour 5+ catégories, adapter taille et rayon
         # Taille réduite adaptée au nombre de catégories
-        base_size = max(35, 60 - (num_children * 1.5))
+        base_size = max(45, 75 - (num_children * 1.5))
 
         # Rayon adaptatif : AUGMENTÉ pour utiliser plus d'espace
-        # Formule: radius = 140 + (num_children * 8)
-        # Pour 11 catégories : radius = 140 + 88 = 228px (remplissage meilleur)
-        # Pour 7 catégories : radius = 140 + 56 = 196px
-        # Pour 5 catégories : radius = 140 + 40 = 180px
-        radius = 140 + (num_children * 8)
+        # Formule: radius = 160 + (num_children * 10)
+        # Pour 11 catégories : radius = 160 + 110 = 270px (plus d'espace)
+        # Pour 7 catégories : radius = 160 + 70 = 230px
+        # Pour 5 catégories : radius = 160 + 50 = 210px
+        radius = 160 + (num_children * 10)
 
         angle_step = 2 * math.pi / num_children
         for i in range(num_children):
