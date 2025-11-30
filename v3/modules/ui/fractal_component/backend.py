@@ -84,10 +84,7 @@ def fractal_navigation(
                     with breadcrumb_cols[sep_idx]:
                         st.write("→")
 
-        # Créer un placeholder pour stocker les clics sur triangles
-        triangle_click_placeholder = st.empty()
-
-        # Créer un composant_key unique qui change avec le nœud courant pour éviter le cache
+        # Create unique component key to avoid caching issues
         unique_component_key = f"{key}_{current_node}"
         html_content = _build_fractal_html(hierarchy, current_node, children_codes, unique_component_key, selected_codes)
         component_response = components.html(html_content, height=900)
@@ -98,16 +95,14 @@ def fractal_navigation(
     else:
         component_response = None
 
-    # Gérer les réponses du component (clics normaux) - seulement si show_canvas
+    # Handle component responses (triangle clicks)
     if component_response:
         if isinstance(component_response, dict):
             if component_response.get('type') == 'triangle_click':
-                # Normal click handling (from old code)
                 clicked_code = component_response.get('code')
                 clicked_label = component_response.get('label')
 
                 if clicked_code:
-                    print(f"📍 Triangle cliqué: {clicked_label} (Code: {clicked_code})")
 
                     # Trouver le nœud correspondant
                     clicked_node = hierarchy.get(clicked_code, {})
@@ -131,10 +126,6 @@ def fractal_navigation(
 
                         st.rerun()
 
-    # Navigation via breadcrumb only (removed separate buttons to avoid layout shifts)
-
-    # Note: Buttons are now rendered at the bottom via render_hidden_buttons()
-    # This keeps them out of the canvas section
 
 
 def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) -> None:
@@ -192,10 +183,6 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                     if 'REVENUS' not in st.session_state.fractal_selections:
                         st.session_state.fractal_selections.add('REVENUS')
                     st.rerun()
-                # Hidden button for JavaScript to find and click
-                if st.button("💹 Revenus", key=f"{key}_filter_revenus", use_container_width=True):
-                    pass
-
             with col2:
                 if st.button("➕ Ajouter le filtre Dépenses", key=f"{key}_add_filter_depenses", use_container_width=True):
                     if 'fractal_selections' not in st.session_state:
@@ -203,11 +190,9 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                     if 'DEPENSES' not in st.session_state.fractal_selections:
                         st.session_state.fractal_selections.add('DEPENSES')
                     st.rerun()
-                # Hidden button for JavaScript to find and click
-                if st.button("💸 Dépenses", key=f"{key}_filter_depenses", use_container_width=True):
-                    pass
 
-    # Navigation buttons (invisible to user, only for JavaScript automation)
+    # Navigation buttons for triangles
+    # Rendered invisibly to keep them in DOM for interactive clicks
     if children_codes:
         # Hide navigation buttons in expanders with minimal size
         with st.expander("", expanded=False):
@@ -257,25 +242,17 @@ def render_hidden_buttons(hierarchy: Dict[str, Any], key: Optional[str] = None) 
                                 st.session_state.fractal_selections.add(child_code)
                                 st.rerun()
 
-                # Add invisible filter button for long-click (toggle: add or remove)
-                child_level = child_node.get('level', 0)
+                # Add filter toggle button for level 2 categories
                 if child_level == 2 and has_children:
-                    nav_depth = '_'.join(nav_stack)
-                    add_filter_key = f"add_filter_{nav_depth}_{idx}_{child_code}"
-
-                    # Invisible button for long-click (always available, works as toggle)
-                    # If not selected, the button text shows "Ajouter", otherwise "Retirer"
                     if 'fractal_selections' not in st.session_state:
                         st.session_state.fractal_selections = set()
 
                     is_selected = child_code in st.session_state.fractal_selections
                     button_text = f"✕ Retirer le filtre '{child_label}'" if is_selected else f"➕ Ajouter le filtre '{child_label}'"
+                    add_filter_key = f"add_filter_{child_code}_{idx}"
 
                     if st.button(button_text, key=add_filter_key, use_container_width=True):
-                        if 'fractal_selections' not in st.session_state:
-                            st.session_state.fractal_selections = set()
-
-                        if child_code in st.session_state.fractal_selections:
+                        if is_selected:
                             st.session_state.fractal_selections.discard(child_code)
                         else:
                             st.session_state.fractal_selections.add(child_code)
