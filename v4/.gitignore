@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node (if using npm)
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Streamlit
+.streamlit/
+.streamlit_cache/
+.streamlit_dev_cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Screenshots/demos (optional - keep or remove)
+cap*.png
+screenshots/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude Code
+.claude/settings.local.json
+
+# Distribution folders
+../v4/
+v4/

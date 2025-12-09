@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Navigation</title>
+    <link rel="stylesheet" href="./fractal.css">
+</head>
+<body>
+    <!-- Canvas pour les triangles -->
+    <canvas id="fractal-canvas"></canvas>
+
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="spinner-container">
+        <div class="spinner"></div>
+        <p>Chargement...</p>
+    </div>
+
+    <!-- Info Panel (top-right) -->
+    <div id="info-panel" class="info-panel">
+        <div class="info-title">
+            <span class="emoji">🔺</span>
+            <span>UNIVERS FRACTAL</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Niveau</span>
+            <span class="value" id="level-value">0</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Montant Total</span>
+            <span class="value" id="amount-value">0€</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Catégories</span>
+            <span class="value" id="categories-value">0</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Zoom</span>
+            <span class="value" id="zoom-value">1.0x</span>
+        </div>
+    </div>
+
+    <!-- Breadcrumb (top-left) -->
+    <div id="breadcrumb" class="breadcrumb">
+        Univers Financier
+    </div>
+
+    <!-- Controls (bottom-right) -->
+    <div class="controls">
+        <button id="back-btn" class="control-btn back-btn" style="display: none;">
+            ← Retour
+        </button>
+        <button id="reset-btn" class="control-btn reset-btn">
+            🏠 Vue d'ensemble
+        </button>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/streamlit-component-lib@latest/streamlit-component-lib.js"></script>
+    <script src="./fractal.js"></script>
+</body>
+</html>
