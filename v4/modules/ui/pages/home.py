@@ -310,14 +310,27 @@ def interface_accueil() -> None:
         if echeances:
             for ech in echeances:
                 type_ech, cat, montant, date_str, desc, type_echeance = ech
-                emoji = "💰" if type_ech == "revenu" else "💸"
-                icone_source = "🔄" if type_echeance == 'récurrente' else "📌"
-                date_ech = pd.to_datetime(date_str).strftime("%d/%m")
                 
-                with st.container():
-                    st.write(f"{emoji} {icone_source} **{cat}**")
-                    st.caption(f"{montant:.2f} € - {date_ech}")
-                    st.markdown("")
+                col1, col2, col3 = st.columns([1, 3, 1])
+                
+                with col1:
+                    emoji = "💰" if type_ech == "revenu" else "💸"
+                    icone_source = "🔄" if type_echeance == 'récurrente' else "📌"
+                    st.write(f"{emoji} {icone_source}")
+                
+                with col2:
+                    st.write(f"**{cat}**")
+                    if desc:
+                        st.caption(f"📅 {pd.to_datetime(date_str).strftime('%d/%m/%Y')} • {desc}")
+                    else:
+                        st.caption(f"📅 {pd.to_datetime(date_str).strftime('%d/%m/%Y')}")
+                
+                with col3:
+                    couleur = "#FF6B6B" if type_ech == "dépense" else "#00D4AA"
+                    signe = "-" if type_ech == "dépense" else "+"
+                    st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{montant:.2f} €</p>", unsafe_allow_html=True)
+                
+                st.markdown("---")
         else:
             st.info("Aucune échéance prévue ce mois")
         
@@ -389,17 +402,22 @@ def interface_accueil() -> None:
             df_recent = df_trans.sort_values("date", ascending=False).head(nb_afficher)
             
             for _, trans in df_recent.iterrows():
-                emoji = "💰" if trans["type"] == "revenu" else "💸"
-                date_trans = pd.to_datetime(trans["date"]).strftime("%d/%m")
+                col1, col2, col3 = st.columns([1, 3, 1])
                 
-                with st.container():
-                    col_info, col_montant = st.columns([3, 1])
-                    with col_info:
-                        st.write(f"{emoji} **{trans['categorie']}**")
-                        st.caption(f"{date_trans}")
-                    with col_montant:
-                        st.write(f"{trans['montant']:.2f} €")
-                    st.markdown("")
+                with col1:
+                    emoji = "💸" if trans["type"] == "dépense" else "💹"
+                    st.write(f"{emoji}")
+                
+                with col2:
+                    st.write(f"**{trans['categorie']}** → {trans['sous_categorie']}")
+                    st.caption(f"📅 {pd.to_datetime(trans['date']).strftime('%d/%m/%Y')}")
+                
+                with col3:
+                    couleur = "#FF6B6B" if trans["type"] == "dépense" else "#00D4AA"
+                    signe = "-" if trans["type"] == "dépense" else "+"
+                    st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{trans['montant']:.2f} €</p>", unsafe_allow_html=True)
+                
+                st.markdown("---")
             
             # Boutons pour afficher plus/moins
             col_plus, col_moins = st.columns(2)

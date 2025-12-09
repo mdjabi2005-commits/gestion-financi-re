@@ -108,28 +108,78 @@ def interface_process_all_revenues_in_folder() -> None:
         toast_success("Revenus scannés avec succès. Tu peux maintenant les modifier avant validation.")
 
     if st.session_state.get("revenus_data"):
+        st.markdown("### 📋 Revenus détectés")
+        st.caption(f"{len(st.session_state['revenus_data'])} revenu(s) à valider")
+        st.markdown("---")
+        
         updated_list = []
         for idx, data in enumerate(st.session_state["revenus_data"]):
-            st.markdown("---")
-            st.write(f"📄 {data['file']}")
-            col1, col2 = st.columns(2)
+            # Affichage en 3 colonnes comme dans home.py
+            col1, col2, col3 = st.columns([1, 3, 1])
+            
             with col1:
-                cat = st.text_input(f"Catégorie ({data['file']})", value=data["categorie"], key=f"rev_cat_{idx}")
-                souscat = st.text_input(f"Sous-catégorie ({data['file']})", value=data["sous_categorie"], key=f"rev_souscat_{idx}")
+                emoji = "💹"
+                st.write(f"{emoji}")
+                st.caption(f"📄 {data['file'][:20]}..." if len(data['file']) > 20 else f"📄 {data['file']}")
+            
             with col2:
+                cat = st.text_input(
+                    "Catégorie", 
+                    value=data["categorie"], 
+                    key=f"rev_cat_{idx}",
+                    label_visibility="collapsed"
+                )
+                souscat = st.text_input(
+                    "Sous-catégorie", 
+                    value=data["sous_categorie"], 
+                    key=f"rev_souscat_{idx}",
+                    label_visibility="collapsed"
+                )
+                
+                col_date, col_desc = st.columns(2)
+                with col_date:
+                    date_edit = st.date_input(
+                        "Date", 
+                        value=data["date"], 
+                        key=f"rev_date_{idx}",
+                        label_visibility="collapsed"
+                    )
+                with col_desc:
+                    desc_edit = st.text_input(
+                        "Description", 
+                        value=data.get("description", ""), 
+                        key=f"rev_desc_{idx}", 
+                        placeholder="Description...",
+                        label_visibility="collapsed"
+                    )
+            
+            with col3:
                 montant_str = f"{data['montant']:.2f}" if data["montant"] else ""
-                montant_edit = st.text_input(f"Montant (€) ({data['file']})", value=montant_str, key=f"rev_montant_{idx}")
-                date_edit = st.date_input(f"Date ({data['file']})", value=data["date"], key=f"rev_date_{idx}")
+                montant_edit = st.text_input(
+                    "Montant", 
+                    value=montant_str, 
+                    key=f"rev_montant_{idx}",
+                    label_visibility="collapsed"
+                )
+                montant_val = safe_convert(montant_edit)
+                
+                # Affichage du montant coloré en lecture seule
+                couleur = "#00D4AA"  # Vert pour les revenus
+                st.markdown(
+                    f"<p style='color: {couleur}; text-align: right; font-weight: bold; font-size: 18px;'>+{montant_val:.2f} €</p>", 
+                    unsafe_allow_html=True
+                )
             
-            # Champ description
-            desc_edit = st.text_input(f"Description ({data['file']})", value=data.get("description", ""), key=f"rev_desc_{idx}", placeholder="Optionnel : ajoutez une description...")
-            
-            # NEW: Show preview text if available
+            # Expander pour l'aperçu du texte extrait (si disponible)
             if data.get("preview_text"):
-                with st.expander("📄 Aperçu du texte extrait (PDF)"):
-                    st.text_area("Texte du PDF:", value=data["preview_text"], height=150, key=f"rev_preview_{idx}", disabled=True)
-
-            montant_val = safe_convert(montant_edit)
+                with st.expander("📄 Aperçu du texte extrait"):
+                    st.text_area(
+                        "Texte du PDF:", 
+                        value=data["preview_text"], 
+                        height=150, 
+                        key=f"rev_preview_{idx}", 
+                        disabled=True
+                    )
 
             updated_list.append({
                 "file": data["file"],
@@ -137,15 +187,16 @@ def interface_process_all_revenues_in_folder() -> None:
                 "categorie": cat.strip(),
                 "sous_categorie": souscat.strip(),
                 "montant": montant_val,
-                "montant_initial": data.get("montant_initial", montant_val),  # Conserver le montant OCR initial
+                "montant_initial": data.get("montant_initial", montant_val),
                 "date": date_edit,
                 "source": data["source"],
                 "description": desc_edit.strip() if desc_edit else ""
             })
+            
+            st.markdown("---")
 
         st.session_state["revenus_data"] = updated_list
 
-        st.markdown("---")
 
         # Check if any Uber revenues detected
         has_uber = any(is_uber_transaction(data["categorie"], "") for data in st.session_state["revenus_data"])

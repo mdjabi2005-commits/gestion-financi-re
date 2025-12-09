@@ -10,6 +10,7 @@ This module contains all transaction-related interface functions including:
 import streamlit as st
 import pandas as pd
 import io
+import os
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict
 from config import DB_PATH, TO_SCAN_DIR , REVENUS_A_TRAITER
@@ -30,7 +31,8 @@ from modules.services.recurrence_service import backfill_recurrences_to_today
 from modules.services.normalization import normalize_category, normalize_subcategory
 from modules.services.file_service import (
     deplacer_fichiers_associes,
-    supprimer_fichiers_associes
+    supprimer_fichiers_associes,
+    trouver_fichiers_associes
 )
 from modules.services.fractal_service import build_fractal_hierarchy
 from modules.ui.dynamic_tree_component import dynamic_tree
@@ -584,6 +586,58 @@ def interface_voir_transactions() -> None:
             st.session_state.tree_transactions_reset += 1
             
             st.rerun()
+
+    # =====================================================
+    # SECTION 4: DOCUMENTS ASSOCIÉS
+    # =====================================================
+    st.markdown("---")
+    
+    # Compter combien de transactions ont des documents
+    transactions_avec_docs = []
+    for _, trans in df_filtered.iterrows():
+        fichiers = trouver_fichiers_associes(trans.to_dict())
+        if fichiers:
+            transactions_avec_docs.append((trans, fichiers))
+    
+    if transactions_avec_docs:
+        with st.expander(f"📎 Documents associés ({len(transactions_avec_docs)} transaction(s) avec documents)", expanded=False):
+            st.markdown("### 📂 Documents des transactions affichées")
+            st.caption(f"Affichage des documents pour {len(transactions_avec_docs)} transaction(s) ayant des fichiers associés")
+            st.markdown("---")
+            
+            # Afficher toutes les transactions en lignes (pas d'onglets)
+            for trans, fichiers in transactions_avec_docs:
+                # Affichage en 3 colonnes comme dans home.py
+                col1, col2, col3 = st.columns([1, 3, 1])
+                
+                with col1:
+                    emoji = "💸" if trans["type"] == "dépense" else "💹"
+                    st.write(f"{emoji}")
+                
+                with col2:
+                    st.write(f"**{trans['categorie']}** → {trans['sous_categorie']}")
+                    st.caption(f"📅 {pd.to_datetime(trans['date']).strftime('%d/%m/%Y')} • Transaction #{trans['id']}")
+                    if trans.get('description'):
+                        st.caption(f"📝 {trans['description']}")
+                
+                with col3:
+                    couleur = "#FF6B6B" if trans["type"] == "dépense" else "#00D4AA"
+                    signe = "-" if trans["type"] == "dépense" else "+"
+                    st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{trans['montant']:.2f} €</p>", unsafe_allow_html=True)
+                
+                # Documents dans un expander pour ne pas alourdir la page
+                # Inclure explicitement l'ID pour être sûr qu'il est passé
+                trans_dict = trans.to_dict()
+                with st.expander(f"📎 Voir les {len(fichiers)} document(s) [ID: {trans_dict.get('id', 'N/A')}]", expanded=False):
+                    # Debug: afficher les fichiers trouvés
+                    st.caption(f"Documents trouvés pour transaction #{trans_dict.get('id', 'N/A')}: {[os.path.basename(f) for f in fichiers]}")
+                    afficher_documents_associes(trans_dict, context=f"view_trans_{trans['id']}")
+                
+                st.markdown("---")
+
+    
+    else:
+        st.info("📎 Aucun document associé aux transactions affichées")
 
     
     # Note: Debug buttons removed after switching to dynamic tree

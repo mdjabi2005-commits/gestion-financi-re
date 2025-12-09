@@ -22,17 +22,18 @@ def trouver_fichiers_associes(
     """
     Find files associated with a transaction in the directory structure.
 
-    Searches for receipts and supporting documents by transaction category
-    and subcategory. Files are matched by location in the directory tree,
-    with optional date matching if filename contains date pattern.
+    Searches for receipts and supporting documents by transaction ID first,
+    then falls back to category/subcategory matching for legacy files.
 
-    The search looks for files in:
-    - base_dir/categorie/sous_categorie/
+    The search looks for files:
+    1. Named with transaction ID: {id}_1.ext, {id}_2.ext, etc.
+    2. In directory: base_dir/categorie/sous_categorie/
 
     Supported file types: .jpg, .jpeg, .png, .pdf
 
     Args:
         transaction: Transaction dict with keys:
+            - 'id': Transaction ID (for new ID-based naming)
             - 'categorie': Main category folder
             - 'sous_categorie': Subcategory folder
             - 'date': Optional date for matching (YYYY-MM-DD)
@@ -45,6 +46,7 @@ def trouver_fichiers_associes(
 
     Example:
         >>> tx = {
+        ...     'id': 42,
         ...     'categorie': 'Alimentation',
         ...     'sous_categorie': 'Epicerie',
         ...     'date': '2025-01-15',
@@ -59,7 +61,8 @@ def trouver_fichiers_associes(
         base_dirs = [SORTED_DIR, REVENUS_TRAITES]
 
     fichiers_trouves = []
-
+    
+    transaction_id = transaction.get("id")
     categorie = transaction.get("categorie", "").strip()
     sous_categorie = transaction.get("sous_categorie", "").strip()
     date_transaction = transaction.get("date", "")
@@ -73,6 +76,32 @@ def trouver_fichiers_associes(
     else:
         dossiers_recherche = base_dirs
 
+    # MÉTHODE 1: Recherche par ID de transaction (nouveau système)
+    if transaction_id:
+        for base_dir in dossiers_recherche:
+            if not os.path.exists(base_dir):
+                continue
+                
+            # Construire le chemin attendu
+            chemin_attendu = os.path.join(base_dir, categorie, sous_categorie)
+            
+            if os.path.exists(chemin_attendu):
+                # Chercher le fichier nommé exactement {id}.{extension}
+                for fichier in os.listdir(chemin_attendu):
+                    # Extraire le nom sans extension
+                    nom_sans_ext, ext = os.path.splitext(fichier)
+                    
+                    # Vérifier si le nom correspond exactement à l'ID (format: {id}.extension)
+                    if nom_sans_ext == str(transaction_id) and ext.lower() in ('.jpg', '.jpeg', '.png', '.pdf'):
+                        chemin_complet = os.path.join(chemin_attendu, fichier)
+                        fichiers_trouves.append(chemin_complet)
+    
+    # Si des fichiers ont été trouvés avec l'ID, les retourner
+    if fichiers_trouves:
+        return fichiers_trouves[:5]
+    
+    # MÉTHODE 2: Fallback sur l'ancien système (catégorie/sous-catégorie)
+    # Pour compatibilité avec les anciens fichiers non encore migrés
     for base_dir in dossiers_recherche:
         if not os.path.exists(base_dir):
             continue
@@ -84,25 +113,28 @@ def trouver_fichiers_associes(
             # Search for all files in the directory
             for fichier in os.listdir(chemin_attendu):
                 if fichier.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
-                    chemin_complet = os.path.join(chemin_attendu, fichier)
+                    # Ne pas inclure les fichiers déjà nommés avec un ID (éviter doublons)
+                    if not re.match(r'^\d+_\d+\.', fichier):
+                        chemin_complet = os.path.join(chemin_attendu, fichier)
 
-                    # Optional: additional date verification
-                    if date_transaction:
-                        try:
-                            # Extract date from filename if possible
-                            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', fichier)
-                            if date_match:
-                                date_fichier = date_match.group(1)
-                                if date_fichier in date_transaction:
-                                    fichiers_trouves.append(chemin_complet)
-                                    continue
-                        except Exception:
-                            pass
+                        # Optional: additional date verification
+                        if date_transaction:
+                            try:
+                                # Extract date from filename if possible
+                                date_match = re.search(r'(\d{4}-\d{2}-\d{2})', fichier)
+                                if date_match:
+                                    date_fichier = date_match.group(1)
+                                    if date_fichier in date_transaction:
+                                        fichiers_trouves.append(chemin_complet)
+                                        continue
+                            except Exception:
+                                pass
 
-                    # If no date match, add anyway
-                    fichiers_trouves.append(chemin_complet)
+                        # If no date match, add anyway
+                        fichiers_trouves.append(chemin_complet)
 
     return fichiers_trouves[:5]  # Limit to 5 files maximum
+
 
 
 def supprimer_fichiers_associes(transaction: Dict[str, Any]) -> int:
