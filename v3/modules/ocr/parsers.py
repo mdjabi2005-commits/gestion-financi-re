@@ -522,12 +522,13 @@ def parse_uber_pdf(pdf_path: str) -> Dict[str, Any]:
     # Look for billing period: "Période de facturation : 01/07/2025 - 31/07/2025"
     date_fin = None
     periode_match = re.search(
-        r"P[eé]riode de facturation\s*[:\-]?\s*([0-3]?\d[\/\-\.][01]?\d[\/\-\.]\d{2,4})\s*[\-–]\s*([0-3]?\d[\/\-\.][01]?\d[\/\-\.]\d{2,4})",
+        r"P[eé]riode de facturation\s*[:\-]?\s*([0-3]?\d[\/\-\.][ ]?[01]?\d[\/\-\.]\d{2,4})\s*[\-–]\s*([0-3]?\d[\/\-\.][ ]?[01]?\d[\/\-\.]\d{2,4})",
         text,
         re.IGNORECASE
     )
     if periode_match:
         debut_str, fin_str = periode_match.groups()
+        fin_str = fin_str.replace(" ", "")  # Remove spaces
         for fmt in ("%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d-%m-%y"):
             try:
                 date_fin = datetime.strptime(fin_str, fmt).date()
@@ -551,12 +552,31 @@ def parse_uber_pdf(pdf_path: str) -> Dict[str, Any]:
                 except Exception:
                     continue
 
+    # NEW: Try "Date de facturation : 16 sept. 2025" (French month abbreviations)
+    if not date_fin:
+        month_pattern = r"Date de facturation\s*[:\-]?\s*(\d{1,2})\s+(janv|f[eé]vr|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|d[eé]c)\.?\s+(\d{4})"
+        m3 = re.search(month_pattern, text, re.IGNORECASE)
+        if m3:
+            day_str, month_str, year_str = m3.groups()
+            month_map = {
+                "janv": 1, "févr": 2, "fevr": 2, "mars": 3, "avr": 4,
+                "mai": 5, "juin": 6, "juil": 7, "août": 8, "aout": 8,
+                "sept": 9, "oct": 10, "nov": 11, "déc": 12, "dec": 12
+            }
+            month_num = month_map.get(month_str.lower())
+            if month_num:
+                try:
+                    date_fin = date(int(year_str), month_num, int(day_str))
+                except Exception:
+                    pass
+
     if not date_fin:
         date_fin = datetime.now().date()
 
     # Net amount: varies by Uber PDF (Net earnings, Total to be paid, etc.)
     montant = 0.0
     montant_patterns = [
+        r"Montant total [aà] payer\s*[:\-–]?\s*([0-9]+[., ][0-9]{2})\s*€?",
         r"(?:Net earnings|Net to driver|Total net|Montant net|Net earnings \(driver\))\s*[:\-\–]?\s*([0-9]+[.,][0-9]{2})\s*€?",
         r"([\d]{1,3}(?:[ .,]\d{3})*[.,]\d{2})\s*€\s*(?:net|netto|net earnings|to driver)?"
     ]
@@ -566,17 +586,18 @@ def parse_uber_pdf(pdf_path: str) -> Dict[str, Any]:
             s = m.group(1).replace(" ", "").replace(".", "").replace(",", ".") if "," in m.group(1) and "." in m.group(1) else m.group(1).replace(",", ".").replace(" ", "")
             try:
                 montant = safe_convert(s)
-                break
+                if montant > 0:
+                    break
             except Exception:
                 continue
 
     # Fallback: find last amount in text
     if montant == 0.0:
-        all_amounts = re.findall(r"(\d+[.,]\d{2})\s*€?", text)
+        all_amounts = re.findall(r"(\d+[., ]\d{2})\s*€?", text)
         if all_amounts:
             for a in reversed(all_amounts):
                 try:
-                    candidate = safe_convert(a)
+                    candidate = safe_convert(a.replace(" ", "").replace(",", "."))
                     if candidate > 0:
                         montant = candidate
                         break
@@ -590,6 +611,9 @@ def parse_uber_pdf(pdf_path: str) -> Dict[str, Any]:
     if montant > 0:
         logger.info(f"Uber PDF processed: {montant}€ → {montant_net}€ net (after 21% tax)")
 
+    # Create preview text (first 500 chars)
+    preview_text = text[:500] + "..." if len(text) > 500 else text
+
     return {
         "montant": montant_net,  # Return NET amount after taxes
         "date": date_fin,
@@ -597,7 +621,8 @@ def parse_uber_pdf(pdf_path: str) -> Dict[str, Any]:
         "sous_categorie": "Uber",
         "source": "PDF Uber",
         "montant_brut": montant,  # Additional information
-        "tax_amount": tax_amount
+        "tax_amount": tax_amount,
+        "preview_text": preview_text  # NEW: Preview for verification
     }
 
 
@@ -683,12 +708,16 @@ def parse_fiche_paie(pdf_path: str) -> Dict[str, Any]:
     if not date_found:
         date_found = datetime.now().date()
 
+    # Create preview text (first 500 chars)
+    preview_text = text[:500] + "..." if len(text) > 500 else text
+
     return {
         "montant": round(float(montant), 2),
         "date": date_found,
         "categorie": "Revenu",
         "sous_categorie": "Salaire",
-        "source": "PDF Fiche de paie"
+        "source": "PDF Fiche de paie",
+        "preview_text": preview_text  # NEW: Preview for verification
     }
 
 

@@ -626,11 +626,8 @@ def interface_voir_transactions() -> None:
                     st.markdown(f"<p style='color: {couleur}; text-align: right; font-weight: bold;'>{signe}{trans['montant']:.2f} €</p>", unsafe_allow_html=True)
                 
                 # Documents dans un expander pour ne pas alourdir la page
-                # Inclure explicitement l'ID pour être sûr qu'il est passé
                 trans_dict = trans.to_dict()
-                with st.expander(f"📎 Voir les {len(fichiers)} document(s) [ID: {trans_dict.get('id', 'N/A')}]", expanded=False):
-                    # Debug: afficher les fichiers trouvés
-                    st.caption(f"Documents trouvés pour transaction #{trans_dict.get('id', 'N/A')}: {[os.path.basename(f) for f in fichiers]}")
+                with st.expander(f"📎 Voir les {len(fichiers)} document(s)", expanded=False):
                     afficher_documents_associes(trans_dict, context=f"view_trans_{trans['id']}")
                 
                 st.markdown("---")

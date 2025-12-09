@@ -1,0 +1,6 @@
+{
+  "streamlitComponentVersion": "1.4.0",
+  "name": "fractal_navigation",
+  "description": "Interactive Sierpinski triangle-based hierarchical navigation component",
+  "category": "data_visualization"
+}

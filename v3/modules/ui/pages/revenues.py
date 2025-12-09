@@ -99,7 +99,8 @@ def interface_process_all_revenues_in_folder() -> None:
                 "montant": parsed.get("montant", 0.0),
                 "montant_initial": parsed.get("montant", 0.0),  # Sauvegarder le montant détecté par OCR
                 "date": date_val,
-                "source":"PDF"
+                "source":"PDF",
+                "preview_text": parsed.get("preview_text", "")  # NEW: Store preview text
             })
 
         st.session_state["revenus_data"] = data_list
@@ -118,6 +119,11 @@ def interface_process_all_revenues_in_folder() -> None:
                 montant_str = f"{data['montant']:.2f}" if data["montant"] else ""
                 montant_edit = st.text_input(f"Montant (€) ({data['file']})", value=montant_str, key=f"rev_montant_{idx}")
                 date_edit = st.date_input(f"Date ({data['file']})", value=data["date"], key=f"rev_date_{idx}")
+            
+            # NEW: Show preview text if available
+            if data.get("preview_text"):
+                with st.expander("📄 Aperçu du texte extrait (PDF)"):
+                    st.text_area("Texte du PDF:", value=data["preview_text"], height=150, key=f"rev_preview_{idx}", disabled=True)
 
             montant_val = safe_convert(montant_edit)
 

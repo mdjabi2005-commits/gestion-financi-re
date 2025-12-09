@@ -17,7 +17,9 @@
       "Bash(find:*)",
       "Bash(dir:*)",
       "Bash(tree:*)",
-      "Bash(xargs basename:*)"
+      "Bash(xargs basename:*)",
+      "Bash(git push:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

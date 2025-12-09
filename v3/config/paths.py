@@ -8,7 +8,7 @@ _home = Path.home()
 DATA_DIR = str(_home / "analyse")
 
 # Database
-DB_PATH = os.path.join(DATA_DIR, "finances.db")
+DB_PATH = os.path.join(DATA_DIR, "finances2.db")
 
 # Scan directories
 TO_SCAN_DIR = os.path.join(DATA_DIR, "tickets_a_scanner")
