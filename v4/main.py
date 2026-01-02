@@ -12,7 +12,7 @@ Refactored modular version
 import streamlit as st
 
 # Initialize logging system FIRST (before any other imports)
-from shared.logging_config import setup_logging
+from config.logging_config import setup_logging
 setup_logging()
 
 # ==============================
@@ -59,10 +59,9 @@ from domains.ocr.pages.ocr_control_center import render_ocr_control_center
 # ==============================
 # LOGGING CONFIGURATION
 # ==============================
-from config.logging_config import setup_logging, get_logger
+from config.logging_config import get_logger
 
-# Initialiser le système de logging
-setup_logging(log_dir=DATA_DIR, level="INFO")
+# Get logger for main module
 logger = get_logger(__name__)
 
 # ==============================

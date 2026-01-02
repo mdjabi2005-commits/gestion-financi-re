@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 import subprocess
 import sys
-
+from config.paths import DB_PATH, APP_LOG_PATH,APP_LOG_DIR
 
 def render_console():
     """Render the control console."""
@@ -27,7 +27,7 @@ def render_console():
         st.metric("🟢 Status", "En ligne", delta="Running")
     
     with col2:
-        db_path = Path("data/database.db")
+        db_path = Path(DB_PATH)
         if db_path.exists():
             db_size = db_path.stat().st_size / 1024  # KB
             st.metric("💾 Base de données", f"{db_size:.1f} KB")
@@ -35,7 +35,7 @@ def render_console():
             st.metric("💾 Base de données", "Non trouvée", delta_color="off")
     
     with col3:
-        log_path = Path("data/logs/gestio_app.log")
+        log_path = Path(APP_LOG_PATH)
         if log_path.exists():
             log_size = log_path.stat().st_size / 1024  # KB
             st.metric("📝 Logs", f"{log_size:.1f} KB")
@@ -104,11 +104,12 @@ def render_console():
     st.header("🔗 Raccourcis")
     
     col1, col2, col3 = st.columns(3)
-    
+    log_dir = Path(APP_LOG_DIR)
+    log_file = Path(APP_LOG_PATH)
     with col1:
         st.markdown("**📁 Dossiers**")
-        st.markdown("- [data/](data/)")
-        st.markdown("- [data/logs/](data/logs/)")
+        st.markdown(f"- [{log_dir}]({log_dir})")
+        st.markdown(f"- [{log_file}]({log_file})")
         st.markdown("- [tests/](tests/)")
     
     with col2:
@@ -146,7 +147,7 @@ def render_console():
 
 def show_recent_logs():
     """Display recent log entries."""
-    log_file = Path("data/logs/gestio_app.log")
+    log_file = Path(APP_LOG_PATH)
     
     if not log_file.exists():
         st.warning("⚠️ Fichier de logs introuvable")

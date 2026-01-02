@@ -26,6 +26,10 @@ PROBLEMATIC_DIR = os.path.join(DATA_DIR, "tickets_problematiques")
 REVENUS_A_TRAITER = os.path.join(DATA_DIR, "revenus_a_traiter")
 REVENUS_TRAITES = os.path.join(DATA_DIR, "revenus_traites")
 
+# Application Logs
+APP_LOG_DIR = os.path.join(DATA_DIR, "logs")
+APP_LOG_PATH = os.path.join(APP_LOG_DIR, "gestio_app.log")
+
 # OCR Logs
 OCR_LOGS_DIR = os.path.join(DATA_DIR, "ocr_logs")
 LOG_PATH = os.path.join(OCR_LOGS_DIR, "pattern_log.json")
@@ -40,5 +44,5 @@ CSV_TRANSACTIONS_SANS_TICKETS = os.path.join(CSV_EXPORT_DIR, "transactions_sans_
 
 # Create directories
 for directory in [DATA_DIR, TO_SCAN_DIR, SORTED_DIR, PROBLEMATIC_DIR,
-                  REVENUS_A_TRAITER, REVENUS_TRAITES, OCR_LOGS_DIR, CSV_EXPORT_DIR]:
+                  REVENUS_A_TRAITER, REVENUS_TRAITES, APP_LOG_DIR, OCR_LOGS_DIR, CSV_EXPORT_DIR]:
     os.makedirs(directory, exist_ok=True)

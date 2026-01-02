@@ -1,0 +1,286 @@
+# 🚀 Plan d'Amélioration Gestio V4
+
+## 📋 Vue d'ensemble
+
+Ce plan détaille les 3 phases d'amélioration de Gestio V4 :
+1. **Phase 1 : Debugging & Optimisation** (Priorité haute)
+2. **Phase 2 : Refactoring & Consolidation** (Priorité moyenne)
+3. **Phase 3 : Nouvelles Fonctionnalités** (Priorité basse)
+
+---
+
+## 🎯 Objectifs Globaux
+
+- ✅ Corriger tous les bugs existants
+- ✅ Optimiser les performances (temps de chargement, requêtes SQL)
+- ✅ Améliorer la structure du code (maintenabilité)
+- ✅ Ajouter des visualisations avancées (Heatmap, analyses)
+
+---
+
+# 📊 Phase 1 : Debugging & Optimisation
+
+**Durée estimée** : 3-5 jours  
+**Objectif** : Application stable et performante
+
+## 1.1 Debugging
+
+### 🐛 Bugs à corriger
+- [ ] Tester toutes les fonctionnalités (ajout, modification, suppression)
+- [ ] Vérifier les calculs (solde, totaux, statistiques)
+- [ ] Tester les filtres (calendrier, catégories)
+- [ ] Vérifier l'export CSV
+- [ ] Tester le mode édition
+
+### 🔍 Tests à effectuer
+- [ ] Ajouter 50+ transactions de test
+- [ ] Tester avec différents mois/années
+- [ ] Tester les cas limites (montants négatifs, dates futures, etc.)
+- [ ] Vérifier la cohérence des données
+
+---
+
+## 1.2 Optimisation des Performances
+
+### ⚡ Requêtes SQL
+- [ ] Ajouter des index sur colonnes fréquemment utilisées
+  ```sql
+  CREATE INDEX idx_date ON mes_transactions(date);
+  CREATE INDEX idx_categorie ON mes_transactions(categorie);
+  CREATE INDEX idx_type ON mes_transactions(type);
+  ```
+- [ ] Optimiser les requêtes avec `EXPLAIN QUERY PLAN`
+- [ ] Éviter les requêtes multiples (utiliser JOIN si possible)
+
+### 🎨 Streamlit
+- [ ] Utiliser `@st.cache_data` pour les requêtes SQL
+- [ ] Utiliser `@st.cache_resource` pour la connexion DB
+- [ ] Limiter les `st.rerun()` inutiles
+- [ ] Optimiser les graphiques Plotly (réduire les données si > 1000 points)
+
+### 📊 Pandas
+- [ ] Vérifier qu'il n'y a pas de boucles `for` (utiliser vectorisation)
+- [ ] Utiliser `groupby()` au lieu de boucles
+- [ ] Optimiser les `pivot_table()` et [merge()](file:///c:/Users/djabi/Desktop/apprentissage/exercices/exercice%20pandas.py#238-241)
+
+---
+
+# 🔧 Phase 2 : Refactoring & Consolidation
+
+**Durée estimée** : 5-7 jours  
+**Objectif** : Code propre, maintenable et modulaire
+
+## 2.1 Restructuration du Code
+
+### 📁 Organisation des fichiers
+```
+gestio_v4/
+├── main.py                    # Point d'entrée
+├── config.py                  # Configuration globale
+├── database/
+│   ├── __init__.py
+│   ├── connection.py          # Gestion connexion DB
+│   └── queries.py             # Requêtes SQL centralisées
+├── pages/
+│   ├── tableau_bord.py
+│   ├── voir_transactions.py
+│   ├── ajouter_transaction.py
+│   └── parametres.py
+├── components/
+│   ├── __init__.py
+│   ├── graphs.py              # Fonctions graphiques Plotly
+│   ├── filters.py             # Composants de filtrage
+│   └── stats.py               # Calculs statistiques
+└── utils/
+    ├── __init__.py
+    ├── helpers.py             # Fonctions utilitaires
+    └── validators.py          # Validation des données
+```
+
+### 🔄 Refactoring du Code
+
+#### Créer des fonctions réutilisables
+- [ ] Extraire la logique de connexion DB dans `database/connection.py`
+- [ ] Centraliser les requêtes SQL dans `database/queries.py`
+- [ ] Créer des fonctions pour chaque graphique dans `components/graphs.py`
+- [ ] Créer des fonctions de validation dans `utils/validators.py`
+
+#### Exemple de refactoring
+**Avant** :
+```python
+# Code dupliqué dans chaque page
+conn = sqlite3.connect('transaction.db')
+df = pd.read_sql_query("SELECT * FROM mes_transactions", conn)
+conn.close()
+```
+
+**Après** :
+```python
+# database/queries.py
+@st.cache_data
+def get_all_transactions():
+    with get_connection() as conn:
+        return pd.read_sql_query("SELECT * FROM mes_transactions", conn)
+
+# Dans les pages
+df = get_all_transactions()
+```
+
+---
+
+## 2.2 Amélioration de la Structure
+
+### 📝 Typing (Annotations de types)
+- [ ] Ajouter des annotations de types à toutes les fonctions
+  ```python
+  def calculer_solde(df: pd.DataFrame) -> float:
+      revenus = df[df['type'] == 'revenu']['montant'].sum()
+      depenses = df[df['type'] == 'depense']['montant'].sum()
+      return revenus - depenses
+  ```
+
+### 🧪 Tests Unitaires (Optionnel)
+- [ ] Créer des tests pour les fonctions critiques
+- [ ] Tester les calculs (solde, statistiques)
+- [ ] Tester les validations
+
+---
+
+# 🎨 Phase 3 : Nouvelles Fonctionnalités
+
+**Durée estimée** : 7-10 jours  
+**Objectif** : Enrichir l'application avec des analyses avancées
+
+## 3.1 Réorganisation "Voir Transactions"
+
+### 📊 Nouvelle structure avec sous-onglets
+
+```
+📊 Voir Transactions
+├── 📋 Vue Standard
+│   ├── Graphique évolution (actuel)
+│   └── Tableau transactions (actuel)
+│
+└── 📊 Analyses Avancées
+    ├── 🔥 Heatmap Mensuelle
+    └── 🌳 Arbre Hiérarchique (Sunburst)
+```
+
+### Implémentation
+- [ ] Créer les sous-onglets avec `st.tabs()`
+- [ ] Déplacer le Sunburst depuis `arbre_dynamique.py`
+- [ ] Créer la Heatmap mensuelle
+
+---
+
+## 3.2 Heatmap Mensuelle
+
+### 📊 Fonctionnalité
+- Matrice : Jours (lignes) × Catégories (colonnes)
+- Couleurs : Vert (faible) → Rouge (élevé)
+- Valeurs : Montant affiché dans chaque cellule
+
+### Code
+```python
+# Créer la matrice
+pivot = df_mois.pivot_table(
+    values='montant',
+    index='jour',
+    columns='categorie',
+    aggfunc='sum',
+    fill_value=0
+)
+
+# Heatmap
+fig = go.Figure(data=go.Heatmap(
+    z=pivot.values,
+    x=pivot.columns,
+    y=pivot.index,
+    colorscale='RdYlGn_r',
+    text=pivot.values,
+    texttemplate='%{text:.0f}€'
+))
+```
+
+### Tâches
+- [ ] Créer la fonction `create_heatmap()` dans `components/graphs.py`
+- [ ] Ajouter un sélecteur de mois
+- [ ] Ajouter une légende explicative
+- [ ] Optimiser pour les mois avec peu de transactions
+
+---
+
+## 3.3 Module Portefeuille (Gestion Multi-Comptes)
+
+### 💼 Compte Bancaire
+- [ ] Créer table `comptes` (nom, type, solde_initial, devise)
+- [ ] Lier transactions aux comptes
+- [ ] Dashboard multi-comptes (solde par compte)
+- [ ] Transferts entre comptes
+
+### 📊 Investissements (Actions/ETF)
+- [ ] Créer table `investissements` (ticker, quantité, date_achat, prix_achat)
+- [ ] Intégration API Yahoo Finance (`yfinance`)
+- [ ] Calcul automatique gains/pertes
+- [ ] Graphique Candlestick pour évolution
+- [ ] Dashboard portefeuille (répartition, performance)
+
+### 🎯 Budget avec Gauge
+- [ ] Ajouter graphique Gauge dans "Portefeuille/Budget"
+- [ ] Indicateur visuel : Vert (0-70%), Orange (70-90%), Rouge (90-100%)
+- [ ] Alertes si dépassement > 10%
+
+---
+
+## 3.4 Graphiques Avancés
+
+### 📈 Waterfall
+- [ ] Évolution du solde (Solde initial → Revenus → Dépenses → Solde final)
+- [ ] Intégrer dans "Tableau de Bord" ou "Analyses Avancées"
+
+### 📉 Funnel
+- [ ] Entonnoir de conversion budget (Transactions totales → Validées → Catégorisées → Budgétées → Exportées)
+- [ ] Utile pour analyser le processus de gestion
+
+---
+
+## 3.5 Refactoring Portefeuille
+
+### 🔄 Stratégie Multipage
+- [ ] Créer `pages/portefeuille/` avec sous-pages :
+  - `comptes.py` (gestion comptes bancaires)
+  - `investissements.py` (suivi actions/ETF)
+  - `budget.py` (budget avec Gauge)
+- [ ] Centraliser la logique dans `components/portfolio.py`
+
+---
+
+## 3.6 Autres Améliorations (Optionnel)
+
+### 🎯 Fonctionnalités Avancées
+- [ ] Comparaison Budget vs Réel avec alertes
+- [ ] Prévisions (tendances futures)
+- [ ] Export PDF des rapports
+- [ ] Mode sombre/clair
+
+---
+
+## 📅 Planning Global
+
+| Phase | Durée | Priorité | Statut |
+|-------|-------|----------|--------|
+| Phase 1 : Debugging & Optimisation | 3-5 jours | 🔴 Haute | ⏳ À faire |
+| Phase 2 : Refactoring | 5-7 jours | 🟡 Moyenne | ⏳ À faire |
+| Phase 3 : Nouvelles Fonctionnalités | 7-10 jours | 🟢 Basse | ⏳ À faire |
+
+**Durée totale estimée** : 15-22 jours
+
+---
+
+## 🎯 Prochaines Étapes
+
+1. ✅ Terminer exercice 25 Plotly
+2. ⏳ Phase 1 : Debugging (tester toutes les fonctionnalités)
+3. ⏳ Phase 1 : Optimisation (cache, index SQL)
+4. ⏳ Phase 2 : Refactoring (structure, typing)
+5. ⏳ Phase 3 : Heatmap + Sunburst dans "Voir Transactions"

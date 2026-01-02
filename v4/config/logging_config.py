@@ -11,9 +11,10 @@ import logging
 import logging.handlers
 from pathlib import Path
 from typing import Optional
+from config.paths import APP_LOG_PATH
 
 
-def setup_logging(log_dir: Optional[Path] = None, level: str = "INFO") -> None:
+def setup_logging(level: str = "INFO") -> None:
     """
     Configure le système de logging pour l'application.
     
@@ -26,14 +27,8 @@ def setup_logging(log_dir: Optional[Path] = None, level: str = "INFO") -> None:
         >>> from pathlib import Path
         >>> setup_logging(Path("logs"), "INFO")
     """
-    # Créer le répertoire de logs s'il n'existe pas
-    if log_dir is None:
-        log_dir = Path.cwd()
     
-    log_dir = Path(log_dir)
-    log_dir.mkdir(parents=True, exist_ok=True)
-    
-    log_file = log_dir / "gestio_app.log"
+    log_file = Path(APP_LOG_PATH)
     
     # Format détaillé pour les logs
     formatter = logging.Formatter(

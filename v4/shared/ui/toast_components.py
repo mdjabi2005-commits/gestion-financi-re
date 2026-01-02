@@ -396,7 +396,6 @@ def afficher_documents_associes(transaction: Dict[str, Any], context: Optional[s
 # Unified system with proportional bubbles + chips for category management
 
 import pandas as pd
-import math
 import time
 from typing import List, Dict, Any
 
