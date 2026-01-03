@@ -1,4 +1,17 @@
-# 🏗️ Guide Build - Gestio V4
+---
+type: guide_general
+difficulty: advanced
+tags: [build, deployment, pyinstaller, github-actions]
+last_updated: 2024-12-22
+estimated_reading: 25min
+status: active
+phase: 3
+related:
+  - ajouts/08_phase3_build_installation.md
+  - guides/IMPLEMENTATION_GUIDE.md
+---
+
+# Guide de Build - Gestio V4
 
 **Dernière mise à jour** : 23 décembre 2024
 

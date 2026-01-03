@@ -1,4 +1,16 @@
-# 🏗️ Architecture Projet Gestio V4
+---
+type: guide_general
+difficulty: intermediate
+tags: [architecture, structure, patterns, design]
+last_updated: 2024-12-16
+estimated_reading: 30min
+status: active
+related:
+  - guides/IMPLEMENTATION_GUIDE.md
+  - modules/INVENTAIRE_LIBRAIRIES.md
+---
+
+# Architecture - Gestio V4
 
 **Diagramme principal** - Vue d'ensemble complète du système
 

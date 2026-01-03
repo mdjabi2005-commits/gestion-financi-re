@@ -1,0 +1,475 @@
+# 🚀 Plan d'Implémentation QG - Squad Lamoms V3
+
+**Date** : 2 janvier 2026  
+**Objectif** : Développer le QG (Quartier Général) de la Squad Lamoms  
+**Coût Phase 1-2** : ~$2/mois  
+**Durée** : 2-4 mois (formation)
+
+---
+
+## 🎯 Vision Globale
+
+**Créer un QG autonome avec 7 agents IA** pour :
+- 🛡️ Corriger bugs automatiquement (Défensif)
+- 🎨 Développer nouvelles fonctionnalités (Créatif)
+- 💰 Conseiller financièrement (Social)
+
+**Stratégie** : Apprendre avec modèles locaux gratuits → Upgrade si besoin
+
+---
+
+## 🏗️ Architecture QG
+
+![Architecture QG](C:/Users/djabi/.gemini/antigravity/brain/ede6fef1-d756-4899-840c-0bc3a3c7f96f/architecture_qg_overview_1767394516408.png)
+
+### Les 3 Zones
+
+**Zone Front (Mobile/Web)** :
+- LAMOMS-COACH (~$1/mois)
+
+**Zone QG (Serveur PC)** :
+- LAMOMS-MÉCANICIEN (Ollama - $0)
+- LAMOMS-BIBLIOTHÉCAIRE (ChromaDB - $0)
+- LAMOMS-ANALYSTE (Llama 3 - $0)
+- LAMOMS-MENTORE (Gemini - ~$1/mois, temporaire)
+- LAMOMS-PLANIFICATEUR (Python - $0)
+
+**Zone Cloud (APIs)** :
+- LAMOMS-EXPERT (n8n - $0)
+
+---
+
+## 🔄 Les 3 Workflows
+
+### 1. Workflow Défensif (Bugs)
+
+![Workflow Défensif](C:/Users/djabi/.gemini/antigravity/brain/ede6fef1-d756-4899-840c-0bc3a3c7f96f/workflow_defensif_diagram_1767394460398.png)
+
+**Flux** :
+1. COACH détecte bug 🐛
+2. BIBLIOTHÉCAIRE cherche dans base 📚
+3. **Pré-filtre Top 3 solutions** (RAG scoring)
+4. Si nouveau → EXPERT cherche 🌐
+5. MÉCANICIEN choisit et fixe 🔧
+6. COACH notifié ✅
+
+**Innovation** : Pré-filtrage intelligent par BIBLIOTHÉCAIRE
+
+---
+
+### 2. Workflow Créatif (Features)
+
+![Workflow Créatif](C:/Users/djabi/.gemini/antigravity/brain/ede6fef1-d756-4899-840c-0bc3a3c7f96f/workflow_creatif_diagram_1767394478688.png)
+
+**Flux** :
+1. USER demande feature ✨
+2. PLANIFICATEUR organise 📅
+3. MÉCANICIEN demande docs
+4. BIBLIOTHÉCAIRE fournit templates 📚
+5. Si manque → EXPERT cherche 🌐
+6. MÉCANICIEN développe 🔧
+7. COACH notifie ✅
+
+**Innovation** : BIBLIOTHÉCAIRE guide, MÉCANICIEN code
+
+---
+
+### 3. Workflow Social (Conseils)
+
+![Workflow Social](C:/Users/djabi/.gemini/antigravity/brain/ede6fef1-d756-4899-840c-0bc3a3c7f96f/workflow_social_diagram_1767394500472.png)
+
+**Flux** :
+1. USER demande conseil 💰
+2. COACH collecte données
+3. ANALYSTE génère (ou MENTORE si Phase 1-3) 🎓
+4. COACH affiche + feedback 👍👎
+5. Si 👍 → BIBLIOTHÉCAIRE stocke Dataset d'Or 📚
+
+**Innovation** : Apprentissage progressif (teacher-student)
+
+---
+
+## 📅 Phase 1 : MVP Coach Financier (2 mois)
+
+### Objectif
+Créer système minimal de conseils financiers avec apprentissage
+
+### Architecture Phase 1
+
+```
+┌─────────────────────────────────────┐
+│     ZONE FRONT (Streamlit)          │
+│  LAMOMS-COACH                       │
+│  - Affiche conseils                 │
+│  - Collecte feedback 👍👎           │
+└──────────────┬──────────────────────┘
+               ↕ (API REST)
+┌─────────────────────────────────────┐
+│     ZONE QG (Python + LangChain)    │
+│  LAMOMS-BIBLIOTHÉCAIRE (ChromaDB)   │
+│  - Stocke logs utilisateur          │
+│  - Stocke Dataset d'Or              │
+└──────────────┬──────────────────────┘
+               ↕ (API)
+┌─────────────────────────────────────┐
+│     ZONE CLOUD                      │
+│  LAMOMS-MENTORE (Gemini Flash)      │
+│  - Génère conseils                  │
+└─────────────────────────────────────┘
+```
+
+### Étape 1.1 : Setup Environnement (3-5 jours)
+
+**Tâches** :
+- [ ] Installer Ollama sur PC
+- [ ] Télécharger Llama 3 8B (`ollama pull llama3`)
+- [ ] Créer projet Python `squad_lamoms/`
+- [ ] Installer dépendances :
+  ```bash
+  pip install langchain langchain-google-genai langchain-community
+  pip install chromadb ollama fastapi uvicorn python-dotenv
+  ```
+- [ ] Configurer API Keys (Gemini)
+- [ ] Tester Ollama local
+
+**Structure Projet** :
+```
+squad_lamoms/
+├── .env                    # API keys
+├── requirements.txt        # Dépendances
+├── main.py                 # Point d'entrée
+├── config/
+│   └── settings.py         # Configuration
+├── agents/
+│   ├── __init__.py
+│   ├── coach.py            # Agent Coach
+│   ├── mentore.py          # Agent Mentore
+│   ├── mecanicien.py       # Agent Mécanicien (Ollama)
+│   └── bibliothecaire.py   # Agent Bibliothécaire
+├── tools/
+│   ├── __init__.py
+│   ├── vision_scanner.py   # Vision IA (optionnel)
+│   └── database.py         # Outils DB
+├── memory/
+│   ├── __init__.py
+│   ├── chroma_store.py     # ChromaDB wrapper
+│   └── dataset.py          # Dataset d'Or
+├── api/
+│   ├── __init__.py
+│   └── routes.py           # API REST
+└── tests/
+    └── test_agents.py      # Tests
+```
+
+**Livrables** :
+- ✅ Environnement Python fonctionnel
+- ✅ Ollama + Llama 3 opérationnel
+- ✅ ChromaDB testé
+- ✅ API Gemini testée
+
+---
+
+### Étape 1.2 : Créer Agent MENTORE (5-7 jours)
+
+**Code Exemple** :
+```python
+# agents/mentore.py
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import ChatPromptTemplate
+
+MENTORE_PROMPT = """
+Tu es LAMOMS-MENTORE, coach financier expert.
+
+Analyse ces données utilisateur et donne UN conseil actionnable :
+{user_data}
+
+Conseil (max 2 phrases, concret et utile) :
+"""
+
+class MentoreAgent:
+    def __init__(self, api_key: str):
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            api_key=api_key
+        )
+        self.prompt = ChatPromptTemplate.from_template(MENTORE_PROMPT)
+    
+    def generate_advice(self, user_data: dict) -> str:
+        """Génère conseil financier."""
+        chain = self.prompt | self.llm
+        response = chain.invoke({"user_data": user_data})
+        return response.content
+```
+
+**Tâches** :
+- [ ] Créer classe `MentoreAgent`
+- [ ] Optimiser prompt système
+- [ ] Tester avec vraies données Gestio V4
+- [ ] Générer 10 conseils et valider
+
+**Livrables** :
+- ✅ Agent MENTORE fonctionnel
+- ✅ 10 conseils validés
+- ✅ Temps réponse < 5s
+
+---
+
+### Étape 1.3 : Créer Agent BIBLIOTHÉCAIRE (5-7 jours)
+
+**Code Exemple** :
+```python
+# memory/chroma_store.py
+from langchain_community.vectorstores import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+class BibliothecaireMemory:
+    def __init__(self, api_key: str):
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=api_key
+        )
+        self.vectorstore = Chroma(
+            collection_name="dataset_or",
+            embedding_function=self.embeddings,
+            persist_directory="./chroma_db"
+        )
+    
+    def store_advice(self, advice: str, feedback: str, metadata: dict):
+        """Stocke conseil validé (👍)."""
+        if feedback == "up":
+            self.vectorstore.add_texts(
+                texts=[advice],
+                metadatas=[metadata]
+            )
+    
+    def search_similar(self, query: str, k: int = 3) -> list:
+        """Cherche Top 3 solutions similaires."""
+        docs = self.vectorstore.similarity_search(query, k=k)
+        return docs
+```
+
+**Tâches** :
+- [ ] Setup ChromaDB
+- [ ] Créer système de stockage
+- [ ] Implémenter recherche sémantique
+- [ ] Tester pré-filtrage Top 3
+
+**Livrables** :
+- ✅ ChromaDB opérationnel
+- ✅ Stockage conseils validés
+- ✅ Recherche Top 3 fonctionnelle
+
+---
+
+### Étape 1.4 : Créer Agent COACH (3-5 jours)
+
+**Code Exemple** :
+```python
+# Interface Streamlit
+import streamlit as st
+import requests
+
+st.title("💰 Gestio V4 - Coach Financier")
+
+# Afficher dernier conseil
+if st.button("🎯 Demander conseil"):
+    conseil = requests.get("http://localhost:8000/api/conseil").json()
+    
+    st.info(conseil["texte"])
+    
+    # Feedback
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("👍 Utile"):
+            requests.post(f"/api/feedback/{conseil['id']}", 
+                         json={"vote": "up"})
+            st.success("Merci ! Conseil sauvegardé.")
+    
+    with col2:
+        if st.button("👎 Inutile"):
+            requests.post(f"/api/feedback/{conseil['id']}", 
+                         json={"vote": "down"})
+            st.warning("Merci ! On fera mieux.")
+```
+
+**Tâches** :
+- [ ] Créer interface Streamlit
+- [ ] Connecter à API QG
+- [ ] Tester workflow bout-en-bout
+
+**Livrables** :
+- ✅ Interface COACH fonctionnelle
+- ✅ Workflow complet testé
+- ✅ Premier conseil validé 👍
+
+---
+
+## 📅 Phase 2 : Maintenance Auto (2 mois)
+
+### Objectif
+Ajouter MÉCANICIEN + EXPERT pour auto-réparation code
+
+### Étape 2.1 : Créer Agent MÉCANICIEN (7-10 jours)
+
+**Code Exemple** :
+```python
+# agents/mecanicien.py
+from langchain_community.llms import Ollama
+from langchain.agents import create_tool_calling_agent
+from langchain.tools import tool
+
+MECANICIEN_PROMPT = """
+Tu es LAMOMS-MÉCANICIEN, expert en développement Python.
+
+Tu reçois les 3 meilleures solutions pour un bug.
+Choisis la plus adaptée et génère le code de correction.
+
+Solutions proposées :
+{solutions}
+
+Contexte du bug :
+{bug_context}
+
+Génère le patch de correction :
+"""
+
+class MecanicienAgent:
+    def __init__(self):
+        self.llm = Ollama(model="llama3")  # Local, gratuit !
+        
+    def fix_bug(self, solutions: list, bug_context: dict) -> str:
+        """Choisit solution et génère patch."""
+        # MÉCANICIEN analyse les 3 solutions
+        # Choisit la meilleure
+        # Génère le code
+        pass
+```
+
+**Tâches** :
+- [ ] Créer classe `MecanicienAgent`
+- [ ] Intégrer Ollama local
+- [ ] Tester sur bugs réels
+- [ ] Mesurer qualité corrections
+
+**Livrables** :
+- ✅ MÉCANICIEN opérationnel
+- ✅ 5+ bugs corrigés
+- ✅ Taux succès > 70%
+
+---
+
+### Étape 2.2 : Améliorer BIBLIOTHÉCAIRE (Pré-filtrage)
+
+**Code Exemple** :
+```python
+# agents/bibliothecaire.py
+class BibliothecaireAgent:
+    def __init__(self, memory: BibliothecaireMemory):
+        self.memory = memory
+    
+    def find_solutions(self, bug_description: str) -> list:
+        """Trouve et pré-filtre Top 3 solutions."""
+        # 1. Recherche sémantique
+        all_solutions = self.memory.search_similar(bug_description, k=10)
+        
+        # 2. Scoring avec RAG
+        scored = self._score_solutions(all_solutions, bug_description)
+        
+        # 3. Pré-filtrage Top 3
+        top_3 = sorted(scored, key=lambda x: x['score'], reverse=True)[:3]
+        
+        return top_3
+    
+    def _score_solutions(self, solutions: list, context: str) -> list:
+        """Score solutions par pertinence."""
+        # Utilise embeddings pour scorer
+        pass
+```
+
+**Tâches** :
+- [ ] Implémenter scoring RAG
+- [ ] Tester pré-filtrage
+- [ ] Mesurer précision Top 3
+
+**Livrables** :
+- ✅ Pré-filtrage opérationnel
+- ✅ Top 3 pertinent > 80%
+
+---
+
+## 💰 Coûts et Technologies
+
+### Stack Technologique
+
+| Composant | Technologie | Coût |
+|-----------|-------------|------|
+| **COACH** | Streamlit + Gemini 2.0 Flash | ~$1/mois |
+| **MÉCANICIEN** | Ollama + Llama 3 8B | $0 |
+| **BIBLIOTHÉCAIRE** | ChromaDB + Embeddings | $0 |
+| **ANALYSTE** | Llama 3 8B (local) | $0 |
+| **MENTORE** | Gemini 1.5 Flash | ~$1/mois |
+| **EXPERT** | n8n + Python requests | $0 |
+| **PLANIFICATEUR** | Python + Telegram API | $0 |
+
+**Total Phase 1-2** : **~$2/mois** 🎉
+
+### Évolution Coûts
+
+**Phase 1-2 (Formation)** : ~$2/mois
+- Objectif : Apprendre
+- Modèles locaux gratuits
+- Qualité suffisante pour formation
+
+**Phase 3+ (Performance)** :
+- Si MÉCANICIEN local insuffisant → Upgrade Claude (~$10/mois)
+- Sinon → Rester local ($0)
+- Décision basée sur résultats
+
+---
+
+## 📊 Métriques de Succès
+
+### Phase 1 (MVP Coach)
+- [ ] 20+ conseils générés
+- [ ] 70%+ satisfaction (👍)
+- [ ] Temps réponse < 5s
+- [ ] Coût < $2/mois
+
+### Phase 2 (Maintenance)
+- [ ] 5+ bugs auto-corrigés
+- [ ] 70%+ taux succès corrections
+- [ ] 0 régression introduite
+- [ ] Coût < $3/mois
+
+---
+
+## 🎯 Prochaines Étapes Immédiates
+
+**Vous êtes ici** : Phase 0 (Apprentissage)
+
+**Avant Phase 1** :
+1. ✅ Terminer roadmap apprentissage (LangChain, ChromaDB)
+2. ⏳ Installer Ollama + Llama 3
+3. ⏳ Setup environnement Python
+
+**Pendant Phase 1** (Ordre) :
+1. **Semaine 1** : Setup + MENTORE
+2. **Semaine 2** : BIBLIOTHÉCAIRE + ChromaDB
+3. **Semaine 3** : COACH (Streamlit)
+4. **Semaine 4** : Tests + Optimisation
+5. **Semaines 5-8** : Collecte 20+ feedbacks
+
+---
+
+## 🚀 Vision Long Terme
+
+**Mois 1-2** : MVP Coach fonctionnel (vous comme testeur)  
+**Mois 3-4** : Maintenance auto opérationnelle  
+**Mois 5-12** : Apprentissage ANALYSTE  
+**Mois 12+** : Autonomie totale + $0/mois
+
+**Objectif ultime** : QG autonome, intelligent et **gratuit** ! 💪
+
+---
+
+**Prêt à commencer ?** Suivez la roadmap d'apprentissage puis revenez ici pour Phase 1 ! 😊

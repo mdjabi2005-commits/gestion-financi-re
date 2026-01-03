@@ -1,3 +1,17 @@
+---
+type: guide_librairie
+library: pandas
+difficulty: intermediate
+tags: [dataframes, data-analysis, filtering, groupby, manipulation]
+phase: 2
+last_updated: 2024-12-25
+estimated_reading: 20min
+status: active
+related:
+  - help/numpy.md
+  - modules/database-rules.md
+---
+
 # 📚 Bibliothèque : Pandas
 
 ## 🎯 Qu'est-ce que Pandas ?

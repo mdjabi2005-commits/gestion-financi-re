@@ -1,3 +1,17 @@
+---
+type: guide_librairie
+library: sqlite3
+difficulty: intermediate
+tags: [database, sql, persistence]
+phase: 1
+last_updated: 2024-12-14
+estimated_reading: 15min
+status: active
+related:
+  - modules/database-rules.md
+  - help/pandas.md
+---
+
 # 📚 Bibliothèque : SQLite3
 
 ## 🎯 Qu'est-ce que SQLite ?

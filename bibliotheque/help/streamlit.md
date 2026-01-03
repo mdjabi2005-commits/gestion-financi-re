@@ -1,3 +1,17 @@
+---
+type: guide_librairie
+library: streamlit
+difficulty: beginner
+tags: [ui, web, interface, dashboard]
+phase: 1
+last_updated: 2024-12-14
+estimated_reading: 15min
+status: active
+related:
+  - help/plotly.md
+  - help/pandas.md
+---
+
 # 📚 Bibliothèque : Streamlit
 
 ## 🎯 Qu'est-ce que Streamlit ?

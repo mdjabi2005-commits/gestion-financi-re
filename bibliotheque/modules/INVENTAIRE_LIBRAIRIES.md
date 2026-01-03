@@ -1,3 +1,13 @@
+---
+type: inventaire
+difficulty: beginner
+tags: [librairies, dependencies, roadmap, progression]
+last_updated: 2024-12-24
+estimated_reading: 15min
+status: active
+total_libraries: 30
+---
+
 # 📚 Inventaire Complet des 30 Librairies - Gestio V4
 
 **Objectif** : Maîtriser TOUTES les librairies utilisées dans Gestio V4

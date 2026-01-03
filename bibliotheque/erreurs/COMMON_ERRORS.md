@@ -1,3 +1,16 @@
+---
+type: erreur
+difficulty: intermediate
+tags: [debugging, troubleshooting, solutions]
+last_updated: 2024-12-18
+estimated_reading: 25min
+status: active
+total_errors: 7
+related:
+  - erreurs/phase1_erreurs_corrections.md
+  - erreurs/phase2_erreurs_corrections.md
+---
+
 # Erreurs Courantes - Gestio V4
 
 ## 🎯 Objectif

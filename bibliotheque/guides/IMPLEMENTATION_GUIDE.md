@@ -1,3 +1,16 @@
+---
+type: guide_general
+difficulty: intermediate
+tags: [architecture, regles, implementation, best-practices]
+last_updated: 2024-12-14
+estimated_reading: 20min
+status: active
+related:
+  - guides/BUILD.md
+  - erreurs/COMMON_ERRORS.md
+  - modules/database-rules.md
+---
+
 # Guide d'Implémentation - Gestio V4
 
 ## 🎯 Objectif de ce document

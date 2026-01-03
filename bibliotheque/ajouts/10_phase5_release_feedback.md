@@ -1,8 +1,8 @@
 # Phase 5 : Release & Feedback
 
-**Date** : 22 décembre 2024  
-**Version** : 4.0.0  
-**Référence** : [PLAN_PRODUCTION_DESKTOP_V4.md - Phase 5](file:///c:/Users/djabi/gestion-financière/bibliotheque/help/PLAN_PRODUCTION_DESKTOP_V4.md#L448)
+**Date** : 22 décembre 2024
+**Type** : Release
+**Version** : 4.0.0
 
 ---
 
@@ -186,7 +186,6 @@ Une fois Phase 5 100% validée :
 ## 📚 Références
 
 - [GitHub Releases](https://github.com/mdjabi2005/gestion-financiere_little/releases)
-- [PLAN_PRODUCTION_DESKTOP_V4.md](file:///c:/Users/djabi/gestion-financière/bibliotheque/help/PLAN_PRODUCTION_DESKTOP_V4.md)
 - [build.yml](file:///c:/Users/djabi/gestion-financiere_little/.github/workflows/build.yml)
 
 ---

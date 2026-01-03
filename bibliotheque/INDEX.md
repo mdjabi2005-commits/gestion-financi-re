@@ -15,9 +15,9 @@ bibliotheque/
 ├── INDEX.md         → Ce fichier (navigation)
 ├── guides/          → Règles générales et standards
 ├── modules/         → Règles spécifiques par module
-├── readmes/         → Documentation technique modules (copies)
 ├── help/            → Guides bibliothèques externes
-├── ajouts/          → Walkthroughs chronologiques
+├── ajouts/          → Historique chronologique des modifications
+├── walkthroughs/    → Sessions de développement détaillées
 └── erreurs/         → Rapports d'erreurs détaillés
 ```
 
@@ -30,7 +30,7 @@ bibliotheque/
 | Document | Description | Quand consulter |
 |----------|-------------|-----------------|
 | [IMPLEMENTATION_GUIDE.md](guides/IMPLEMENTATION_GUIDE.md) | Règles strictes d'implémentation | Avant d'ajouter du code |
-| [COMMON_ERRORS.md](guides/COMMON_ERRORS.md) | Erreurs courantes + solutions | Quand tu rencontres une erreur |
+| [COMMON_ERRORS.md](erreurs/COMMON_ERRORS.md) | Erreurs courantes + solutions | Quand tu rencontres une erreur |
 
 ### 🔧 Règles par module
 
@@ -41,17 +41,6 @@ bibliotheque/
 | UI | [ui-rules.md](modules/ui-rules.md) | Pages Streamlit, composants |
 | OCR | [ocr-rules.md](modules/ocr-rules.md) | Extraction texte, parsers |
 | Utils | [utils-rules.md](modules/utils-rules.md) | Fonctions helpers globales |
-
-### 📖 Documentation technique (Copies README)
-
-*Copies des README modules pour consultation centralisée*
-
-| Module | Document | Contenu |
-|--------|----------|---------|
-| Config | [config.md](readmes/config.md) | Configuration, chemins, constantes |
-| Database | [database.md](readmes/database.md) | Tables, repositories, modèles |
-
-*Note : Les README originaux restent dans `v4/modules/{module}/README.md`*
 
 ### 📚 Guides bibliothèques externes
 
@@ -71,9 +60,16 @@ bibliotheque/
 | 01 | Refactoring Transactions | Refactoring de `transactions.py` en 3 modules | 14 déc 2024 |
 | 02 | Création Documentation | Création documentation complète projet | 14 déc 2024 |
 | 03 | Refactoring Architecture | Migration modules/ → domains/shared/ | 16 déc 2024 |
-| 04 | Installation Bulletproof | Système d'installation robuste v4.0.0 | 21 déc 2024 |
+| 04 | Amélioration OCR | OCR 100% success rate | 17 déc 2024 |
+| 05 | Phase 1 Production Readiness | Logging + Exceptions + Tests | 19 déc 2024 |
+| 06 | Phase 2 OCR Finalisation | Infrastructure OCR + Apprentissage auto | 19 déc 2024 |
+| 07 | Tour Contrôle Refactorisation | Refactorisation Tour de Contrôle OCR | 20 déc 2024 |
+| 08 | Phase 3 Build Installation | Build multi-OS + Installation bulletproof | 22 déc 2024 |
+| 09 | Phase 4 Amélioration Site | Design, SEO, Performance | 22 déc 2024 |
+| 10 | Phase 5 Release Feedback | Release 1.0 publiée | 22 déc 2024 |
 
 📂 **Archive V3** : Les anciens documents V3 sont dans [_archive_v3/](ajouts/_archive_v3/)
+📂 **Archive** : Fichier 04 archivé (contenu inclus dans 08) → [_archives/](ajouts/_archives/)
 
 📖 **Template** : Voir [ajouts/README.md](ajouts/README.md) pour ajouter un nouveau document
 
@@ -96,8 +92,8 @@ bibliotheque/
 1. **Avant d'ajouter du code** → Consulter `guides/IMPLEMENTATION_GUIDE.md`
 2. **Pour un module spécifique** :
    - Règles : `modules/{module}-rules.md`
-   - Documentation technique : `readmes/{module}.md` ou `v4/modules/{module}/README.md`
-3. **En cas d'erreur** → Chercher dans `guides/COMMON_ERRORS.md` puis `erreurs/`
+   - Documentation technique : `v4/modules/{module}/README.md`
+3. **En cas d'erreur** → Chercher dans `erreurs/COMMON_ERRORS.md` puis `erreurs/`
 4. **Pour comprendre l'historique** → Parcourir `ajouts/`
 5. **Guides bibliothèques** → Consulter `help/`
 
@@ -108,9 +104,38 @@ bibliotheque/
 2. **Lire** `guides/IMPLEMENTATION_GUIDE.md` pour les règles générales
 3. **Consulter** le module concerné :
    - Règles dans `modules/{module}-rules.md`
-   - Doc technique dans `readmes/{module}.md`
-4. **Vérifier** si l'erreur existe dans `guides/COMMON_ERRORS.md`
+   - Doc technique dans `v4/modules/{module}/README.md`
+4. **Vérifier** si l'erreur existe dans `erreurs/COMMON_ERRORS.md`
 5. **Documenter** nouvelle feature dans `ajouts/YYYY-MM-DD_feature.md`
+
+### 🤖 Pour l'Agent BIBLIOTHÉCAIRE
+
+**Fichiers clés pour l'indexation** :
+- `INDEX.md` - Point d'entrée principal (ce fichier)
+- `GLOSSAIRE.md` - Définitions techniques centralisées
+- `MAPPING.json` - Index rapide par catégorie
+- `modules/INVENTAIRE_LIBRAIRIES.md` - Liste des 30 librairies Python
+- `ARCHITECTURE.md` - Vue d'ensemble technique du projet
+
+**Workflow de recherche recommandé** :
+1. **Localiser** : Consulter `MAPPING.json` pour trouver le bon fichier
+2. **Filtrer** : Lire le frontmatter YAML pour vérifier la pertinence
+3. **Définir** : Utiliser `GLOSSAIRE.md` pour les termes techniques
+4. **Chercher** : Utiliser ChromaDB pour la recherche sémantique
+
+**Catégories de documents** :
+- `guides/` - Règles générales d'implémentation (IMPLEMENTATION_GUIDE, BUILD)
+- `modules/` - Règles spécifiques par module (database, services, UI, OCR, utils)
+- `help/` - Guides des bibliothèques externes (pandas, plotly, streamlit, etc.)
+- `ajouts/` - Historique chronologique des modifications (01-10)
+- `erreurs/` - Catalogue des erreurs et solutions
+- `walkthroughs/` - Sessions de développement détaillées
+
+**Priorités de consultation** :
+1. **Architecture** → `ARCHITECTURE.md` (vue d'ensemble)
+2. **Règles** → `guides/IMPLEMENTATION_GUIDE.md` (règles strictes)
+3. **Erreurs** → `erreurs/COMMON_ERRORS.md` (pièges à éviter)
+4. **Contexte** → `ajouts/` (historique des décisions)
 
 ---
 
@@ -194,7 +219,7 @@ bibliotheque/erreurs/2024-12-XX_type-erreur.md
 
 - 🏠 [Retour au projet](../v4/README.md)
 - 📖 [Guide implémentation](guides/IMPLEMENTATION_GUIDE.md)
-- 🔴 [Erreurs courantes](guides/COMMON_ERRORS.md)
+- 🔴 [Erreurs courantes](erreurs/COMMON_ERRORS.md)
 - 📚 [Guides bibliothèques](help/)
 - 📝 [Historique ajouts](ajouts/)
 
@@ -205,13 +230,14 @@ bibliotheque/erreurs/2024-12-XX_type-erreur.md
 | Catégorie | Nombre |
 |-----------|--------|
 | Guides généraux | 2 |
-| Règles modules | 5 |
-| Guides bibliothèques | 4 |
-| Ajouts historiques | 4 (+ 5 archivés V3) |
-| Erreurs documentées | 7 (dans COMMON_ERRORS) |
-| **Total documents** | **21+** |
+| Règles modules | 7 |
+| Guides bibliothèques | 15 |
+| Ajouts historiques | 10 (+ 6 archivés V3) |
+| Erreurs documentées | 7 |
+| Walkthroughs | 1 |
+| **Total documents** | **56** |
 
 ---
 
-**Dernière mise à jour** : 21 décembre 2024  
-**Version bibliothèque** : 1.2
+**Dernière mise à jour** : 2 janvier 2026  
+**Version bibliothèque** : 1.3

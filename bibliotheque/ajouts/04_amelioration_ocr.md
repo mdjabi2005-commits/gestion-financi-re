@@ -1,7 +1,8 @@
 # Ajout 04 - Amélioration OCR 100% Réussite
 
-**Date** : 17 décembre 2024  
-**Auteur** : Équipe développement  
+**Date** : 17 décembre 2024
+**Type** : Feature
+**Auteur** : Équipe développement
 **Impact** : Performance OCR +36.4% (63.6% → 100%)
 
 ---

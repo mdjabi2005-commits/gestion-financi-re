@@ -1,8 +1,8 @@
 # Phase 4 : Amélioration Site Web
 
-**Date** : 22 décembre 2024  
-**Version** : 4.0.0  
-**Référence** : [PLAN_PRODUCTION_DESKTOP_V4.md - Phase 4](file:///c:/Users/djabi/gestion-financière/bibliotheque/help/PLAN_PRODUCTION_DESKTOP_V4.md#L357)
+**Date** : 22 décembre 2024
+**Type** : UI/Web
+**Version** : 4.0.0
 
 ---
 
@@ -196,7 +196,6 @@ Tutoriels vidéo :
 
 ## 📚 Références
 
-- [PLAN_PRODUCTION_DESKTOP_V4.md](file:///c:/Users/djabi/gestion-financière/bibliotheque/help/PLAN_PRODUCTION_DESKTOP_V4.md) - Plan complet Phase 4
 - [docs/index.html](file:///c:/Users/djabi/gestion-financiere_little/docs/index.html) - Code source du site
 - Web.dev Lighthouse - Tests de performance
 

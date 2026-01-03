@@ -1,8 +1,8 @@
 # Phase 3 : Build Multi-OS et Installation Bullet-Proof
 
-**Date** : 22 décembre 2024  
-**Version** : 4.0.0  
-**Référence** : [PLAN_PRODUCTION_DESKTOP_V4.md - Phase 3](file:///c:/Users/djabi/gestion-financière/travaux-antigravity/travaux%20a%20venir/PLAN_PRODUCTION_DESKTOP_V4.md#L253)
+**Date** : 22 décembre 2024
+**Type** : Build/Release
+**Version** : 4.0.0
 
 ---
 
@@ -402,7 +402,6 @@ Launch 3+
 
 - `.github/workflows/build.yml`
 - `README.md` du dépôt racine
-- [PLAN_PRODUCTION_DESKTOP_V4.md](file:///c:/Users/djabi/gestion-financière/travaux-antigravity/travaux%20a%20venir/PLAN_PRODUCTION_DESKTOP_V4.md)
 
 ---
 

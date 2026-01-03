@@ -1,3 +1,17 @@
+---
+type: guide_librairie
+library: plotly
+difficulty: intermediate
+tags: [graphiques, visualisation, interactif, dashboard]
+phase: 2
+last_updated: 2024-12-25
+estimated_reading: 20min
+status: active
+related:
+  - help/pandas.md
+  - help/streamlit.md
+---
+
 # 📚 Bibliothèque : Plotly
 
 ## 🎯 Qu'est-ce que Plotly ?
